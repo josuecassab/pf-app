@@ -1,36 +1,22 @@
 import { useInfiniteQuery } from "@tanstack/react-query";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
   FlatList,
-  Modal,
-  Pressable,
   ScrollView,
-  StyleSheet,
   Text,
   TouchableHighlight,
   View,
 } from "react-native";
-import { Dropdown } from "react-native-element-dropdown";
 import { SafeAreaView } from "react-native-safe-area-context";
-
-const labels = [
-  { label: "Item 1", value: "1" },
-  { label: "Item 2", value: "2" },
-  { label: "Item 3", value: "3" },
-  { label: "Item 4", value: "4" },
-  { label: "Item 5", value: "5" },
-  { label: "Item 6", value: "6" },
-  { label: "Item 7", value: "7" },
-  { label: "Item 8", value: "8" },
-];
+import MyCustomModal from "./MyCustomModal";
 
 export default function TxnTable() {
   const API_URL = process.env.EXPO_PUBLIC_API_URL;
   console.log("API_URL:", API_URL); // Debug log
   const [value, setValue] = useState(null);
-  const [modalVisible, setModalVisible] = useState(false);
+  const [categoryModalVisible, setCategoryModalVisible] = useState(false);
+  const [subCategoryModalVisible, setSubCategoryModalVisible] = useState(false);
   // const [selectedYear, setSelectedYear] = useState(
   //   String(new Date().getFullYear())
   // );
@@ -39,7 +25,28 @@ export default function TxnTable() {
   //   String(new Date().getMonth() + 1)
   // );
   const [selectedMonth, setSelectedMonth] = useState(String(9));
+  const [selectedTxn, setSelectedTxn] = useState({ id: null, category: null });
+  const [loading, setLoading] = useState(false);
+  const [rawCategories, setRawCategories] = useState({});
+  const [categories, setCategories] = useState([]);
+  const [subCategories, setSubCategories] = useState([]);
 
+  useEffect(() => {
+    console.log("use effect");
+    const fetchCategories = async () => {
+      const res = await fetch(`${API_URL}/categories`);
+      const rawCategories = await res.json();
+      console.log(rawCategories);
+      setRawCategories(rawCategories);
+      setCategories(
+        Object.keys(rawCategories).map((item) => ({
+          label: item,
+          value: item,
+        }))
+      );
+    };
+    fetchCategories();
+  }, []);
   // const txns = data;
   const columnsWidth = {
     fecha: "w-32",
@@ -67,17 +74,17 @@ export default function TxnTable() {
       // Calculate previous month from the last page param
       let prevMonth = parseInt(lastPageParam.month) - 1;
       let prevYear = parseInt(lastPageParam.year);
-      
+
       if (prevMonth < 1) {
         prevMonth = 12;
         prevYear -= 1;
       }
-      
+
       // Optional: Set a limit (e.g., don't go before year 2020)
       if (prevYear < 2020) {
         return undefined;
       }
-      
+
       return { year: String(prevYear), month: String(prevMonth) };
     },
     staleTime: 1000 * 60 * 5,
@@ -155,15 +162,47 @@ export default function TxnTable() {
     );
   };
 
-  const renderCategoriaCell = (value, widthClass) => {
+  const handleCategoriaPress = (id) => {
+    setSelectedTxn({ id: id, category: null });
+    setCategoryModalVisible(true);
+  };
+
+  const handleSubCategoryPress = (id, category, subCategory) => {
+    setSelectedTxn({ id: id, category: category, subCategory: null });
+    // Transform subCategories to the format expected by Dropdown
+    const subCats = rawCategories[category] || [];
+    setSubCategories(
+      subCats.map((item) => ({
+        label: item,
+        value: item,
+      }))
+    );
+    setSubCategoryModalVisible(true);
+  };
+
+  const renderCategoriaCell = (id, category, widthClass) => {
     return (
       <TouchableHighlight
         className={"border-b border-r p-2 border-slate-300 " + widthClass}
-        onPress={() => setModalVisible(true)}
+        onPress={() => handleCategoriaPress(id)}
         underlayColor="#e2e8f0"
       >
         <View>
-          <Text className="text-right">{value.toLowerCase()}</Text>
+          <Text className="text-right">{category.toLowerCase()}</Text>
+        </View>
+      </TouchableHighlight>
+    );
+  };
+
+  const renderSubCategoryCell = (id, category, subCategory, widthClass) => {
+    return (
+      <TouchableHighlight
+        className={"border-b border-r p-2 border-slate-300 " + widthClass}
+        onPress={() => handleSubCategoryPress(id, category, subCategory)}
+        underlayColor="#e2e8f0"
+      >
+        <View>
+          <Text className="text-right">{subCategory?.toLowerCase()}</Text>
         </View>
       </TouchableHighlight>
     );
@@ -175,8 +214,17 @@ export default function TxnTable() {
         {renderCell(item.fecha, columnsWidth["fecha"])}
         {renderDescripcionCell(item.descripcion, columnsWidth["descripcion"])}
         {renderValorCell(item.valor, columnsWidth["valor"])}
-        {renderCategoriaCell(item.categoria, columnsWidth["categoria"])}
-        {renderCell(item.sub_categoria, columnsWidth["sub_categoria"])}
+        {renderCategoriaCell(
+          item.id,
+          item.categoria,
+          columnsWidth["categoria"]
+        )}
+        {renderSubCategoryCell(
+          item.id,
+          item.categoria,
+          item.sub_categoria,
+          columnsWidth["sub_categoria"]
+        )}
       </View>
     );
   };
@@ -200,62 +248,61 @@ export default function TxnTable() {
     );
   };
 
+  const updateCategory = async () => {
+    setLoading(true);
+    try {
+      const txnsToSubmit = selectedTxn;
+
+      const res = await fetch(`${API_URL}/update_txn_category/`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(txnsToSubmit),
+      });
+      const result = await res.json();
+      console.log("Update result:", result);
+      txns.find((txn) => txn.id === selectedTxn.id).categoria =
+        selectedTxn.category;
+    } catch (error) {
+      console.error("Failed to update transactions:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <SafeAreaView style={{ flex: 1 }} className="px-4">
-      <Modal
-        animationType="slide"
-        transparent={true}
-        visible={modalVisible}
-        onRequestClose={() => {
-          Alert.alert("Modal has been closed.");
-          setModalVisible(!modalVisible);
+      <MyCustomModal
+        labels={categories}
+        value={selectedTxn.category}
+        onChange={(item) => {
+          setSelectedTxn({ id: selectedTxn.id, category: item.value });
         }}
-      >
-        <View className="flex-1 justify-center items-center bg-black/50">
-          <View className="bg-white rounded-2xl p-6 m-4 shadow-lg w-80">
-            <Text className="text-xl font-bold mb-4 text-slate-800">
-              Category Details
-            </Text>
-            <Text className="text-slate-600 mb-6">
-              Select a new category for this transaction.
-            </Text>
-            <Dropdown
-              style={styles.dropdown}
-              placeholderStyle={styles.placeholderStyle}
-              selectedTextStyle={styles.selectedTextStyle}
-              inputSearchStyle={styles.inputSearchStyle}
-              iconStyle={styles.iconStyle}
-              data={labels}
-              search
-              maxHeight={300}
-              labelField="label"
-              valueField="value"
-              placeholder="Select item"
-              searchPlaceholder="Search..."
-              value={value}
-              onChange={(item) => {
-                setValue(item.value);
-              }}
-              // renderLeftIcon={() => (
-              //   <AntDesign
-              //     style={styles.icon}
-              //     color="black"
-              //     name="Safety"
-              //     size={20}
-              //   />
-              // )}
-            />
-            <Pressable
-              className="bg-blue-500 rounded-lg p-3"
-              onPress={() => setModalVisible(!modalVisible)}
-            >
-              <Text className="text-white text-center font-semibold">
-                Acceptar
-              </Text>
-            </Pressable>
-          </View>
-        </View>
-      </Modal>
+        onAccept={() => {
+          console.log(selectedTxn);
+          updateCategory();
+          setCategoryModalVisible(!categoryModalVisible);
+        }}
+        visible={categoryModalVisible}
+        SetModalFunc={() => setCategoryModalVisible(!categoryModalVisible)}
+      />
+      <MyCustomModal
+        labels={subCategories}
+        value={selectedTxn.subCategory}
+        onChange={(item) => {
+          setSelectedTxn({ id: selectedTxn.id, subCategory: item.value });
+        }}
+        onAccept={() => {
+          console.log(selectedTxn);
+          updateCategory();
+          setSubCategoryModalVisible(!subCategoryModalVisible);
+        }}
+        visible={subCategoryModalVisible}
+        SetModalFunc={() =>
+          setSubCategoryModalVisible(!subCategoryModalVisible)
+        }
+      />
       <View className="border border-slate-300 rounded-2xl">
         <ScrollView horizontal showsHorizontalScrollIndicator={true}>
           <FlatList
@@ -274,29 +321,3 @@ export default function TxnTable() {
     </SafeAreaView>
   );
 }
-
-const styles = StyleSheet.create({
-  dropdown: {
-    margin: 16,
-    height: 50,
-    borderBottomColor: "gray",
-    borderBottomWidth: 0.5,
-  },
-  icon: {
-    marginRight: 5,
-  },
-  placeholderStyle: {
-    fontSize: 16,
-  },
-  selectedTextStyle: {
-    fontSize: 16,
-  },
-  iconStyle: {
-    width: 20,
-    height: 20,
-  },
-  inputSearchStyle: {
-    height: 40,
-    fontSize: 16,
-  },
-});
