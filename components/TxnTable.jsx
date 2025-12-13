@@ -1,13 +1,15 @@
 import { useInfiniteQuery } from "@tanstack/react-query";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
+  Pressable,
   ScrollView,
   Text,
   TouchableHighlight,
   View,
 } from "react-native";
+import MonthPicker from "react-native-month-year-picker";
 import { SafeAreaView } from "react-native-safe-area-context";
 import MyCustomModal from "./MyCustomModal";
 
@@ -25,31 +27,31 @@ export default function TxnTable() {
   //   String(new Date().getMonth() + 1)
   // );
   const [selectedMonth, setSelectedMonth] = useState(String(9));
-  const [selectedTxn, setSelectedTxn] = useState({ id: null, category: null });
+  const [selectedCategory, setSelectedCategory] = useState({});
+  const [selectedSubcategory, setSelectedSubcategory] = useState({});
   const [loading, setLoading] = useState(false);
-  const [rawCategories, setRawCategories] = useState({});
   const [categories, setCategories] = useState([]);
   const [subCategories, setSubCategories] = useState([]);
+  const [show, setShow] = useState(false);
+  // Initialize date to match selectedYear and selectedMonth (month is 0-indexed)
+  const [date, setDate] = useState(new Date(2025, 8)); // September 2025
+
+  const showPicker = useCallback((value) => setShow(value), []);
 
   useEffect(() => {
     console.log("use effect");
     const fetchCategories = async () => {
-      const res = await fetch(`${API_URL}/categories`);
-      const rawCategories = await res.json();
-      console.log(rawCategories);
-      setRawCategories(rawCategories);
-      setCategories(
-        Object.keys(rawCategories).map((item) => ({
-          label: item,
-          value: item,
-        }))
+      const res = await fetch(`${API_URL}/categories`).then((res) =>
+        res.json()
       );
+      console.log(res);
+      setCategories(res);
     };
     fetchCategories();
   }, []);
   // const txns = data;
   const columnsWidth = {
-    fecha: "w-32",
+    fecha: "w-[98px]",
     descripcion: "w-36",
     valor: "w-28",
     categoria: "w-28",
@@ -95,8 +97,23 @@ export default function TxnTable() {
 
   // Flatten all pages into a single array of transactions
   const txns = useMemo(() => {
+    // console.log(data.pageParams);
+    // console.log(data.pages);
     return data?.pages?.flatMap((page) => page) ?? [];
   }, [data]);
+
+  const onValueChange = useCallback(
+    (event, newDate) => {
+      const selectedDate = newDate || date;
+      console.log(selectedDate);
+      showPicker(false);
+      setDate(selectedDate);
+      // Update year and month to trigger refetch with new filters
+      setSelectedYear(String(selectedDate.getFullYear()));
+      setSelectedMonth(String(selectedDate.getMonth() + 1));
+    },
+    [date, showPicker]
+  );
 
   const renderHeaderCell = (label, widthClass = "w-40") => (
     <View
@@ -163,24 +180,11 @@ export default function TxnTable() {
   };
 
   const handleCategoriaPress = (id) => {
-    setSelectedTxn({ id: id, category: null });
+    setSelectedCategory({ id: id, label: null, value: null });
     setCategoryModalVisible(true);
   };
 
-  const handleSubCategoryPress = (id, category, subCategory) => {
-    setSelectedTxn({ id: id, category: category, subCategory: null });
-    // Transform subCategories to the format expected by Dropdown
-    const subCats = rawCategories[category] || [];
-    setSubCategories(
-      subCats.map((item) => ({
-        label: item,
-        value: item,
-      }))
-    );
-    setSubCategoryModalVisible(true);
-  };
-
-  const renderCategoriaCell = (id, category, widthClass) => {
+  const renderCategoryCell = (id, category, widthClass) => {
     return (
       <TouchableHighlight
         className={"border-b border-r p-2 border-slate-300 " + widthClass}
@@ -194,11 +198,22 @@ export default function TxnTable() {
     );
   };
 
+  const handleSubcategoryPress = (id, category, subCategory) => {
+    console.log(category);
+    setSelectedSubcategory({ id: id, category: category, subCategory: null });
+    const subCategories =
+      categories.filter((item) => item.label === category)[0]?.sub_categorias ||
+      [];
+    console.log(subCategories);
+    setSubCategories(subCategories);
+    setSubCategoryModalVisible(true);
+  };
+
   const renderSubCategoryCell = (id, category, subCategory, widthClass) => {
     return (
       <TouchableHighlight
         className={"border-b border-r p-2 border-slate-300 " + widthClass}
-        onPress={() => handleSubCategoryPress(id, category, subCategory)}
+        onPress={() => handleSubcategoryPress(id, category, subCategory)}
         underlayColor="#e2e8f0"
       >
         <View>
@@ -214,11 +229,7 @@ export default function TxnTable() {
         {renderCell(item.fecha, columnsWidth["fecha"])}
         {renderDescripcionCell(item.descripcion, columnsWidth["descripcion"])}
         {renderValorCell(item.valor, columnsWidth["valor"])}
-        {renderCategoriaCell(
-          item.id,
-          item.categoria,
-          columnsWidth["categoria"]
-        )}
+        {renderCategoryCell(item.id, item.categoria, columnsWidth["categoria"])}
         {renderSubCategoryCell(
           item.id,
           item.categoria,
@@ -251,19 +262,42 @@ export default function TxnTable() {
   const updateCategory = async () => {
     setLoading(true);
     try {
-      const txnsToSubmit = selectedTxn;
-
       const res = await fetch(`${API_URL}/update_txn_category/`, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify(txnsToSubmit),
+        body: JSON.stringify(selectedCategory),
       });
       const result = await res.json();
       console.log("Update result:", result);
-      txns.find((txn) => txn.id === selectedTxn.id).categoria =
-        selectedTxn.category;
+      const txnItem = txns.find((txn) => txn.id === selectedCategory.id);
+      if (txnItem) {
+        txnItem.categoria = selectedCategory.label;
+      }
+    } catch (error) {
+      console.error("Failed to update transactions:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const updateSubcategory = async () => {
+    setLoading(true);
+    try {
+      const res = await fetch(`${API_URL}/update_txn_category/`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(selectedSubcategory),
+      });
+      const result = await res.json();
+      console.log("Update result:", result);
+      const txnItem = txns.find((txn) => txn.id === selectedSubcategory.id);
+      if (txnItem) {
+        txnItem.sub_categoria = selectedSubcategory.subCategoryLabel;
+      }
     } catch (error) {
       console.error("Failed to update transactions:", error);
     } finally {
@@ -272,15 +306,19 @@ export default function TxnTable() {
   };
 
   return (
-    <SafeAreaView style={{ flex: 1 }} className="px-4">
+    <SafeAreaView style={{ flex: 1 }} className="px-4 gap-2">
       <MyCustomModal
         labels={categories}
-        value={selectedTxn.category}
+        value={selectedCategory.value}
         onChange={(item) => {
-          setSelectedTxn({ id: selectedTxn.id, category: item.value });
+          setSelectedCategory({
+            id: selectedCategory.id,
+            label: item.label,
+            value: item.value,
+          });
         }}
         onAccept={() => {
-          console.log(selectedTxn);
+          console.log(selectedCategory);
           updateCategory();
           setCategoryModalVisible(!categoryModalVisible);
         }}
@@ -289,13 +327,16 @@ export default function TxnTable() {
       />
       <MyCustomModal
         labels={subCategories}
-        value={selectedTxn.subCategory}
+        value={selectedSubcategory.subCategoryValue}
         onChange={(item) => {
-          setSelectedTxn({ id: selectedTxn.id, subCategory: item.value });
+          setSelectedSubcategory({
+            id: selectedSubcategory.id,
+            subCategoryLabel: item.label,
+            subCategoryValue: item.value,
+          });
         }}
         onAccept={() => {
-          console.log(selectedTxn);
-          updateCategory();
+          updateSubcategory();
           setSubCategoryModalVisible(!subCategoryModalVisible);
         }}
         visible={subCategoryModalVisible}
@@ -303,6 +344,22 @@ export default function TxnTable() {
           setSubCategoryModalVisible(!subCategoryModalVisible)
         }
       />
+      <Pressable
+        onPress={() => showPicker(true)}
+        className="rounded-2xl px-4 py-2 self-start border border-gray-400 bg-white active:bg-gray-200"
+      >
+        <Text className="text-lg text-slate-800 font-bold">
+          {date.toLocaleDateString("es-ES", { month: "long", year: "numeric" })}
+        </Text>
+      </Pressable>
+      {show && (
+        <MonthPicker
+          onChange={onValueChange}
+          value={date}
+          minimumDate={new Date(2025, 0)}
+          maximumDate={new Date(2025, 11)}
+        />
+      )}
       <View className="border border-slate-300 rounded-2xl">
         <ScrollView horizontal showsHorizontalScrollIndicator={true}>
           <FlatList

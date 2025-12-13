@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   FlatList,
   ScrollView,
@@ -9,10 +9,6 @@ import {
   View,
 } from "react-native";
 import EllipsisMenu from "./EllipsisMenu";
-import data from "./sample_grouped_txns.json";
-
-// 1. Sample Data
-const DATA = data;
 
 // 2. Configuration
 const LEFT_COL_WIDTH = "w-40";
@@ -47,10 +43,12 @@ const months = [
 ];
 
 export default function DataTable() {
+  const API_URL = process.env.EXPO_PUBLIC_API_URL;
   const leftRef = useRef(null);
   const rightRef = useRef(null);
   const [text, setText] = useState("");
-  const [filteredData, setFilteredData] = useState(DATA);
+  const [data, setData] = useState([]);
+  const [filteredData, setFilteredData] = useState([]);
   const [expandedCategories, setExpandedCategories] = useState(new Set());
   const [sortConfig, setSortConfig] = useState({
     key: null,
@@ -62,6 +60,22 @@ export default function DataTable() {
   const isScrollingRef = useRef(false);
   const isSyncingRef = useRef(false);
   const lastOffsetRef = useRef({ left: 0, right: 0 });
+
+  useEffect(() => {
+    const fetchGroupedTxns = async () => {
+      try {
+        const data = await fetch(`${API_URL}/grouped_txns`).then((res) =>
+          res.json()
+        );
+        console.log("Grouped Txns:", data);
+        setData(data);
+        setFilteredData(data);
+      } catch (error) {
+        console.error("Error fetching grouped txns:", error);
+      }
+    };
+    fetchGroupedTxns();
+  }, []);
 
   const monthlyTotals = useMemo(() => {
     return activeColumns.map((month) =>
@@ -321,12 +335,16 @@ export default function DataTable() {
     );
   }, [monthlyTotals, renderFooterCell]);
 
-  const filterData = useCallback((text) => {
-    const result = DATA.filter((item) =>
-      item.categoria.toLowerCase().includes(text.toLowerCase())
-    );
-    setFilteredData(result);
-  }, []);
+  const filterData = useCallback(
+    (text) => {
+      console.log("Filtering data with text:", text);
+      const result = data.filter((item) =>
+        item.categoria.toLowerCase().includes(text.toLowerCase())
+      );
+      setFilteredData(result);
+    },
+    [data]
+  );
 
   const handleColumns = (item) => {
     setActiveColumns((prev) => {
@@ -351,10 +369,11 @@ export default function DataTable() {
           activeColumns={activeColumns}
         />
         <TextInput
-          className="border border-gray-300 rounded-lg py-3 flex-1"
+          className="border border-gray-300 rounded-lg py-3 flex-1 text-black"
           placeholder="Escribe para filtrar categorías..."
           onChangeText={(newText) => filterData(newText)}
           defaultValue={text}
+          autoCapitalize="none"
         />
       </View>
       <View className="flex-1 flex-row border border-slate-300 rounded-lg overflow-hidden">
@@ -381,9 +400,9 @@ export default function DataTable() {
           />
         </View>
         {/* Scrollable Right Columns */}
-        <View className="flex-1" style={{ overflow: 'hidden' }}>
-          <ScrollView 
-            horizontal 
+        <View className="flex-1" style={{ overflow: "hidden" }}>
+          <ScrollView
+            horizontal
             showsHorizontalScrollIndicator={true}
             nestedScrollEnabled={true}
           >
