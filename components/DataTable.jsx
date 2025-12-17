@@ -20,6 +20,7 @@ const HEADER_HEIGHT = 40;
 const styles = StyleSheet.create({
   rowHeight: { height: ROW_HEIGHT },
   headerHeight: { height: HEADER_HEIGHT },
+  // color: { backgroundColor: "#d27a7a" },
 });
 
 // 4. Format number helper
@@ -67,7 +68,7 @@ export default function DataTable() {
         const data = await fetch(`${API_URL}/grouped_txns`).then((res) =>
           res.json()
         );
-        console.log("Grouped Txns:", data);
+        // console.log("Grouped Txns:", data);
         setData(data);
         setFilteredData(data);
       } catch (error) {

@@ -16,17 +16,16 @@ import MyCustomModal from "./MyCustomModal";
 export default function TxnTable() {
   const API_URL = process.env.EXPO_PUBLIC_API_URL;
   console.log("API_URL:", API_URL); // Debug log
-  const [value, setValue] = useState(null);
   const [categoryModalVisible, setCategoryModalVisible] = useState(false);
   const [subCategoryModalVisible, setSubCategoryModalVisible] = useState(false);
-  // const [selectedYear, setSelectedYear] = useState(
-  //   String(new Date().getFullYear())
-  // );
-  const [selectedYear, setSelectedYear] = useState(String(2025));
-  // const [selectedMonth, setSelectedMonth] = useState(
-  //   String(new Date().getMonth() + 1)
-  // );
-  const [selectedMonth, setSelectedMonth] = useState(String(9));
+  const [selectedYear, setSelectedYear] = useState(
+    String(new Date().getFullYear())
+  );
+  // const [selectedYear, setSelectedYear] = useState(String(2025));
+  const [selectedMonth, setSelectedMonth] = useState(
+    String(new Date().getMonth() + 1)
+  );
+  // const [selectedMonth, setSelectedMonth] = useState(String(9));
   const [selectedCategory, setSelectedCategory] = useState({});
   const [selectedSubcategory, setSelectedSubcategory] = useState({});
   const [loading, setLoading] = useState(false);
@@ -39,12 +38,10 @@ export default function TxnTable() {
   const showPicker = useCallback((value) => setShow(value), []);
 
   useEffect(() => {
-    console.log("use effect");
     const fetchCategories = async () => {
       const res = await fetch(`${API_URL}/categories`).then((res) =>
         res.json()
       );
-      console.log(res);
       setCategories(res);
     };
     fetchCategories();
@@ -105,7 +102,6 @@ export default function TxnTable() {
   const onValueChange = useCallback(
     (event, newDate) => {
       const selectedDate = newDate || date;
-      console.log(selectedDate);
       showPicker(false);
       setDate(selectedDate);
       // Update year and month to trigger refetch with new filters
@@ -198,13 +194,11 @@ export default function TxnTable() {
     );
   };
 
-  const handleSubcategoryPress = (id, category, subCategory) => {
-    console.log(category);
-    setSelectedSubcategory({ id: id, category: category, subCategory: null });
+  const handleSubcategoryPress = (id, category) => {
+    setSelectedSubcategory({ id: id, label: null, value: null });
     const subCategories =
       categories.filter((item) => item.label === category)[0]?.sub_categorias ||
       [];
-    console.log(subCategories);
     setSubCategories(subCategories);
     setSubCategoryModalVisible(true);
   };
@@ -213,7 +207,7 @@ export default function TxnTable() {
     return (
       <TouchableHighlight
         className={"border-b border-r p-2 border-slate-300 " + widthClass}
-        onPress={() => handleSubcategoryPress(id, category, subCategory)}
+        onPress={() => handleSubcategoryPress(id, category)}
         underlayColor="#e2e8f0"
       >
         <View>
@@ -262,7 +256,7 @@ export default function TxnTable() {
   const updateCategory = async () => {
     setLoading(true);
     try {
-      const res = await fetch(`${API_URL}/update_txn_category/`, {
+      const res = await fetch(`${API_URL}/update_category/`, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
@@ -285,7 +279,7 @@ export default function TxnTable() {
   const updateSubcategory = async () => {
     setLoading(true);
     try {
-      const res = await fetch(`${API_URL}/update_txn_category/`, {
+      const res = await fetch(`${API_URL}/update_subcategory/`, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
@@ -296,7 +290,7 @@ export default function TxnTable() {
       console.log("Update result:", result);
       const txnItem = txns.find((txn) => txn.id === selectedSubcategory.id);
       if (txnItem) {
-        txnItem.sub_categoria = selectedSubcategory.subCategoryLabel;
+        txnItem.sub_categoria = selectedSubcategory.label;
       }
     } catch (error) {
       console.error("Failed to update transactions:", error);
@@ -318,7 +312,6 @@ export default function TxnTable() {
           });
         }}
         onAccept={() => {
-          console.log(selectedCategory);
           updateCategory();
           setCategoryModalVisible(!categoryModalVisible);
         }}
@@ -327,12 +320,12 @@ export default function TxnTable() {
       />
       <MyCustomModal
         labels={subCategories}
-        value={selectedSubcategory.subCategoryValue}
+        value={selectedSubcategory.value}
         onChange={(item) => {
           setSelectedSubcategory({
             id: selectedSubcategory.id,
-            subCategoryLabel: item.label,
-            subCategoryValue: item.value,
+            label: item.label,
+            value: item.value,
           });
         }}
         onAccept={() => {
