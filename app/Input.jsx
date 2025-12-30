@@ -13,71 +13,32 @@ import {
   TextInput,
   View,
 } from "react-native";
+import CurrencyInput from "react-native-currency-input";
 import {
-  Gesture,
-  GestureDetector,
   GestureHandlerRootView,
   ScrollView as GHScrollView,
 } from "react-native-gesture-handler";
-import Animated, {
-  useAnimatedStyle,
-  useSharedValue,
-  withSpring,
-} from "react-native-reanimated";
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
+import SwipeableCategoryItem from "../components/SwipeableCategoryItem";
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL;
 
-// Separate component so each item has its own gesture/animation state
-function SwipeableCategoryItem({ cat }) {
-  const pressed = useSharedValue(false);
-  const position = useSharedValue(0);
-  const END_POSITION = -140;
-
-  const pan = Gesture.Pan()
-    .activeOffsetX([-10, 10]) // Only activate after 10px horizontal movement, allows vertical scroll
-    .onUpdate((event) => {
-      position.value = event.translationX;
-      pressed.value = true;
-    })
-    .onEnd(() => {
-      console.log("Final position:", position.value);
-      if (position.value < END_POSITION) {
-        position.value = withSpring(END_POSITION);
-      } else {
-        position.value = withSpring(0);
-        pressed.value = false;
-      }
-    });
-
-  const animatedStyles = useAnimatedStyle(() => ({
-    backgroundColor: pressed.value ? "#f0f0f0" : "white",
-    transform: [{ translateX: position.value }],
-  }));
-
-  return (
-    <GestureDetector gesture={pan}>
-      <Animated.View
-        style={[animatedStyles]}
-        className="p-4 border-b border-gray-200 flex-row justify-between flex-1"
-      >
-        <Text className="text-l">{cat.label}</Text>
-      </Animated.View>
-    </GestureDetector>
-  );
-}
-
 export default function Input() {
-  const [selectedLanguage, setSelectedLanguage] = useState();
+  const [selectedCategory, setSelectedCategory] = useState(null);
+  const [selectedSubcategory, setSelectedSubcategory] = useState(null);
   const [date, setDate] = useState(new Date());
   const [show, setShow] = useState(false);
   const [txtType, setTxnType] = useState(0);
-  const [txtInfo, setTxnInfo] = useState({});
+  const [txtData, setTxnData] = useState({});
   const [value, setValue] = useState("");
+
   const [categories, setCategories] = useState([]);
   const [visibleInputCat, setVisibleInputCat] = useState(false);
   const [inputCategory, setInputCategory] = useState("");
+  const [inputSubcategory, setInputSubcategory] = useState("");
   const [showCategoryModal, setShowCategoryModal] = useState(false);
+  const [expandedCategories, setExpandedCategories] = useState(new Set());
+  const [updatingCategory, setUpdatingCategory] = useState(null);
 
   useEffect(() => {
     const fetchCategories = async () => {
@@ -92,6 +53,7 @@ export default function Input() {
 
   const onChange = (event, selectedDate) => {
     const currentDate = selectedDate;
+    console.log(currentDate);
     setShow(false);
     setDate(currentDate);
   };
@@ -102,14 +64,32 @@ export default function Input() {
 
   const handleValueChange = (text) => {
     // Only allow decimal numbers (digits and one decimal point)
-    const decimalRegex = /^\d*\.?\d*$/;
-    if (decimalRegex.test(text)) {
-      setValue(text);
-    }
+    // const decimalRegex = /^\d*\.?\d*$/;
+    // if (decimalRegex.test(text)) {
+    //   setValue(text);
+    // }
+    setValue(text);
   };
 
   const submitTxn = () => {
-    const txn = {};
+    const txn = {
+      fecha: date.toISOString().split("T")[0],
+      valor: txtType === 0 ? parseFloat(value) : -1 * parseFloat(value),
+      id_categoria: selectedCategory,
+      id_subcategoria: selectedSubcategory,
+    };
+    console.log(txn);
+    try {
+      fetch(`${API_URL}/insert_txn/`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(txn),
+      });
+    } catch (error) {
+      console.error("Error submitting transaction:", error);
+    }
   };
 
   const dismissKeyboard = () => {
@@ -134,8 +114,105 @@ export default function Input() {
     }
   };
 
+  const addSubcategory = async (category) => {
+    if (inputSubcategory.trim() === "") return;
+    try {
+      const res = await fetch(`${API_URL}/insert_subcategory/`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          sub_categoria: inputSubcategory,
+          id_categoria: category,
+        }),
+      }).then((res) => res.json());
+      const categoryRef = categories.find(
+        (cat) => cat.value === res["id_categoria"]
+      );
+      categoryRef.sub_categorias.push({
+        label: res["sub_categoria"],
+        value: res["id"],
+      });
+      setCategories([...categories]);
+      setInputSubcategory("");
+    } catch (error) {
+      console.error("Error adding category:", error);
+    }
+  };
+
+  const deleteCategory = async (categoryValue) => {
+    try {
+      await fetch(`${API_URL}/delete_category/?id=${categoryValue}`, {
+        method: "DELETE",
+      });
+      setCategories(categories.filter((cat) => cat.value !== categoryValue));
+    } catch (error) {
+      console.error("Error deleting category:", error);
+    }
+  };
+
+  const deleteSubcategory = async (categoryValue) => {
+    try {
+      const result = await fetch(
+        `${API_URL}/delete_subcategory/?id=${categoryValue}`,
+        {
+          method: "DELETE",
+        }
+      ).then((res) => res.json());
+      console.log(result);
+      const categoryRef = categories.find(
+        (cat) => cat.value === result["id_categoria"]
+      );
+      const newSubcategories = categoryRef.filter(
+        (sub) => sub.value !== result["id"]
+      );
+      categoryRef.sub_categorias = newSubcategories;
+      console.log(categoryRef);
+      setCategories([...categories]);
+    } catch (error) {
+      console.error("Error deleting category:", error);
+    }
+  };
+
+  const updateCategory = async (value, newLabel) => {
+    console.log(value, newLabel);
+    setUpdatingCategory(value);
+    try {
+      const result = await fetch(
+        `${API_URL}/update_category/?value=${value}&label=${newLabel}`,
+        {
+          method: "PUT",
+        }
+      ).then((res) => res.json());
+
+      const categoryRef = categories.find(
+        (cat) => cat.value === result["value"]
+      );
+      categoryRef.label = result["label"];
+      setCategories([...categories]);
+    } catch (error) {
+      console.error("Error deleting category:", error);
+    } finally {
+      setUpdatingCategory(null);
+    }
+  };
+
+  const expandCategories = (cat) => {
+    setExpandedCategories((prev) => {
+      const newSet = new Set(prev);
+      if (newSet.has(cat.value)) {
+        newSet.delete(cat.value);
+      } else {
+        newSet.add(cat.value);
+      }
+      return newSet;
+    });
+  };
+
   const containerStyle =
-    " border justify-center items-center w-full rounded-lg p-5";
+    "border border-gray-400 justify-center items-center w-full rounded-lg p-5";
+
   return (
     // <TouchableWithoutFeedback onPress={dismissKeyboard}>
     <SafeAreaView>
@@ -151,19 +228,31 @@ export default function Input() {
               textColor="black"
               themeVariant="light"
               display="default"
+              accentColor="#0a84ff"
+              // style={{ backgroundColor: "#e5e7eb" }}
             />
           </View>
           <View className={containerStyle + " gap-2"}>
             <Text className="font-semibold">Valor</Text>
-            <TextInput
-              className="rounded-lg py-3 px-4 text-black bg-gray-200"
+            <CurrencyInput
+              className="rounded-3xl py-2 px-4 text-black bg-gray-200/70 w-[150px] text-center"
+              value={value}
+              onChangeValue={handleValueChange}
+              delimiter="."
+              separator=","
+              precision={2}
+              minValue={0}
+              style={{ fontSize: 16 }}
+            />
+            {/* <TextInput
+              className="rounded-3xl py-3 px-4 text-black bg-gray-200 w-[150px] text-center"
               placeholder="Ingresa el valor"
               placeholderTextColor="black"
               inputMode="decimal"
               keyboardType="decimal-pad"
               value={value}
               onChangeText={handleValueChange}
-            />
+            /> */}
           </View>
           <View className={containerStyle + " gap-2"}>
             <Text className="font-semibold">Tipo</Text>
@@ -182,20 +271,51 @@ export default function Input() {
             </View>
           </View>
           <View className={`${containerStyle}` + " gap-4"}>
-            <View className="flex-row justify-between items-center w-full">
-              <Text className="font-semibold">Categoria</Text>
+            <View className="flex-row justify-center items-center w-full">
+              <Text className="font-semibold text-lg">Categoria</Text>
               <Pressable
-                className="rounded-lg p-2 active:bg-gray-200"
+                className="absolute right-1 rounded-lg p-2 active:bg-gray-200"
                 onPress={() => setShowCategoryModal(true)}
               >
-                <Feather
-                  name="edit"
-                  size={20}
-                  color="black"
-                />
+                <Feather name="edit" size={20} color="black" />
               </Pressable>
             </View>
-            <Modal transparent={false} animationType="slide" visible={showCategoryModal}>
+            <View className="justify-between w-full">
+              <Picker
+                selectedValue={selectedCategory}
+                onValueChange={(itemValue, itemIndex) =>
+                  setSelectedCategory(itemValue)
+                }
+                style={{ color: "#000000" }}
+                itemStyle={{ fontSize: 16, color: "#000000" }}
+              >
+                {categories.map((cat) => (
+                  <Picker.Item label={cat.label} value={cat.value} />
+                ))}
+              </Picker>
+              <View className="flex-row justify-center flex-1">
+                <Text className="text-lg font-semibold">Sub Categoria</Text>
+              </View>
+              <Picker
+                selectedValue={selectedSubcategory}
+                onValueChange={(itemValue, itemIndex) =>
+                  setSelectedSubcategory(itemValue)
+                }
+                style={{ color: "#000000" }}
+                itemStyle={{ fontSize: 16, color: "#000000" }}
+              >
+                {categories
+                  .filter((cat) => cat.value === selectedCategory)[0]
+                  ?.sub_categorias.map((cat) => (
+                    <Picker.Item label={cat.label} value={cat.value} />
+                  ))}
+              </Picker>
+            </View>
+            <Modal
+              transparent={false}
+              animationType="slide"
+              visible={showCategoryModal}
+            >
               <SafeAreaProvider>
                 <SafeAreaView style={{ flex: 1 }}>
                   <View className="flex-row justify-between items-center px-4 py-2">
@@ -228,7 +348,7 @@ export default function Input() {
                   {visibleInputCat && (
                     <View className="flex-row gap-2 px-4 py-2">
                       <TextInput
-                        className="rounded-lg py-3 px-4 text-black bg-gray-200 flex-1"
+                        className="rounded-lg py-2 px-3 text-black flex-1 border-gray-300 border mb-2"
                         placeholder="Nueva Categoria"
                         placeholderTextColor="black"
                         value={inputCategory}
@@ -236,8 +356,11 @@ export default function Input() {
                           setInputCategory(text);
                         }}
                       />
-                      <Pressable onPress={() => addCategory()}>
-                        <Text className="bg-[#0a84ff] text-white font-semibold rounded-lg p-3">
+                      <Pressable
+                        className="bg-[#0a84ff] rounded-lg p-3 active:bg-[#0a84ff]/50 mb-2"
+                        onPress={() => addCategory()}
+                      >
+                        <Text className=" text-white font-semibold ">
                           Agregar
                         </Text>
                       </Pressable>
@@ -246,16 +369,47 @@ export default function Input() {
                   <GestureHandlerRootView style={{ flex: 1 }}>
                     <GHScrollView>
                       {categories.map((cat) => (
-                        <View className="flex-row relative" key={cat.value}>
-                          <View className="absolute right-0 h-full w-[140px] justify-center items-center flex-row">
-                            <Pressable className="border-l border-white h-full px-4 justify-center bg-green-200 active:opacity-70">
-                              <Text className="text-black">Editar</Text>
-                            </Pressable>
-                            <Pressable className="border-l border-gray-200 h-full px-4 justify-center bg-red-200 active:opacity-70">
-                              <Text className="text-black">Eliminar</Text>
-                            </Pressable>
-                          </View>
-                          <SwipeableCategoryItem cat={cat} />
+                        <View key={cat.value}>
+                          <SwipeableCategoryItem
+                            cat={cat}
+                            parent={true}
+                            onPress={() => expandCategories(cat)}
+                            onDelete={deleteCategory}
+                            onEdit={updateCategory}
+                            isLoading={updatingCategory === cat.value}
+                          />
+                          {expandedCategories.has(cat.value) && (
+                            <>
+                              {cat.sub_categorias.map((sub) => (
+                                <View key={sub.value} className="pl-8 w-full">
+                                  <SwipeableCategoryItem
+                                    cat={sub}
+                                    onDelete={deleteSubcategory}
+                                  />
+                                </View>
+                              ))}
+                              <View
+                                key={cat.sub}
+                                className="flex-row gap-2 px-4 py-2 ml-4"
+                              >
+                                <TextInput
+                                  className="rounded-lg py-2 px-3 text-black flex-1 border-gray-300 border"
+                                  placeholder="Nueva Subcategoria"
+                                  placeholderTextColor="black"
+                                  value={inputSubcategory}
+                                  onChangeText={(text) => {
+                                    setInputSubcategory(text);
+                                  }}
+                                />
+                                <Pressable
+                                  onPress={() => addSubcategory(cat.value)}
+                                  className="px-4 bg-gray-200 justify-center rounded-lg active:bg-gray-300"
+                                >
+                                  <Text>Agregar</Text>
+                                </Pressable>
+                              </View>
+                            </>
+                          )}
                         </View>
                       ))}
                     </GHScrollView>
@@ -263,43 +417,13 @@ export default function Input() {
                 </SafeAreaView>
               </SafeAreaProvider>
             </Modal>
-            <View className="justify-between w-full">
-              <Picker
-                selectedValue={selectedLanguage}
-                onValueChange={(itemValue, itemIndex) =>
-                  setSelectedLanguage(itemValue)
-                }
-                style={{ color: "#000000" }}
-                itemStyle={{ fontSize: 16, color: "#000000" }}
-              >
-                {categories.map((cat) => (
-                  <Picker.Item label={cat.label} value={cat.value} />
-                ))}
-              </Picker>
-            </View>
           </View>
-          <View className={containerStyle}>
-            <View className="flex-row">
-              <Text className="font-semibold">Sub Categoria</Text>
-            </View>
-            <View className="w-[300px] ">
-              <Picker
-                selectedValue={selectedLanguage}
-                onValueChange={(itemValue, itemIndex) =>
-                  setSelectedLanguage(itemValue)
-                }
-                style={{ color: "#000000" }}
-                itemStyle={{ fontSize: 16, color: "#000000" }}
-              >
-                {categories
-                  .filter((cat) => cat.value === selectedLanguage)[0]
-                  ?.sub_categorias.map((cat) => (
-                    <Picker.Item label={cat.label} value={cat.value} />
-                  ))}
-              </Picker>
-            </View>
-          </View>
-          <Pressable onPress={submitTxn}></Pressable>
+          <Pressable
+            onPress={submitTxn}
+            className="bg-[#0a84ff] rounded-lg p-4 w-full items-center active:bg-[#0a84ff]/50"
+          >
+            <Text className="text-white font-semibold">Enviar transacción</Text>
+          </Pressable>
         </View>
       </ScrollView>
     </SafeAreaView>

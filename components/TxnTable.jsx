@@ -1,21 +1,25 @@
-import { useInfiniteQuery } from "@tanstack/react-query";
+import MaterialIcons from "@expo/vector-icons/MaterialIcons";
+import { Picker } from "@react-native-picker/picker";
+import { useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
   FlatList,
+  Modal,
   Pressable,
   ScrollView,
   Text,
   TouchableHighlight,
   View,
 } from "react-native";
-import MonthPicker from "react-native-month-year-picker";
 import { SafeAreaView } from "react-native-safe-area-context";
 import MyCustomModal from "./MyCustomModal";
 
 export default function TxnTable() {
   const API_URL = process.env.EXPO_PUBLIC_API_URL;
   console.log("API_URL:", API_URL); // Debug log
+  const queryClient = useQueryClient();
   const [categoryModalVisible, setCategoryModalVisible] = useState(false);
   const [subCategoryModalVisible, setSubCategoryModalVisible] = useState(false);
   const [selectedYear, setSelectedYear] = useState(
@@ -34,8 +38,19 @@ export default function TxnTable() {
   const [show, setShow] = useState(false);
   // Initialize date to match selectedYear and selectedMonth (month is 0-indexed)
   const [date, setDate] = useState(new Date(2025, 8)); // September 2025
+  const [tempYear, setTempYear] = useState(selectedYear); // Temporary year for picker
+  const [tempMonth, setTempMonth] = useState(selectedMonth); // Temporary month for picker
 
-  const showPicker = useCallback((value) => setShow(value), []);
+  const showPicker = useCallback(
+    (value) => {
+      setShow(value);
+      if (value) {
+        setTempYear(selectedYear); // Reset temp year when opening picker
+        setTempMonth(selectedMonth); // Reset temp month when opening picker
+      }
+    },
+    [selectedYear, selectedMonth]
+  );
 
   useEffect(() => {
     const fetchCategories = async () => {
@@ -53,6 +68,7 @@ export default function TxnTable() {
     valor: "w-28",
     categoria: "w-28",
     sub_categoria: "w-28",
+    editar: "w-[60px]",
   };
 
   const {
@@ -99,17 +115,43 @@ export default function TxnTable() {
     return data?.pages?.flatMap((page) => page) ?? [];
   }, [data]);
 
-  const onValueChange = useCallback(
-    (event, newDate) => {
-      const selectedDate = newDate || date;
-      showPicker(false);
-      setDate(selectedDate);
-      // Update year and month to trigger refetch with new filters
-      setSelectedYear(String(selectedDate.getFullYear()));
-      setSelectedMonth(String(selectedDate.getMonth() + 1));
-    },
-    [date, showPicker]
-  );
+  const onValueChange = useCallback(() => {
+    showPicker(false);
+    const newDate = new Date(parseInt(tempYear), parseInt(tempMonth) - 1);
+    setDate(newDate);
+    // Update year and month to trigger refetch with new filters
+    setSelectedYear(tempYear);
+    setSelectedMonth(tempMonth);
+  }, [tempYear, tempMonth, showPicker]);
+
+  // Generate year options (from 2025 to current year)
+  const yearOptions = useMemo(() => {
+    const currentYear = new Date().getFullYear();
+    const years = [];
+    for (let year = 2025; year <= currentYear; year++) {
+      years.push(String(year));
+    }
+    return years;
+  }, []);
+
+  // Generate month options
+  const monthOptions = useMemo(() => {
+    const months = [
+      { value: "1", label: "Enero" },
+      { value: "2", label: "Febrero" },
+      { value: "3", label: "Marzo" },
+      { value: "4", label: "Abril" },
+      { value: "5", label: "Mayo" },
+      { value: "6", label: "Junio" },
+      { value: "7", label: "Julio" },
+      { value: "8", label: "Agosto" },
+      { value: "9", label: "Septiembre" },
+      { value: "10", label: "Octubre" },
+      { value: "11", label: "Noviembre" },
+      { value: "12", label: "Diciembre" },
+    ];
+    return months;
+  }, []);
 
   const renderHeaderCell = (label, widthClass = "w-40") => (
     <View
@@ -127,6 +169,7 @@ export default function TxnTable() {
         {renderHeaderCell("Valor", columnsWidth["valor"])}
         {renderHeaderCell("Categoria", columnsWidth["categoria"])}
         {renderHeaderCell("Sub categoria", columnsWidth["sub_categoria"])}
+        {renderHeaderCell("Editar", columnsWidth["editar"])}
       </View>
     );
   };
@@ -170,7 +213,7 @@ export default function TxnTable() {
   const renderDescripcionCell = (value, widthClass) => {
     return (
       <View className={"border-b border-r p-2 border-slate-300 " + widthClass}>
-        <Text className="text-right">{value.toLowerCase()}</Text>
+        <Text className="text-right">{value && value.toLowerCase()}</Text>
       </View>
     );
   };
@@ -188,7 +231,7 @@ export default function TxnTable() {
         underlayColor="#e2e8f0"
       >
         <View>
-          <Text className="text-right">{category.toLowerCase()}</Text>
+          <Text className="text-right">{category?.toLowerCase()}</Text>
         </View>
       </TouchableHighlight>
     );
@@ -217,11 +260,45 @@ export default function TxnTable() {
     );
   };
 
+  const renderEditCell = (id, widthClass) => {
+    return (
+      <Pressable
+        className={
+          "border-b border-r p-2 border-slate-300 items-center justify-center " +
+          widthClass
+        }
+        onPress={() =>
+          Alert.alert(
+            "Eliminar",
+            "Está seguro que desea eliminar la transaccion",
+            [
+              {
+                text: "No",
+              },
+              {
+                text: "Si",
+                onPress: () => deleteTxn(id),
+              },
+            ]
+          )
+        }
+      >
+        {({ pressed }) => (
+          <MaterialIcons
+            name={pressed ? "delete" : "delete-outline"}
+            size={24}
+            color="black"
+          />
+        )}
+      </Pressable>
+    );
+  };
+
   const renderTxns = (item) => {
     return (
       <View className="flex-row">
         {renderCell(item.fecha, columnsWidth["fecha"])}
-        {renderDescripcionCell(item.descripcion, columnsWidth["descripcion"])}
+        {renderDescripcionCell(item?.descripcion, columnsWidth["descripcion"])}
         {renderValorCell(item.valor, columnsWidth["valor"])}
         {renderCategoryCell(item.id, item.categoria, columnsWidth["categoria"])}
         {renderSubCategoryCell(
@@ -230,6 +307,7 @@ export default function TxnTable() {
           item.sub_categoria,
           columnsWidth["sub_categoria"]
         )}
+        {renderEditCell(item.id, columnsWidth["editar"])}
       </View>
     );
   };
@@ -256,7 +334,7 @@ export default function TxnTable() {
   const updateCategory = async () => {
     setLoading(true);
     try {
-      const res = await fetch(`${API_URL}/update_category/`, {
+      const res = await fetch(`${API_URL}/update_txn_category/`, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
@@ -265,10 +343,10 @@ export default function TxnTable() {
       });
       const result = await res.json();
       console.log("Update result:", result);
-      const txnItem = txns.find((txn) => txn.id === selectedCategory.id);
-      if (txnItem) {
-        txnItem.categoria = selectedCategory.label;
-      }
+      // Invalidate and refetch the transactions query
+      queryClient.invalidateQueries({
+        queryKey: ["txns", selectedYear, selectedMonth],
+      });
     } catch (error) {
       console.error("Failed to update transactions:", error);
     } finally {
@@ -279,7 +357,7 @@ export default function TxnTable() {
   const updateSubcategory = async () => {
     setLoading(true);
     try {
-      const res = await fetch(`${API_URL}/update_subcategory/`, {
+      const res = await fetch(`${API_URL}/update_txn_subcategory/`, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
@@ -288,10 +366,32 @@ export default function TxnTable() {
       });
       const result = await res.json();
       console.log("Update result:", result);
-      const txnItem = txns.find((txn) => txn.id === selectedSubcategory.id);
-      if (txnItem) {
-        txnItem.sub_categoria = selectedSubcategory.label;
-      }
+      // Invalidate and refetch the transactions query
+      queryClient.invalidateQueries({
+        queryKey: ["txns", selectedYear, selectedMonth],
+      });
+    } catch (error) {
+      console.error("Failed to update transactions:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const deleteTxn = async (id) => {
+    setLoading(true);
+    try {
+      const res = await fetch(`${API_URL}/delete_txn/?id=${id}`, {
+        method: "DELETE",
+        headers: {
+          "Content-Type": "application/json",
+        },
+      });
+      const result = await res.json();
+      console.log("deleted result:", result);
+      // Invalidate and refetch the transactions query to update the UI
+      queryClient.invalidateQueries({
+        queryKey: ["txns", selectedYear, selectedMonth],
+      });
     } catch (error) {
       console.error("Failed to update transactions:", error);
     } finally {
@@ -346,12 +446,61 @@ export default function TxnTable() {
         </Text>
       </Pressable>
       {show && (
-        <MonthPicker
-          onChange={onValueChange}
-          value={date}
-          minimumDate={new Date(2025, 0)}
-          maximumDate={new Date(2025, 11)}
-        />
+        <Modal
+          transparent={true}
+          animationType="slide"
+          visible={show}
+          onRequestClose={() => showPicker(false)}
+        >
+          <View className="flex-1 justify-end bg-black/50">
+            <View className="bg-white rounded-t-3xl p-4 h-1/3">
+              <View className="flex-row justify-between items-center mb-10">
+                <Pressable onPress={() => showPicker(false)}>
+                  <Text className="text-blue-500 text-lg">Cancel</Text>
+                </Pressable>
+                <Text className="text-lg font-bold">Seleccionar fecha</Text>
+                <Pressable onPress={onValueChange}>
+                  <Text className="text-blue-500 text-lg">Done</Text>
+                </Pressable>
+              </View>
+              <View
+                className="flex-row justify-center items-center"
+                style={{ height: 200 }}
+              >
+                <View className="flex-1">
+                  {/* <Text className="text-center mb-2 text-slate-600 font-semibold">Año</Text> */}
+                  <Picker
+                    selectedValue={tempYear}
+                    onValueChange={(itemValue) => setTempYear(itemValue)}
+                    style={{ color: "#000000" }}
+                    itemStyle={{ fontSize: 18, color: "#000000" }}
+                  >
+                    {yearOptions.map((year) => (
+                      <Picker.Item key={year} label={year} value={year} />
+                    ))}
+                  </Picker>
+                </View>
+                <View className="flex-1">
+                  {/* <Text className="text-center mb-2 text-slate-600 font-semibold">Mes</Text> */}
+                  <Picker
+                    selectedValue={tempMonth}
+                    onValueChange={(itemValue) => setTempMonth(itemValue)}
+                    style={{ color: "#000000" }}
+                    itemStyle={{ fontSize: 18, color: "#000000" }}
+                  >
+                    {monthOptions.map((month) => (
+                      <Picker.Item
+                        key={month.value}
+                        label={month.label}
+                        value={month.value}
+                      />
+                    ))}
+                  </Picker>
+                </View>
+              </View>
+            </View>
+          </View>
+        </Modal>
       )}
       <View className="border border-slate-300 rounded-2xl">
         <ScrollView horizontal showsHorizontalScrollIndicator={true}>
