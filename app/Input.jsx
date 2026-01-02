@@ -5,6 +5,7 @@ import { Picker } from "@react-native-picker/picker";
 import SegmentedControl from "@react-native-segmented-control/segmented-control";
 import { useEffect, useState } from "react";
 import {
+  ActivityIndicator,
   Keyboard,
   Modal,
   Pressable,
@@ -39,6 +40,7 @@ export default function Input() {
   const [showCategoryModal, setShowCategoryModal] = useState(false);
   const [expandedCategories, setExpandedCategories] = useState(new Set());
   const [updatingCategory, setUpdatingCategory] = useState(null);
+  const [isSending, setIsSending] = useState(false);
 
   useEffect(() => {
     const fetchCategories = async () => {
@@ -72,6 +74,7 @@ export default function Input() {
   };
 
   const submitTxn = () => {
+    setIsSending(true);
     const txn = {
       fecha: date.toISOString().split("T")[0],
       valor: txtType === 0 ? parseFloat(value) : -1 * parseFloat(value),
@@ -90,6 +93,7 @@ export default function Input() {
     } catch (error) {
       console.error("Error submitting transaction:", error);
     }
+    setIsSending(false);
   };
 
   const dismissKeyboard = () => {
@@ -243,6 +247,7 @@ export default function Input() {
               precision={2}
               minValue={0}
               style={{ fontSize: 16 }}
+              keyboardType="number-pad"
             />
             {/* <TextInput
               className="rounded-3xl py-3 px-4 text-black bg-gray-200 w-[150px] text-center"
@@ -422,7 +427,13 @@ export default function Input() {
             onPress={submitTxn}
             className="bg-[#0a84ff] rounded-lg p-4 w-full items-center active:bg-[#0a84ff]/50"
           >
-            <Text className="text-white font-semibold">Enviar transacción</Text>
+            {isSending ? (
+              <ActivityIndicator size="small" color="#ffffff" />
+            ) : (
+              <Text className="text-white font-semibold">
+                Enviar transacción
+              </Text>
+            )}
           </Pressable>
         </View>
       </ScrollView>

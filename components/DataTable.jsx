@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  ActivityIndicator,
   FlatList,
   ScrollView,
   StyleSheet,
@@ -56,6 +57,7 @@ export default function DataTable() {
     direction: "asc",
   });
   const [activeColumns, setActiveColumns] = useState(months);
+  const [isLoading, setIsLoading] = useState(true);
 
   const scrollingListRef = useRef(null);
   const isScrollingRef = useRef(false);
@@ -76,6 +78,7 @@ export default function DataTable() {
       }
     };
     fetchGroupedTxns();
+    setIsLoading(false);
   }, []);
 
   const monthlyTotals = useMemo(() => {
@@ -430,6 +433,7 @@ export default function DataTable() {
             </View>
           </ScrollView>
         </View>
+        {isLoading && <ActivityIndicator size="small" color="#0a84ff" />}
       </View>
     </View>
   );

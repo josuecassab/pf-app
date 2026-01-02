@@ -1,10 +1,11 @@
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import { Picker } from "@react-native-picker/picker";
 import { useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  Animated,
   FlatList,
   Modal,
   Pressable,
@@ -20,6 +21,7 @@ export default function TxnTable() {
   const API_URL = process.env.EXPO_PUBLIC_API_URL;
   console.log("API_URL:", API_URL); // Debug log
   const queryClient = useQueryClient();
+  const rotateAnim = useRef(new Animated.Value(0)).current;
   const [categoryModalVisible, setCategoryModalVisible] = useState(false);
   const [subCategoryModalVisible, setSubCategoryModalVisible] = useState(false);
   const [selectedYear, setSelectedYear] = useState(
@@ -399,6 +401,27 @@ export default function TxnTable() {
     }
   };
 
+  const handleRefreshPressIn = () => {
+    Animated.timing(rotateAnim, {
+      toValue: 1,
+      duration: 300,
+      useNativeDriver: true,
+    }).start();
+  };
+
+  const handleRefreshPressOut = () => {
+    Animated.timing(rotateAnim, {
+      toValue: 0,
+      duration: 300,
+      useNativeDriver: true,
+    }).start();
+  };
+
+  const rotation = rotateAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: ["0deg", "180deg"],
+  });
+
   return (
     <SafeAreaView style={{ flex: 1 }} className="px-4 gap-2">
       <MyCustomModal
@@ -437,14 +460,28 @@ export default function TxnTable() {
           setSubCategoryModalVisible(!subCategoryModalVisible)
         }
       />
-      <Pressable
-        onPress={() => showPicker(true)}
-        className="rounded-2xl px-4 py-2 self-start border border-gray-400 bg-white active:bg-gray-200"
-      >
-        <Text className="text-lg text-slate-800 font-bold">
-          {date.toLocaleDateString("es-ES", { month: "long", year: "numeric" })}
-        </Text>
-      </Pressable>
+      <View className="flex flex-row justify-between items-center">
+        <Pressable
+          onPress={() => showPicker(true)}
+          className="rounded-2xl px-4 py-2 self-start border border-gray-400 bg-white active:bg-gray-200"
+        >
+          <Text className="text-lg text-slate-800 font-bold">
+            {date.toLocaleDateString("es-ES", {
+              month: "long",
+              year: "numeric",
+            })}
+          </Text>
+        </Pressable>
+        <Pressable
+          className="rounded-2xl px-4 py-2 self-start border border-gray-400 bg-white active:bg-gray-200"
+          onPressIn={handleRefreshPressIn}
+          onPressOut={handleRefreshPressOut}
+        >
+          <Animated.View style={{ transform: [{ rotate: rotation }] }}>
+            <MaterialIcons name="refresh" size={24} color="black" />
+          </Animated.View>
+        </Pressable>
+      </View>
       {show && (
         <Modal
           transparent={true}
