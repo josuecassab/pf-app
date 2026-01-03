@@ -9,6 +9,7 @@ import {
   FlatList,
   Modal,
   Pressable,
+  RefreshControl,
   ScrollView,
   Text,
   TouchableHighlight,
@@ -27,14 +28,13 @@ export default function TxnTable() {
   const [selectedYear, setSelectedYear] = useState(
     String(new Date().getFullYear())
   );
-  // const [selectedYear, setSelectedYear] = useState(String(2025));
   const [selectedMonth, setSelectedMonth] = useState(
     String(new Date().getMonth() + 1)
   );
-  // const [selectedMonth, setSelectedMonth] = useState(String(9));
   const [selectedCategory, setSelectedCategory] = useState({});
   const [selectedSubcategory, setSelectedSubcategory] = useState({});
   const [loading, setLoading] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const [categories, setCategories] = useState([]);
   const [subCategories, setSubCategories] = useState([]);
   const [show, setShow] = useState(false);
@@ -324,6 +324,14 @@ export default function TxnTable() {
     }
   };
 
+  const handleLoadRecent = async () => {
+    setRefreshing(true);
+    await queryClient.invalidateQueries({
+      queryKey: ["txns", selectedYear, selectedMonth],
+    });
+    setRefreshing(false);
+  };
+
   const renderFooter = () => {
     if (!isFetchingNextPage) return null;
     return (
@@ -472,7 +480,7 @@ export default function TxnTable() {
             })}
           </Text>
         </Pressable>
-        <Pressable
+        {/* <Pressable
           className="rounded-2xl px-4 py-2 self-start border border-gray-400 bg-white active:bg-gray-200"
           onPressIn={handleRefreshPressIn}
           onPressOut={handleRefreshPressOut}
@@ -480,7 +488,7 @@ export default function TxnTable() {
           <Animated.View style={{ transform: [{ rotate: rotation }] }}>
             <MaterialIcons name="refresh" size={24} color="black" />
           </Animated.View>
-        </Pressable>
+        </Pressable> */}
       </View>
       {show && (
         <Modal
@@ -548,6 +556,14 @@ export default function TxnTable() {
             ListHeaderComponent={renderHeader}
             renderItem={({ item }) => renderTxns(item)}
             stickyHeaderIndices={[0]}
+            refreshControl={
+              <RefreshControl
+                refreshing={refreshing}
+                onRefresh={handleLoadRecent}
+                tintColor="#3b82f6"
+                colors={["#3b82f6"]}
+              />
+            }
             onEndReached={handleLoadMore}
             onEndReachedThreshold={0.5}
             ListFooterComponent={renderFooter}

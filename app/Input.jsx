@@ -1,20 +1,22 @@
 import AntDesign from "@expo/vector-icons/AntDesign";
 import Feather from "@expo/vector-icons/Feather";
 import DateTimePicker from "@react-native-community/datetimepicker";
-import { Picker } from "@react-native-picker/picker";
 import SegmentedControl from "@react-native-segmented-control/segmented-control";
 import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
   Keyboard,
   Modal,
   Pressable,
   ScrollView,
+  StyleSheet,
   Text,
   TextInput,
   View,
 } from "react-native";
 import CurrencyInput from "react-native-currency-input";
+import { Dropdown } from "react-native-element-dropdown";
 import {
   GestureHandlerRootView,
   ScrollView as GHScrollView,
@@ -29,7 +31,7 @@ export default function Input() {
   const [selectedSubcategory, setSelectedSubcategory] = useState(null);
   const [date, setDate] = useState(new Date());
   const [show, setShow] = useState(false);
-  const [txtType, setTxnType] = useState(0);
+  const [txtType, setTxnType] = useState(1);
   const [txtData, setTxnData] = useState({});
   const [value, setValue] = useState("");
 
@@ -47,7 +49,7 @@ export default function Input() {
       const res = await fetch(`${API_URL}/categories`).then((res) =>
         res.json()
       );
-      console.log("Fetched Categories:", res);
+      // console.log("Fetched Categories:", res);
       setCategories(res);
     };
     fetchCategories();
@@ -73,27 +75,47 @@ export default function Input() {
     setValue(text);
   };
 
-  const submitTxn = () => {
+  const submitTxn = async () => {
     setIsSending(true);
-    const txn = {
-      fecha: date.toISOString().split("T")[0],
-      valor: txtType === 0 ? parseFloat(value) : -1 * parseFloat(value),
-      id_categoria: selectedCategory,
-      id_subcategoria: selectedSubcategory,
-    };
+    const txn = {};
+    txn.fecha = date.toISOString().split("T")[0];
+    txn.valor = txtType === 0 ? parseFloat(value) : -1 * parseFloat(value);
+    if (selectedCategory?.value) {
+      txn.id_categoria = selectedCategory.value;
+    } else {
+      Alert.alert("Error de validación", "Porfavor seleccione una categoria");
+      setIsSending(false);
+      return;
+    }
+    txn.id_subcategoria = selectedSubcategory?.value
+      ? selectedSubcategory.value
+      : null;
+
     console.log(txn);
     try {
-      fetch(`${API_URL}/insert_txn/`, {
+      const res = await fetch(`${API_URL}/insert_txn/`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify(txn),
       });
+
+      const data = await res.json();
+      console.log(data);
+
+      if (!res.ok) {
+        Alert.alert("Error enviando la transacción", data.message || JSON.stringify(data));
+        return;
+      }
+
+      Alert.alert("Éxito", "Transacción enviada correctamente");
     } catch (error) {
       console.error("Error submitting transaction:", error);
+      Alert.alert("Error enviando la transacción", error.message);
+    } finally {
+      setIsSending(false);
     }
-    setIsSending(false);
   };
 
   const dismissKeyboard = () => {
@@ -277,7 +299,7 @@ export default function Input() {
           </View>
           <View className={`${containerStyle}` + " gap-4"}>
             <View className="flex-row justify-center items-center w-full">
-              <Text className="font-semibold text-lg">Categoria</Text>
+              <Text className="font-semibold text-base">Categoria</Text>
               <Pressable
                 className="absolute right-1 rounded-lg p-2 active:bg-gray-200"
                 onPress={() => setShowCategoryModal(true)}
@@ -286,35 +308,53 @@ export default function Input() {
               </Pressable>
             </View>
             <View className="justify-between w-full">
-              <Picker
-                selectedValue={selectedCategory}
-                onValueChange={(itemValue, itemIndex) =>
-                  setSelectedCategory(itemValue)
-                }
-                style={{ color: "#000000" }}
-                itemStyle={{ fontSize: 16, color: "#000000" }}
-              >
-                {categories.map((cat) => (
-                  <Picker.Item label={cat.label} value={cat.value} />
-                ))}
-              </Picker>
-              <View className="flex-row justify-center flex-1">
-                <Text className="text-lg font-semibold">Sub Categoria</Text>
+              <Dropdown
+                style={styles.dropdown}
+                placeholderStyle={styles.placeholderStyle}
+                selectedTextStyle={styles.selectedTextStyle}
+                inputSearchStyle={styles.inputSearchStyle}
+                iconStyle={styles.iconStyle}
+                data={categories}
+                search
+                maxHeight={300}
+                labelField="label"
+                valueField="value"
+                placeholder="Seleccionar categoria"
+                searchPlaceholder="Buscar..."
+                value={selectedCategory?.value}
+                onChange={(item) => {
+                  setSelectedCategory({
+                    label: item.label,
+                    value: item.value,
+                    sub_categorias: item.sub_categorias,
+                  });
+                  console.log(selectedCategory);
+                }}
+              />
+              <View className="flex-row flex-1 justify-center">
+                <Text className="text-base font-semibold">Sub Categoria</Text>
               </View>
-              <Picker
-                selectedValue={selectedSubcategory}
-                onValueChange={(itemValue, itemIndex) =>
-                  setSelectedSubcategory(itemValue)
-                }
-                style={{ color: "#000000" }}
-                itemStyle={{ fontSize: 16, color: "#000000" }}
-              >
-                {categories
-                  .filter((cat) => cat.value === selectedCategory)[0]
-                  ?.sub_categorias.map((cat) => (
-                    <Picker.Item label={cat.label} value={cat.value} />
-                  ))}
-              </Picker>
+              <Dropdown
+                style={styles.dropdown}
+                placeholderStyle={styles.placeholderStyle}
+                selectedTextStyle={styles.selectedTextStyle}
+                inputSearchStyle={styles.inputSearchStyle}
+                iconStyle={styles.iconStyle}
+                data={selectedCategory?.sub_categorias || []}
+                search
+                maxHeight={300}
+                labelField="label"
+                valueField="value"
+                placeholder="Seleccionar sub categoria"
+                searchPlaceholder="Buscar..."
+                value={selectedSubcategory?.value}
+                onChange={(item) => {
+                  setSelectedSubcategory({
+                    label: item.label,
+                    value: item.value,
+                  });
+                }}
+              />
             </View>
             <Modal
               transparent={false}
@@ -425,7 +465,7 @@ export default function Input() {
           </View>
           <Pressable
             onPress={submitTxn}
-            className="bg-[#0a84ff] rounded-lg p-4 w-full items-center active:bg-[#0a84ff]/50"
+            className="bg-[#0a84ff] rounded-lg p-3 items-center active:bg-[#0a84ff]/50"
           >
             {isSending ? (
               <ActivityIndicator size="small" color="#ffffff" />
@@ -442,11 +482,28 @@ export default function Input() {
   );
 }
 
-// const styles = StyleSheet.create({
-//   container: {
-//     flex: 1,
-//     alignItems: "center",
-//     justifyContent: "start",
-//     height: "100%",
-//   },
-// });
+const styles = StyleSheet.create({
+  dropdown: {
+    margin: 16,
+    height: 50,
+    borderBottomColor: "gray",
+    borderBottomWidth: 0.5,
+  },
+  icon: {
+    marginRight: 5,
+  },
+  placeholderStyle: {
+    fontSize: 16,
+  },
+  selectedTextStyle: {
+    fontSize: 16,
+  },
+  iconStyle: {
+    width: 20,
+    height: 20,
+  },
+  inputSearchStyle: {
+    height: 40,
+    fontSize: 16,
+  },
+});
