@@ -1,3 +1,4 @@
+import { useQuery } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
@@ -50,7 +51,6 @@ export default function GroupedTable() {
   const leftRef = useRef(null);
   const rightRef = useRef(null);
   const [text, setText] = useState("");
-  const [data, setData] = useState([]);
   const [filteredData, setFilteredData] = useState([]);
   const [expandedCategories, setExpandedCategories] = useState(new Set());
   const [sortConfig, setSortConfig] = useState({
@@ -58,7 +58,6 @@ export default function GroupedTable() {
     direction: "asc",
   });
   const [activeColumns, setActiveColumns] = useState(months);
-  const [isLoading, setIsLoading] = useState(true);
   const [showYears, setShowYears] = useState(false);
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   const scrollingListRef = useRef(null);
@@ -68,22 +67,21 @@ export default function GroupedTable() {
 
   const years = [2026, 2025, 2024, 2023, 2022, 2021];
 
+  const { isPending, error, data, isFetching } = useQuery({
+    queryKey: [selectedYear],
+    queryFn: async () => {
+      const response = await fetch(
+        `${API_URL}/grouped_txns?year=${selectedYear}`
+      );
+      return await response.json();
+    },
+  });
+
   useEffect(() => {
-    const fetchGroupedTxns = async () => {
-      try {
-        const data = await fetch(`${API_URL}/grouped_txns`).then((res) =>
-          res.json()
-        );
-        // console.log("Grouped Txns:", data);
-        setData(data);
-        setFilteredData(data);
-      } catch (error) {
-        console.error("Error fetching grouped txns:", error);
-      }
-    };
-    fetchGroupedTxns();
-    setIsLoading(false);
-  }, []);
+    if (data) {
+      setFilteredData(data);
+    }
+  }, [data]);
 
   const monthlyTotals = useMemo(() => {
     return activeColumns.map((month) =>
@@ -464,7 +462,8 @@ export default function GroupedTable() {
             </View>
           </ScrollView>
         </View>
-        {isLoading && <ActivityIndicator size="small" color="#0a84ff" />}
+        {isPending && <ActivityIndicator size="small" color="#0a84ff" />}
+        {error && <Text>{"An error has occurred: " + error.message}</Text>}
       </View>
     </View>
   );
