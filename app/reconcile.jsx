@@ -64,9 +64,9 @@ export default function Reconcile() {
     },
   });
 
-  if (isPending) return "Loading...";
+  if (isPending) return <Text>Loading...</Text>;
 
-  if (error) return "An error has occurred: " + error.message;
+  if (error) return <Text>An error has occurred: {error.message}</Text>;
 
   const handleUpload = async () => {
     if (!file) {
@@ -207,7 +207,7 @@ export default function Reconcile() {
   };
 
   const renderFooter = () => {
-    if (!isFetchingNextPage) return null;
+    if (!isFetching) return null;
     return (
       <View className="py-4">
         <ActivityIndicator size="large" color="#3b82f6" />

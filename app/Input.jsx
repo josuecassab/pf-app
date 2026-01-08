@@ -7,12 +7,14 @@ import {
   ActivityIndicator,
   Alert,
   Keyboard,
+  KeyboardAvoidingView,
   Modal,
+  Platform,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
+  TouchableWithoutFeedback,
   View,
 } from "react-native";
 import CurrencyInput from "react-native-currency-input";
@@ -78,7 +80,8 @@ export default function Input() {
   const submitTxn = async () => {
     setIsSending(true);
     const txn = {};
-    txn.fecha = date.toISOString().split("T")[0];
+    // Format date in local timezone as YYYY-MM-DD (using 'en-CA' locale for ISO format)
+    txn.fecha = date.toLocaleDateString("en-CA");
     txn.valor = txtType === 0 ? parseFloat(value) : -1 * parseFloat(value);
     if (selectedCategory?.value) {
       txn.id_categoria = selectedCategory.value;
@@ -105,11 +108,12 @@ export default function Input() {
       console.log(data);
 
       if (!res.ok) {
-        Alert.alert("Error enviando la transacción", data.message || JSON.stringify(data));
+        Alert.alert(
+          "Error enviando la transacción",
+          data.message || JSON.stringify(data)
+        );
         return;
       }
-
-      Alert.alert("Éxito", "Transacción enviada correctamente");
     } catch (error) {
       console.error("Error submitting transaction:", error);
       Alert.alert("Error enviando la transacción", error.message);
@@ -240,9 +244,17 @@ export default function Input() {
     "border border-gray-400 justify-center items-center w-full rounded-lg p-5";
 
   return (
-    // <TouchableWithoutFeedback onPress={dismissKeyboard}>
-    <SafeAreaView>
-      <ScrollView>
+    // <SafeAreaView style={{ flex: 1 }}>
+    <KeyboardAvoidingView
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
+      style={{ flex: 1 }}
+      keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 20}
+    >
+      <TouchableWithoutFeedback onPress={dismissKeyboard}>
+        {/* <ScrollView
+        contentContainerStyle={{ flexGrow: 1 }}
+        keyboardShouldPersistTaps="handled"
+      > */}
         <View className="flex-1 justify-center items-center bg-white gap-4 p-4">
           <View className={containerStyle + " gap-2"}>
             <Text className="font-semibold">Fecha</Text>
@@ -316,7 +328,7 @@ export default function Input() {
                 iconStyle={styles.iconStyle}
                 data={categories}
                 search
-                maxHeight={300}
+                maxHeight={220}
                 labelField="label"
                 valueField="value"
                 placeholder="Seleccionar categoria"
@@ -330,6 +342,7 @@ export default function Input() {
                   });
                   console.log(selectedCategory);
                 }}
+                // dropdownPosition="top"
               />
               <View className="flex-row flex-1 justify-center">
                 <Text className="text-base font-semibold">Sub Categoria</Text>
@@ -342,7 +355,7 @@ export default function Input() {
                 iconStyle={styles.iconStyle}
                 data={selectedCategory?.sub_categorias || []}
                 search
-                maxHeight={300}
+                maxHeight={220}
                 labelField="label"
                 valueField="value"
                 placeholder="Seleccionar sub categoria"
@@ -354,6 +367,7 @@ export default function Input() {
                     value: item.value,
                   });
                 }}
+                dropdownPosition="top"
               />
             </View>
             <Modal
@@ -476,9 +490,10 @@ export default function Input() {
             )}
           </Pressable>
         </View>
-      </ScrollView>
-    </SafeAreaView>
-    // </TouchableWithoutFeedback>
+        {/* </ScrollView> */}
+      </TouchableWithoutFeedback>
+    </KeyboardAvoidingView>
+    // </SafeAreaView>
   );
 }
 
