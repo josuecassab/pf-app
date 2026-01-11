@@ -22,7 +22,8 @@ export default function Reconcile() {
   const [statements, setStatements] = useState([]);
   const [selectedStatement, setSelectedStatement] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
-  const table = "34269719739_JUN2025";
+  const [unmatchedTxns, setUnmatchedTxns] = useState([]);
+  const [matchedTxns, setMatchedTxns] = useState([]);
 
   const columnsWidth = {
     fecha: "w-[98px]",
@@ -30,7 +31,6 @@ export default function Reconcile() {
     valor: "w-28",
     categoria: "w-28",
     sub_categoria: "w-28",
-    editar: "w-[60px]",
   };
 
   const fetchStatements = async () => {
@@ -39,11 +39,12 @@ export default function Reconcile() {
         res.json()
       );
       const statements = data.map((item) => ({
-        label: item.split("/").at(-1),
+        label: item.split("/").at(-1).split(".")[0],
         value: item,
       }));
       console.log(statements);
       setStatements(statements);
+      setSelectedStatement(statements[0]);
     } catch (error) {
       console.error("Error fetching statements:", error);
     }
@@ -57,9 +58,11 @@ export default function Reconcile() {
   }, []);
 
   const { isPending, error, data, isFetching } = useQuery({
-    queryKey: [selectedStatement],
+    queryKey: [selectedStatement?.label],
     queryFn: async () => {
-      const response = await fetch(`${API_URL}/statements?table=${table}`);
+      const response = await fetch(
+        `${API_URL}/statements?table=${selectedStatement.label}`
+      );
       return await response.json();
     },
   });
@@ -74,32 +77,64 @@ export default function Reconcile() {
     }
     setIsLoading(true);
 
-    // 1️⃣ Get signed URL from backend
-    const res = await fetch(
-      `${API_URL}/generate_upload_url?filename=${encodeURIComponent(file.name)}`
-    );
-    const { url } = await res.json();
-    console.log(url);
-    // 2️⃣ Upload file directly to GCS
-    const upload = await fetch(url, {
-      method: "PUT",
-      headers: {
-        "Content-Type":
-          "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-      },
-      body: file,
-    });
+    try {
+      // 1️⃣ Get signed URL from backend
+      const res = await fetch(
+        `${API_URL}/generate_upload_url?filename=${encodeURIComponent(file.name)}`
+      );
+      const { url } = await res.json();
+      console.log("Uploading file:", file);
 
-    if (upload.ok) {
-      Alert.alert("Éxito", "✅ File uploaded successfully!");
-      console.log("GCS URL:", url.split("?")[0]);
-      fetchStatements();
-    } else {
-      Alert.alert("Error", "❌ Upload failed.");
+      // 2️⃣ Read the file from URI as blob
+      const fileResponse = await fetch(file.uri);
+      const blob = await fileResponse.blob();
+
+      // 3️⃣ Upload file directly to GCS
+      const upload = await fetch(url, {
+        method: "PUT",
+        headers: {
+          "Content-Type":
+            file.mimeType ||
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        },
+        body: blob,
+      });
+
+      const responseBody = await upload.text();
+      console.log("Upload response body:", responseBody);
+
+      if (upload.ok) {
+        Alert.alert("Éxito", "✅ File uploaded successfully!");
+        const gcsURI = url
+          .split("?")[0]
+          .split("https://storage.googleapis.com/")[1];
+        console.log("GCS URI:", "gs://" + gcsURI);
+        try {
+          const result = await fetch(`${API_URL}/create_statement_table`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              gcs_uri: "gs://" + gcsURI,
+            }),
+          }).then((res) => res.json());
+          console.log(result);
+        } catch (error) {
+          console.error("Error processing statement:", error);
+        }
+        fetchStatements();
+      } else {
+        Alert.alert("Error", "❌ Upload failed.");
+        setIsLoading(false);
+        return;
+      }
       setIsLoading(false);
-      return;
+    } catch (error) {
+      console.error("Error uploading file:", error);
+      Alert.alert("Error", "❌ Upload failed: " + error.message);
+      setIsLoading(false);
     }
-    setIsLoading(false);
   };
 
   const pickDocument = async () => {
@@ -126,8 +161,15 @@ export default function Reconcile() {
 
   const reconcile = async () => {
     try {
-      fetch();
-    } catch (error) {}
+      const result = await fetch(
+        `${API_URL}/reconcile_txns?table_name=${selectedStatement.label}`
+      ).then((res) => res.json());
+      console.log("Reconciliation result:", result);
+      setUnmatchedTxns(result["unmatched"]);
+      setMatchedTxns(result["matched"]);
+    } catch (error) {
+      console.error("Error reconciling transactions:", error);
+    }
   };
 
   const formatSpanishNumber = (num) => {
@@ -166,7 +208,8 @@ export default function Reconcile() {
         {renderHeaderCell("Fecha", columnsWidth["fecha"])}
         {renderHeaderCell("Descripcion", columnsWidth["descripcion"])}
         {renderHeaderCell("Valor", columnsWidth["valor"])}
-        {renderHeaderCell("Saldo", columnsWidth["valor"])}
+        {renderHeaderCell("Categoria", columnsWidth["categoria"])}
+        {renderHeaderCell("Sub categoria", columnsWidth["sub_categoria"])}
       </View>
     );
   };
@@ -186,7 +229,7 @@ export default function Reconcile() {
     );
   };
 
-  const renderDescripcionCell = (value, widthClass) => {
+  const renderTextCell = (value, widthClass) => {
     return (
       <View className={"border-b border-r p-2 border-slate-300 " + widthClass}>
         <Text className="text-right">{value && value.toLowerCase()}</Text>
@@ -199,9 +242,10 @@ export default function Reconcile() {
     return (
       <View className="flex-row">
         {renderCell(item.fecha, columnsWidth["fecha"])}
-        {renderDescripcionCell(item?.descripcion, columnsWidth["descripcion"])}
+        {renderTextCell(item?.descripcion, columnsWidth["descripcion"])}
         {renderNumberCell(item.valor, columnsWidth["valor"])}
-        {renderNumberCell(item.valor, columnsWidth["valor"])}
+        {renderTextCell(item.categoria, columnsWidth["categoria"])}
+        {renderTextCell(item.sub_categoria, columnsWidth["sub_categoria"])}
       </View>
     );
   };
@@ -215,12 +259,11 @@ export default function Reconcile() {
     );
   };
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: "white" }}>
-      <View className="px-4 py-4 gap-4">
+    <SafeAreaView className=" bg-white px-5 gap-4">
+      <View className="py-4 gap-4">
         <Text className="text-4xl font-semibold">Conciliar</Text>
         <StatusBar barStyle="dark-content" />
         <View className="gap-2">
-          <Text className="text-lg mx-[8px]">Document Picker</Text>
           <Pressable
             className="px-4 py-3 bg-white rounded-xl active:bg-gray-200 justify-center shadow-sm shadow-black/20"
             onPress={pickDocument}
@@ -301,16 +344,37 @@ export default function Reconcile() {
           </View>
         </View>
       </View>
-
+      <Text className="text-black font-semibold text-xl">
+        Transacciones no concilidadas
+      </Text>
+      {unmatchedTxns.length > 0 && (
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={true}
+          className="border border-slate-300 rounded-2xl"
+        >
+          <FlatList
+            className="rounded-2xl border-slate-300 max-h-[400px] min-h-[300px]"
+            keyExtractor={(item, index) => index}
+            data={unmatchedTxns}
+            ListHeaderComponent={renderHeader}
+            renderItem={({ item }) => renderTxns(item)}
+            stickyHeaderIndices={[0]}
+          />
+        </ScrollView>
+      )}
+      <Text className="text-black font-semibold text-xl">
+        Transacciones concilidadas
+      </Text>
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={true}
         className="border border-slate-300 rounded-2xl"
       >
         <FlatList
-          className="rounded-2xl border-slate-300"
+          className="flex-1 rounded-2xl border-slate-300"
           keyExtractor={(item, index) => index}
-          data={data}
+          data={matchedTxns}
           ListHeaderComponent={renderHeader}
           renderItem={({ item }) => renderTxns(item)}
           stickyHeaderIndices={[0]}
@@ -322,7 +386,6 @@ export default function Reconcile() {
 
 const styles = StyleSheet.create({
   dropdown: {
-    margin: 8,
     backgroundColor: "white",
     borderRadius: 12,
     padding: 12,
@@ -336,7 +399,6 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   reconcileButton: {
-    margin: 8,
     paddingHorizontal: 12,
     paddingVertical: 12,
     justifyContent: "center",
