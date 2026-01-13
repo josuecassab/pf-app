@@ -1,6 +1,10 @@
-import { useQuery } from "@tanstack/react-query";
+import {
+  useInfiniteQuery,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 import * as DocumentPicker from "expo-document-picker";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -14,24 +18,17 @@ import {
 } from "react-native";
 import { Dropdown } from "react-native-element-dropdown";
 import { SafeAreaView } from "react-native-safe-area-context";
+import TxnTable from "../components/TxnTable";
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL;
 
 export default function Reconcile() {
+  const queryClient = useQueryClient();
   const [file, setFile] = useState(null);
   const [statements, setStatements] = useState([]);
   const [selectedStatement, setSelectedStatement] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
-  const [unmatchedTxns, setUnmatchedTxns] = useState([]);
-  const [matchedTxns, setMatchedTxns] = useState([]);
-
-  const columnsWidth = {
-    fecha: "w-[98px]",
-    descripcion: "w-36",
-    valor: "w-28",
-    categoria: "w-28",
-    sub_categoria: "w-28",
-  };
+  const [showReconcile, setShowReconcile] = useState(false);
 
   const fetchStatements = async () => {
     try {
@@ -50,12 +47,88 @@ export default function Reconcile() {
     }
   };
 
-  {
-  }
-
   useEffect(() => {
     fetchStatements();
   }, []);
+
+  const {
+    data: matchedTxns,
+    error: matchedTxnsError,
+    fetchNextPage: fetchNextMatchedTxnsPage,
+    hasNextPage: hasNextMatchedTxnsPage,
+    isFetchingNextPage: isFetchingNextMatchedTxnsPage,
+    isPending: isMatchedTxnsPending,
+  } = useInfiniteQuery({
+    queryKey: ["matched_txns", selectedStatement?.label],
+    queryFn: ({ pageParam }) =>
+      fetch(
+        `${API_URL}/reconcile_matched_txns/?table_name=${selectedStatement.label}&page=${pageParam.page}&limit=${pageParam.limit}`
+      ).then((res) => res.json()),
+    enabled: !!selectedStatement?.label,
+    initialPageParam: { page: 0, limit: 100 },
+    getNextPageParam: (lastPage, allPages, lastPageParam) => {
+      if (
+        !lastPage ||
+        !Array.isArray(lastPage) ||
+        lastPage.length < lastPageParam.limit
+      ) {
+        return undefined;
+      }
+      return { page: lastPageParam.page + 1, limit: lastPageParam.limit };
+    },
+    staleTime: 1000 * 60 * 5,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+    refetchOnMount: false,
+  });
+
+  const {
+    data: unmatchedTxns,
+    error: unmatchedTxnsError,
+    fetchNextPage: fetchNextUnmatchedTxnsPage,
+    hasNextPage: hasNextUnmatchedTxnsPage,
+    isFetchingNextPage: isFetchingNextUnmatchedTxnsPage,
+    isPending: isUnmatchedTxnsPending,
+  } = useInfiniteQuery({
+    queryKey: ["unmatched_txns", selectedStatement?.label],
+    queryFn: ({ pageParam }) =>
+      fetch(
+        `${API_URL}/reconcile_unmatched_txns/?table_name=${selectedStatement.label}&page=${pageParam.page}&limit=${pageParam.limit}`
+      ).then((res) => res.json()),
+    enabled: !!selectedStatement?.label,
+    initialPageParam: { page: 0, limit: 100 },
+    getNextPageParam: (lastPage, allPages, lastPageParam) => {
+      if (
+        !lastPage ||
+        !Array.isArray(lastPage) ||
+        lastPage.length < lastPageParam.limit
+      ) {
+        return undefined;
+      }
+      return { page: lastPageParam.page + 1, limit: lastPageParam.limit };
+    },
+    staleTime: 1000 * 60 * 5,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+    refetchOnMount: false,
+  });
+
+  // Flatten all pages into a single array of transactions
+  const flattenedMatchedTxns = useMemo(() => {
+    return matchedTxns?.pages?.flatMap((page) => page) ?? [];
+  }, [matchedTxns]);
+
+  const flattenedUnmatchedTxns = useMemo(() => {
+    return unmatchedTxns?.pages?.flatMap((page) => page) ?? [];
+  }, [unmatchedTxns]);
+
+  const columnsWidth = {
+    fecha: "w-[98px]",
+    descripcion: "w-36",
+    valor: "w-28",
+    categoria: "w-28",
+    sub_categoria: "w-28",
+  };
 
   const { isPending, error, data, isFetching } = useQuery({
     queryKey: [selectedStatement?.label],
@@ -65,9 +138,10 @@ export default function Reconcile() {
       );
       return await response.json();
     },
+    enabled: !!selectedStatement?.label,
   });
 
-  if (isPending) return <Text>Loading...</Text>;
+  // if (isPending) return <Text>Loading...</Text>;
 
   if (error) return <Text>An error has occurred: {error.message}</Text>;
 
@@ -160,15 +234,27 @@ export default function Reconcile() {
   };
 
   const reconcile = async () => {
+    if (!selectedStatement?.label) {
+      Alert.alert("Error", "Por favor selecciona un extracto primero");
+      return;
+    }
     try {
       const result = await fetch(
         `${API_URL}/reconcile_txns?table_name=${selectedStatement.label}`
       ).then((res) => res.json());
       console.log("Reconciliation result:", result);
-      setUnmatchedTxns(result["unmatched"]);
-      setMatchedTxns(result["matched"]);
+      // Invalidate queries to refetch the data
+      queryClient.invalidateQueries({
+        queryKey: ["matched_txns", selectedStatement.label],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["unmatched_txns", selectedStatement.label],
+      });
     } catch (error) {
       console.error("Error reconciling transactions:", error);
+      Alert.alert("Error", "Error al conciliar transacciones");
+    } finally {
+      setShowReconcile(true);
     }
   };
 
@@ -208,8 +294,7 @@ export default function Reconcile() {
         {renderHeaderCell("Fecha", columnsWidth["fecha"])}
         {renderHeaderCell("Descripcion", columnsWidth["descripcion"])}
         {renderHeaderCell("Valor", columnsWidth["valor"])}
-        {renderHeaderCell("Categoria", columnsWidth["categoria"])}
-        {renderHeaderCell("Sub categoria", columnsWidth["sub_categoria"])}
+        {renderHeaderCell("Saldo", columnsWidth["valor"])}
       </View>
     );
   };
@@ -244,8 +329,7 @@ export default function Reconcile() {
         {renderCell(item.fecha, columnsWidth["fecha"])}
         {renderTextCell(item?.descripcion, columnsWidth["descripcion"])}
         {renderNumberCell(item.valor, columnsWidth["valor"])}
-        {renderTextCell(item.categoria, columnsWidth["categoria"])}
-        {renderTextCell(item.sub_categoria, columnsWidth["sub_categoria"])}
+        {renderNumberCell(item.saldo, columnsWidth["valor"])}
       </View>
     );
   };
@@ -332,6 +416,7 @@ export default function Reconcile() {
                   label: item.label,
                   value: item.value,
                 });
+                setShowReconcile(false);
               }}
             />
             <Pressable
@@ -344,19 +429,16 @@ export default function Reconcile() {
           </View>
         </View>
       </View>
-      <Text className="text-black font-semibold text-xl">
-        Transacciones no concilidadas
-      </Text>
-      {unmatchedTxns.length > 0 && (
+      {!showReconcile && (
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={true}
           className="border border-slate-300 rounded-2xl"
         >
           <FlatList
-            className="rounded-2xl border-slate-300 max-h-[400px] min-h-[300px]"
+            className="rounded-2xl border-slate-300"
             keyExtractor={(item, index) => index}
-            data={unmatchedTxns}
+            data={data}
             ListHeaderComponent={renderHeader}
             renderItem={({ item }) => renderTxns(item)}
             stickyHeaderIndices={[0]}
@@ -364,22 +446,49 @@ export default function Reconcile() {
         </ScrollView>
       )}
       <Text className="text-black font-semibold text-xl">
+        Transacciones no concilidadas
+      </Text>
+      {flattenedUnmatchedTxns.length > 0 && showReconcile && (
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={true}
+          className="border border-slate-300 rounded-2xl"
+        >
+          <TxnTable
+            style={{ flex: 1 }}
+            className="px-4 gap-2"
+            txns={flattenedUnmatchedTxns}
+            error={unmatchedTxnsError}
+            fetchNextPage={fetchNextUnmatchedTxnsPage}
+            hasNextPage={hasNextUnmatchedTxnsPage}
+            isFetchingNextPage={isFetchingNextUnmatchedTxnsPage}
+            isPending={isUnmatchedTxnsPending}
+            queryKey={["unmatched_txns", selectedStatement?.label]}
+          />
+        </ScrollView>
+      )}
+      <Text className="text-black font-semibold text-xl">
         Transacciones concilidadas
       </Text>
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={true}
-        className="border border-slate-300 rounded-2xl"
-      >
-        <FlatList
-          className="flex-1 rounded-2xl border-slate-300"
-          keyExtractor={(item, index) => index}
-          data={matchedTxns}
-          ListHeaderComponent={renderHeader}
-          renderItem={({ item }) => renderTxns(item)}
-          stickyHeaderIndices={[0]}
-        />
-      </ScrollView>
+      {flattenedMatchedTxns.length > 0 && showReconcile && (
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={true}
+          className="border border-slate-300 rounded-2xl"
+        >
+          <TxnTable
+            style={{ flex: 1 }}
+            className="px-4 gap-2"
+            txns={flattenedMatchedTxns}
+            error={matchedTxnsError}
+            fetchNextPage={fetchNextMatchedTxnsPage}
+            hasNextPage={hasNextMatchedTxnsPage}
+            isFetchingNextPage={isFetchingNextMatchedTxnsPage}
+            isPending={isMatchedTxnsPending}
+            queryKey={["matched_txns", selectedStatement?.label]}
+          />
+        </ScrollView>
+      )}
     </SafeAreaView>
   );
 }

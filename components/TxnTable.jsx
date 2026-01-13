@@ -1,6 +1,6 @@
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
-import { useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useMemo, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -35,8 +35,15 @@ const formatSpanishNumber = (num) => {
   return isNegative ? "-" + result : result;
 };
 
-export default function TxnTable({ selectedYear, selectedMonth }) {
-  console.log(selectedYear, selectedMonth);
+export default function TxnTable({
+  txns,
+  error,
+  fetchNextPage,
+  hasNextPage,
+  isFetchingNextPage,
+  isPending,
+  queryKey,
+}) {
   const API_URL = process.env.EXPO_PUBLIC_API_URL;
   const queryClient = useQueryClient();
   const [categoryModalVisible, setCategoryModalVisible] = useState(false);
@@ -60,53 +67,12 @@ export default function TxnTable({ selectedYear, selectedMonth }) {
 
   const columnsWidth = {
     fecha: "w-[98px]",
-    descripcion: "w-36",
+    descripcion: "w-28",
     valor: "w-28",
     categoria: "w-28",
     sub_categoria: "w-28",
     editar: "w-[60px]",
   };
-
-  const {
-    data,
-    error,
-    fetchNextPage,
-    hasNextPage,
-    isFetchingNextPage,
-    isPending,
-  } = useInfiniteQuery({
-    queryKey: ["txns", selectedYear, selectedMonth],
-    queryFn: ({ pageParam }) =>
-      fetch(
-        `${API_URL}/latests_txns/?year=${pageParam.year}&month=${pageParam.month}`
-      ).then((res) => res.json()),
-    initialPageParam: { year: selectedYear, month: selectedMonth },
-    getNextPageParam: (lastPage, allPages, lastPageParam) => {
-      // Calculate previous month from the last page param
-      let prevMonth = parseInt(lastPageParam.month) - 1;
-      let prevYear = parseInt(lastPageParam.year);
-
-      if (prevMonth < 1) {
-        prevMonth = 12;
-        prevYear -= 1;
-      }
-
-      if (prevYear < 2020) {
-        return undefined;
-      }
-
-      return { year: String(prevYear), month: String(prevMonth) };
-    },
-    staleTime: 1000 * 60 * 5,
-    refetchOnWindowFocus: false,
-    refetchOnReconnect: false,
-    refetchOnMount: false,
-  });
-
-  // Flatten all pages into a single array of transactions
-  const txns = useMemo(() => {
-    return data?.pages?.flatMap((page) => page) ?? [];
-  }, [data]);
 
   const handleCategoriaPress = (id) => {
     setSelectedCategory({ id: id, label: null, value: null });
@@ -135,7 +101,7 @@ export default function TxnTable({ selectedYear, selectedMonth }) {
   const handleLoadRecent = async () => {
     setRefreshing(true);
     await queryClient.invalidateQueries({
-      queryKey: ["txns", selectedYear, selectedMonth],
+      queryKey,
     });
     setRefreshing(false);
   };
@@ -154,7 +120,7 @@ export default function TxnTable({ selectedYear, selectedMonth }) {
       console.log("Update result:", result);
       // Invalidate and refetch the transactions query
       queryClient.invalidateQueries({
-        queryKey: ["txns", selectedYear, selectedMonth],
+        queryKey,
       });
     } catch (error) {
       console.error("Failed to update transactions:", error);
@@ -177,7 +143,7 @@ export default function TxnTable({ selectedYear, selectedMonth }) {
       console.log("Update result:", result);
       // Invalidate and refetch the transactions query
       queryClient.invalidateQueries({
-        queryKey: ["txns", selectedYear, selectedMonth],
+        queryKey,
       });
     } catch (error) {
       console.error("Failed to update transactions:", error);

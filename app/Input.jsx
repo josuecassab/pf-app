@@ -119,6 +119,7 @@ export default function Input() {
       Alert.alert("Error enviando la transacción", error.message);
     } finally {
       setIsSending(false);
+      setSelectedSubcategory(null);
     }
   };
 
