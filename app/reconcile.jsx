@@ -33,7 +33,7 @@ export default function Reconcile() {
   const fetchStatements = async () => {
     try {
       const data = await fetch(`${API_URL}/list_statements`).then((res) =>
-        res.json()
+        res.json(),
       );
       const statements = data.map((item) => ({
         label: item.split("/").at(-1).split(".")[0],
@@ -59,13 +59,13 @@ export default function Reconcile() {
     isFetchingNextPage: isFetchingNextMatchedTxnsPage,
     isPending: isMatchedTxnsPending,
   } = useInfiniteQuery({
-    queryKey: ["matched_txns", selectedStatement?.label],
+    queryKey: ["matched_txns", `${selectedStatement?.label}_joined`],
     queryFn: ({ pageParam }) =>
       fetch(
-        `${API_URL}/reconcile_matched_txns/?table_name=${selectedStatement.label}&page=${pageParam.page}&limit=${pageParam.limit}`
+        `${API_URL}/reconcile_matched_txns/?table_name=${pageParam.table_name}&page=${pageParam.page}&limit=${pageParam.limit}`,
       ).then((res) => res.json()),
     enabled: !!selectedStatement?.label,
-    initialPageParam: { page: 0, limit: 100 },
+    initialPageParam: {table_name: `${selectedStatement?.label}_joined`, page: 0, limit: 100 },
     getNextPageParam: (lastPage, allPages, lastPageParam) => {
       if (
         !lastPage ||
@@ -76,6 +76,7 @@ export default function Reconcile() {
       }
       return { page: lastPageParam.page + 1, limit: lastPageParam.limit };
     },
+    enabled: !!selectedStatement?.label,
     staleTime: 1000 * 60 * 5,
     refetchOnWindowFocus: false,
     refetchOnReconnect: false,
@@ -93,7 +94,7 @@ export default function Reconcile() {
     queryKey: ["unmatched_txns", selectedStatement?.label],
     queryFn: ({ pageParam }) =>
       fetch(
-        `${API_URL}/reconcile_unmatched_txns/?table_name=${selectedStatement.label}&page=${pageParam.page}&limit=${pageParam.limit}`
+        `${API_URL}/reconcile_unmatched_txns/?table_name=${selectedStatement.label}&page=${pageParam.page}&limit=${pageParam.limit}`,
       ).then((res) => res.json()),
     enabled: !!selectedStatement?.label,
     initialPageParam: { page: 0, limit: 100 },
@@ -134,7 +135,7 @@ export default function Reconcile() {
     queryKey: [selectedStatement?.label],
     queryFn: async () => {
       const response = await fetch(
-        `${API_URL}/statements?table=${selectedStatement.label}`
+        `${API_URL}/statements?table=${selectedStatement.label}`,
       );
       return await response.json();
     },
@@ -154,7 +155,7 @@ export default function Reconcile() {
     try {
       // 1️⃣ Get signed URL from backend
       const res = await fetch(
-        `${API_URL}/generate_upload_url?filename=${encodeURIComponent(file.name)}`
+        `${API_URL}/generate_upload_url?filename=${encodeURIComponent(file.name)}`,
       );
       const { url } = await res.json();
       console.log("Uploading file:", file);
@@ -239,13 +240,21 @@ export default function Reconcile() {
       return;
     }
     try {
-      const result = await fetch(
-        `${API_URL}/reconcile_txns?table_name=${selectedStatement.label}`
-      ).then((res) => res.json());
-      console.log("Reconciliation result:", result);
+      const res = await fetch(
+        `${API_URL}/create_statement_joined?table_name=${selectedStatement.label}`,
+        {
+          method: "POST",
+        },
+      );
+      const response = await res.json();
+      if (!res.ok) {
+        Alert.alert("Error", response.message);
+        return;
+      }
+      console.log("Reconciliation result:", response);
       // Invalidate queries to refetch the data
       queryClient.invalidateQueries({
-        queryKey: ["matched_txns", selectedStatement.label],
+        queryKey: ["matched_txns", `${selectedStatement.label}_joined`],
       });
       queryClient.invalidateQueries({
         queryKey: ["unmatched_txns", selectedStatement.label],
@@ -479,6 +488,7 @@ export default function Reconcile() {
           <TxnTable
             style={{ flex: 1 }}
             className="px-4 gap-2"
+            table={selectedStatement?.label}
             txns={flattenedMatchedTxns}
             error={matchedTxnsError}
             fetchNextPage={fetchNextMatchedTxnsPage}

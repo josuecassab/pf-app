@@ -1,14 +1,20 @@
 import { Picker } from "@react-native-picker/picker";
-import { QueryClient, QueryClientProvider, useInfiniteQuery } from "@tanstack/react-query";
+import {
+  QueryClient,
+  QueryClientProvider,
+  useInfiniteQuery,
+} from "@tanstack/react-query";
 import { useCallback, useMemo, useState } from "react";
 import { Modal, Pressable, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import TxnTable from "../components/TxnTable";
 
 const queryClient = new QueryClient();
+const API_URL = process.env.EXPO_PUBLIC_API_URL;
+const TABLE = "txns";
 
 export default function Txns() {
-  const [date, setDate] = useState(new Date(2025, 8));
+  const [date, setDate] = useState(new Date());
   const [show, setShow] = useState(false);
   const [selectedYear, setSelectedYear] = useState(
     String(new Date().getFullYear())
@@ -19,8 +25,6 @@ export default function Txns() {
   const [tempYear, setTempYear] = useState(selectedYear);
   const [tempMonth, setTempMonth] = useState(selectedMonth);
 
-  const API_URL = process.env.EXPO_PUBLIC_API_URL;
-
   const {
     data,
     error,
@@ -28,6 +32,7 @@ export default function Txns() {
     hasNextPage,
     isFetchingNextPage,
     isPending,
+    refetch,
   } = useInfiniteQuery({
     queryKey: ["txns", selectedYear, selectedMonth],
     queryFn: ({ pageParam }) =>
@@ -51,10 +56,10 @@ export default function Txns() {
 
       return { year: String(prevYear), month: String(prevMonth) };
     },
-    staleTime: 1000 * 60 * 5,
+    // staleTime: 1000 * 60 * 5,
     refetchOnWindowFocus: false,
     refetchOnReconnect: false,
-    refetchOnMount: false,
+    // refetchOnMount: false,
   });
 
   // Flatten all pages into a single array of transactions
@@ -185,6 +190,7 @@ export default function Txns() {
           <TxnTable
             style={{ flex: 1 }}
             className="px-4 gap-2"
+            table={TABLE}
             txns={txns}
             error={error}
             fetchNextPage={fetchNextPage}
@@ -192,6 +198,7 @@ export default function Txns() {
             isFetchingNextPage={isFetchingNextPage}
             isPending={isPending}
             queryKey={["txns", selectedYear, selectedMonth]}
+            refetch={refetch}
           />
         </QueryClientProvider>
       </View>

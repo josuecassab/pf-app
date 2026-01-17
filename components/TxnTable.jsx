@@ -36,6 +36,7 @@ const formatSpanishNumber = (num) => {
 };
 
 export default function TxnTable({
+  table,
   txns,
   error,
   fetchNextPage,
@@ -43,6 +44,7 @@ export default function TxnTable({
   isFetchingNextPage,
   isPending,
   queryKey,
+  refetch,
 }) {
   const API_URL = process.env.EXPO_PUBLIC_API_URL;
   const queryClient = useQueryClient();
@@ -109,19 +111,25 @@ export default function TxnTable({
   const updateCategory = async () => {
     setLoading(true);
     try {
-      const res = await fetch(`${API_URL}/update_txn_category/`, {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(selectedCategory),
-      });
+      const res = await fetch(
+        `${API_URL}/update_txn_category/?table=${table}`,
+        {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(selectedCategory),
+        }
+      );
       const result = await res.json();
       console.log("Update result:", result);
-      // Invalidate and refetch the transactions query
-      queryClient.invalidateQueries({
+      // Reset and refetch the infinite query to clear all cached pages
+      await queryClient.resetQueries({
         queryKey,
       });
+      if (refetch) {
+        await refetch();
+      }
     } catch (error) {
       console.error("Failed to update transactions:", error);
     } finally {
@@ -132,19 +140,25 @@ export default function TxnTable({
   const updateSubcategory = async () => {
     setLoading(true);
     try {
-      const res = await fetch(`${API_URL}/update_txn_subcategory/`, {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(selectedSubcategory),
-      });
+      const res = await fetch(
+        `${API_URL}/update_txn_subcategory/?table=${table}`,
+        {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(selectedSubcategory),
+        }
+      );
       const result = await res.json();
       console.log("Update result:", result);
-      // Invalidate and refetch the transactions query
-      queryClient.invalidateQueries({
-        queryKey,
+      // Reset and refetch the infinite query to clear all cached pages
+      await queryClient.resetQueries({
+        queryKey: queryKey,
       });
+      if (refetch) {
+        await refetch();
+      }
     } catch (error) {
       console.error("Failed to update transactions:", error);
     } finally {
@@ -322,8 +336,8 @@ export default function TxnTable({
             value: item.value,
           });
         }}
-        onAccept={() => {
-          updateCategory();
+        onAccept={async () => {
+          await updateCategory();
           setCategoryModalVisible(!categoryModalVisible);
         }}
         visible={categoryModalVisible}
@@ -339,8 +353,8 @@ export default function TxnTable({
             value: item.value,
           });
         }}
-        onAccept={() => {
-          updateSubcategory();
+        onAccept={async () => {
+          await updateSubcategory();
           setSubCategoryModalVisible(!subCategoryModalVisible);
         }}
         visible={subCategoryModalVisible}

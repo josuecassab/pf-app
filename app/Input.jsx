@@ -130,25 +130,37 @@ export default function Input() {
   const addCategory = async () => {
     if (inputCategory.trim() === "") return;
     try {
-      const res = await fetch(`${API_URL}/insert_category/`, {
+      console.log("Adding category:", inputCategory);
+      const res = await fetch(`${API_URL}/categories/insert_category/`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({ label: inputCategory }),
-      }).then((res) => res.json());
-      setCategories([...categories, res]);
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        console.log("Error response data:", res);
+        Alert.alert(
+          "Error agregando la categoría",
+          data.message || JSON.stringify(data)
+        );
+        return;
+      }
+      setCategories([...categories, data]);
       setInputCategory("");
       setVisibleInputCat(false);
     } catch (error) {
       console.error("Error adding category:", error);
+      Alert.alert("Error agregando la categoría", error.message);
     }
   };
 
   const addSubcategory = async (category) => {
     if (inputSubcategory.trim() === "") return;
     try {
-      const res = await fetch(`${API_URL}/insert_subcategory/`, {
+      const res = await fetch(`${API_URL}/categories/insert_subcategory/`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -157,52 +169,97 @@ export default function Input() {
           sub_categoria: inputSubcategory,
           id_categoria: category,
         }),
-      }).then((res) => res.json());
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        console.log("Error response data:", res);
+        Alert.alert(
+          "Error agregando la subcategoría",
+          data.message || JSON.stringify(data)
+        );
+        return;
+      }
+
       const categoryRef = categories.find(
-        (cat) => cat.value === res["id_categoria"]
+        (cat) => cat.value === data["id_categoria"]
       );
+      if (!categoryRef) {
+        Alert.alert("Error", "No se encontró la categoría");
+        return;
+      }
       categoryRef.sub_categorias.push({
-        label: res["sub_categoria"],
-        value: res["id"],
+        label: data["sub_categoria"],
+        value: data["id"],
       });
       setCategories([...categories]);
       setInputSubcategory("");
     } catch (error) {
-      console.error("Error adding category:", error);
+      console.error("Error adding subcategory:", error);
+      Alert.alert("Error agregando la subcategoría", error.message);
     }
   };
 
   const deleteCategory = async (categoryValue) => {
     try {
-      await fetch(`${API_URL}/delete_category/?id=${categoryValue}`, {
-        method: "DELETE",
-      });
+      const res = await fetch(
+        `${API_URL}/categories/delete_category/?id=${categoryValue}`,
+        {
+          method: "DELETE",
+        }
+      );
+
+      if (!res.ok) {
+        const data = await res.json();
+        Alert.alert(
+          "Error eliminando la categoría",
+          data.message || JSON.stringify(data)
+        );
+        return;
+      }
+
       setCategories(categories.filter((cat) => cat.value !== categoryValue));
     } catch (error) {
       console.error("Error deleting category:", error);
+      Alert.alert("Error eliminando la categoría", error.message);
     }
   };
 
   const deleteSubcategory = async (categoryValue) => {
     try {
-      const result = await fetch(
-        `${API_URL}/delete_subcategory/?id=${categoryValue}`,
+      const res = await fetch(
+        `${API_URL}/categories/delete_subcategory/?id=${categoryValue}`,
         {
           method: "DELETE",
         }
-      ).then((res) => res.json());
+      );
+
+      const result = await res.json();
+      if (!res.ok) {
+        Alert.alert(
+          "Error eliminando la subcategoría",
+          result.message || JSON.stringify(result)
+        );
+        return;
+      }
+
       console.log(result);
       const categoryRef = categories.find(
         (cat) => cat.value === result["id_categoria"]
       );
-      const newSubcategories = categoryRef.filter(
+      if (!categoryRef) {
+        Alert.alert("Error", "No se encontró la categoría");
+        return;
+      }
+      const newSubcategories = categoryRef.sub_categorias.filter(
         (sub) => sub.value !== result["id"]
       );
       categoryRef.sub_categorias = newSubcategories;
       console.log(categoryRef);
       setCategories([...categories]);
     } catch (error) {
-      console.error("Error deleting category:", error);
+      console.error("Error deleting subcategory:", error);
+      Alert.alert("Error eliminando la subcategoría", error.message);
     }
   };
 
@@ -211,7 +268,7 @@ export default function Input() {
     setUpdatingCategory(value);
     try {
       const result = await fetch(
-        `${API_URL}/update_category/?value=${value}&label=${newLabel}`,
+        `${API_URL}/categories/update_category/?value=${value}&label=${newLabel}`,
         {
           method: "PUT",
         }
@@ -376,106 +433,111 @@ export default function Input() {
               animationType="slide"
               visible={showCategoryModal}
             >
-              <SafeAreaProvider>
-                <SafeAreaView style={{ flex: 1 }}>
-                  <View className="flex-row justify-between items-center px-4 py-2">
-                    <Pressable
-                      onPress={() => setShowCategoryModal(false)}
-                      className="p-2"
-                    >
-                      {({ pressed }) => (
-                        <AntDesign
-                          name="close"
-                          size={24}
-                          color={pressed ? "#6b7280" : "black"}
-                        />
-                      )}
-                    </Pressable>
-                    <Text className="text-2xl font-semibold">Categorias</Text>
-                    <Pressable
-                      onPress={() => setVisibleInputCat(!visibleInputCat)}
-                      className="p-2"
-                    >
-                      {({ pressed }) => (
-                        <AntDesign
-                          name={visibleInputCat ? "close" : "plus"}
-                          size={24}
-                          color={pressed ? "#6b7280" : "black"}
-                        />
-                      )}
-                    </Pressable>
-                  </View>
-                  {visibleInputCat && (
-                    <View className="flex-row gap-2 px-4 py-2">
-                      <TextInput
-                        className="rounded-lg py-2 px-3 text-black flex-1 border-gray-300 border mb-2"
-                        placeholder="Nueva Categoria"
-                        placeholderTextColor="black"
-                        value={inputCategory}
-                        onChangeText={(text) => {
-                          setInputCategory(text);
-                        }}
-                      />
+              <KeyboardAvoidingView
+                behavior={Platform.OS === "ios" ? "padding" : "height"}
+                style={{ flex: 1 }}
+              >
+                <SafeAreaProvider>
+                  <SafeAreaView style={{ flex: 1 }}>
+                    <View className="flex-row justify-between items-center px-4 py-2">
                       <Pressable
-                        className="bg-[#0a84ff] rounded-lg p-3 active:bg-[#0a84ff]/50 mb-2"
-                        onPress={() => addCategory()}
+                        onPress={() => setShowCategoryModal(false)}
+                        className="p-2"
                       >
-                        <Text className=" text-white font-semibold ">
-                          Agregar
-                        </Text>
+                        {({ pressed }) => (
+                          <AntDesign
+                            name="close"
+                            size={24}
+                            color={pressed ? "#6b7280" : "black"}
+                          />
+                        )}
+                      </Pressable>
+                      <Text className="text-2xl font-semibold">Categorias</Text>
+                      <Pressable
+                        onPress={() => setVisibleInputCat(!visibleInputCat)}
+                        className="p-2"
+                      >
+                        {({ pressed }) => (
+                          <AntDesign
+                            name={visibleInputCat ? "close" : "plus"}
+                            size={24}
+                            color={pressed ? "#6b7280" : "black"}
+                          />
+                        )}
                       </Pressable>
                     </View>
-                  )}
-                  <GestureHandlerRootView style={{ flex: 1 }}>
-                    <GHScrollView>
-                      {categories.map((cat) => (
-                        <View key={cat.value}>
-                          <SwipeableCategoryItem
-                            cat={cat}
-                            parent={true}
-                            onPress={() => expandCategories(cat)}
-                            onDelete={deleteCategory}
-                            onEdit={updateCategory}
-                            isLoading={updatingCategory === cat.value}
-                          />
-                          {expandedCategories.has(cat.value) && (
-                            <>
-                              {cat.sub_categorias.map((sub) => (
-                                <View key={sub.value} className="pl-8 w-full">
-                                  <SwipeableCategoryItem
-                                    cat={sub}
-                                    onDelete={deleteSubcategory}
-                                  />
-                                </View>
-                              ))}
-                              <View
-                                key={cat.sub}
-                                className="flex-row gap-2 px-4 py-2 ml-4"
-                              >
-                                <TextInput
-                                  className="rounded-lg py-2 px-3 text-black flex-1 border-gray-300 border"
-                                  placeholder="Nueva Subcategoria"
-                                  placeholderTextColor="black"
-                                  value={inputSubcategory}
-                                  onChangeText={(text) => {
-                                    setInputSubcategory(text);
-                                  }}
-                                />
-                                <Pressable
-                                  onPress={() => addSubcategory(cat.value)}
-                                  className="px-4 bg-gray-200 justify-center rounded-lg active:bg-gray-300"
+                    {visibleInputCat && (
+                      <View className="flex-row gap-2 px-4 py-2">
+                        <TextInput
+                          className="rounded-lg py-2 px-3 text-black flex-1 border-gray-300 border mb-2"
+                          placeholder="Nueva Categoria"
+                          placeholderTextColor="black"
+                          value={inputCategory}
+                          onChangeText={(text) => {
+                            setInputCategory(text);
+                          }}
+                        />
+                        <Pressable
+                          className="bg-[#0a84ff] rounded-lg p-3 active:bg-[#0a84ff]/50 mb-2"
+                          onPress={() => addCategory()}
+                        >
+                          <Text className=" text-white font-semibold ">
+                            Agregar
+                          </Text>
+                        </Pressable>
+                      </View>
+                    )}
+                    <GestureHandlerRootView style={{ flex: 1 }}>
+                      <GHScrollView>
+                        {categories.map((cat) => (
+                          <View key={cat.value}>
+                            <SwipeableCategoryItem
+                              cat={cat}
+                              parent={true}
+                              onPress={() => expandCategories(cat)}
+                              onDelete={deleteCategory}
+                              onEdit={updateCategory}
+                              isLoading={updatingCategory === cat.value}
+                            />
+                            {expandedCategories.has(cat.value) && (
+                              <>
+                                {cat.sub_categorias.map((sub) => (
+                                  <View key={sub.value} className="pl-8 w-full">
+                                    <SwipeableCategoryItem
+                                      cat={sub}
+                                      onDelete={deleteSubcategory}
+                                    />
+                                  </View>
+                                ))}
+                                <View
+                                  key={cat.sub}
+                                  className="flex-row gap-2 px-4 py-2 ml-4"
                                 >
-                                  <Text>Agregar</Text>
-                                </Pressable>
-                              </View>
-                            </>
-                          )}
-                        </View>
-                      ))}
-                    </GHScrollView>
-                  </GestureHandlerRootView>
-                </SafeAreaView>
-              </SafeAreaProvider>
+                                  <TextInput
+                                    className="rounded-lg py-2 px-3 text-black flex-1 border-gray-300 border"
+                                    placeholder="Nueva Subcategoria"
+                                    placeholderTextColor="black"
+                                    value={inputSubcategory}
+                                    onChangeText={(text) => {
+                                      setInputSubcategory(text);
+                                    }}
+                                  />
+                                  <Pressable
+                                    onPress={() => addSubcategory(cat.value)}
+                                    className="px-4 bg-gray-200 justify-center rounded-lg active:bg-gray-300"
+                                  >
+                                    <Text>Agregar</Text>
+                                  </Pressable>
+                                </View>
+                              </>
+                            )}
+                          </View>
+                        ))}
+                      </GHScrollView>
+                    </GestureHandlerRootView>
+                  </SafeAreaView>
+                </SafeAreaProvider>
+              </KeyboardAvoidingView>
             </Modal>
           </View>
           <Pressable

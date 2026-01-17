@@ -220,7 +220,7 @@ export default function GroupedTable() {
                 style={styles.rowHeight}
               >
                 <Text className="text-black text-sm" numberOfLines={1}>
-                  {subItem?.subcategoria || "(Sin subcategoría)"}
+                  {subItem?.sub_categoria || "(Sin subcategoría)"}
                 </Text>
               </View>
             ))}
@@ -375,8 +375,9 @@ export default function GroupedTable() {
           activeColumns={activeColumns}
         />
         <TextInput
-          className="border border-gray-300 rounded-lg py-3 flex-1 text-black"
+          className="border border-gray-300 rounded-lg py-3 flex-1 text-black px-4"
           placeholder="Escribe para filtrar categorías..."
+          placeholderTextColor="#666666"
           onChangeText={(newText) => filterData(newText)}
           defaultValue={text}
           autoCapitalize="none"
