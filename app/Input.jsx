@@ -2,7 +2,8 @@ import AntDesign from "@expo/vector-icons/AntDesign";
 import Feather from "@expo/vector-icons/Feather";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import SegmentedControl from "@react-native-segmented-control/segmented-control";
-import { useEffect, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -24,12 +25,13 @@ import {
   ScrollView as GHScrollView,
 } from "react-native-gesture-handler";
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
-import { useTheme } from "../contexts/ThemeContext";
 import SwipeableCategoryItem from "../components/SwipeableCategoryItem";
+import { useTheme } from "../contexts/ThemeContext";
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL;
 
 export default function Input() {
+  const queryClient = useQueryClient();
   const [selectedCategory, setSelectedCategory] = useState(null);
   const [selectedSubcategory, setSelectedSubcategory] = useState(null);
   const [date, setDate] = useState(new Date());
@@ -46,19 +48,24 @@ export default function Input() {
   const [expandedCategories, setExpandedCategories] = useState(new Set());
   const [updatingCategory, setUpdatingCategory] = useState(null);
   const [isSending, setIsSending] = useState(false);
+  const [filteredCategories, setFilteredCategories] = useState([]);
 
   const { theme } = useTheme();
 
+  const { isPending, error, data, isFetching } = useQuery({
+    queryKey: ["categories"],
+    queryFn: async () => {
+      const response = await fetch(`${API_URL}/categories`);
+      return await response.json();
+    },
+    select: (data) => data.sort((a, b) => a.label.localeCompare(b.label)),
+  });
+
   useEffect(() => {
-    const fetchCategories = async () => {
-      const res = await fetch(`${API_URL}/categories`).then((res) =>
-        res.json(),
-      );
-      // console.log("Fetched Categories:", res);
-      setCategories(res);
-    };
-    fetchCategories();
-  }, []);
+    if (data) {
+      setCategories(data);
+    }
+  }, [data]);
 
   const onChange = (event, selectedDate) => {
     const currentDate = selectedDate;
@@ -151,7 +158,7 @@ export default function Input() {
         );
         return;
       }
-      setCategories([...categories, data]);
+      await queryClient.invalidateQueries({ queryKey: ["categories"] });
       setInputCategory("");
       setVisibleInputCat(false);
     } catch (error) {
@@ -184,18 +191,7 @@ export default function Input() {
         return;
       }
 
-      const categoryRef = categories.find(
-        (cat) => cat.value === data["id_categoria"],
-      );
-      if (!categoryRef) {
-        Alert.alert("Error", "No se encontró la categoría");
-        return;
-      }
-      categoryRef.sub_categorias.push({
-        label: data["sub_categoria"],
-        value: data["id"],
-      });
-      setCategories([...categories]);
+      await queryClient.invalidateQueries({ queryKey: ["categories"] });
       setInputSubcategory("");
     } catch (error) {
       console.error("Error adding subcategory:", error);
@@ -221,7 +217,7 @@ export default function Input() {
         return;
       }
 
-      setCategories(categories.filter((cat) => cat.value !== categoryValue));
+      await queryClient.invalidateQueries({ queryKey: ["categories"] });
     } catch (error) {
       console.error("Error deleting category:", error);
       Alert.alert("Error eliminando la categoría", error.message);
@@ -246,20 +242,7 @@ export default function Input() {
         return;
       }
 
-      console.log(result);
-      const categoryRef = categories.find(
-        (cat) => cat.value === result["id_categoria"],
-      );
-      if (!categoryRef) {
-        Alert.alert("Error", "No se encontró la categoría");
-        return;
-      }
-      const newSubcategories = categoryRef.sub_categorias.filter(
-        (sub) => sub.value !== result["id"],
-      );
-      categoryRef.sub_categorias = newSubcategories;
-      console.log(categoryRef);
-      setCategories([...categories]);
+      await queryClient.invalidateQueries({ queryKey: ["categories"] });
     } catch (error) {
       console.error("Error deleting subcategory:", error);
       Alert.alert("Error eliminando la subcategoría", error.message);
@@ -284,11 +267,7 @@ export default function Input() {
         );
         return;
       }
-      const categoryRef = categories.find(
-        (cat) => cat.value === result["value"],
-      );
-      categoryRef.label = result["label"];
-      setCategories([...categories]);
+      await queryClient.invalidateQueries({ queryKey: ["categories"] });
     } catch (error) {
       console.error("Error actualizando categoría:", error);
     } finally {
@@ -314,14 +293,7 @@ export default function Input() {
         );
         return;
       }
-      const categoryRef = categories.find((cat) => cat.value === parentId);
-      if (!categoryRef) {
-        Alert.alert("Error", "No se encontró la categoría");
-        return;
-      }
-      categoryRef.sub_categorias.find((sub) => sub.value === value).label =
-        result["label"];
-      setCategories([...categories]);
+      await queryClient.invalidateQueries({ queryKey: ["categories"] });
     } catch (error) {
       console.error("Error actualizando Subcategoría:", error);
     } finally {
@@ -341,13 +313,27 @@ export default function Input() {
     });
   };
 
+  const searchCategory = useCallback(
+    (text) => {
+      console.log("Filtering data with text:", text);
+      const filteredCategories = data.filter((cat) =>
+        cat.label.toLowerCase().includes(text.toLowerCase()),
+      );
+      setCategories(filteredCategories);
+    },
+    [data],
+  );
+
   return (
     <KeyboardAvoidingView
       behavior={Platform.OS === "ios" ? "padding" : "height"}
       style={{ flex: 1 }}
       keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 20}
     >
-      <SafeAreaView style={{ flex: 1 }} edges={["top", "left", "right"]}>
+      <SafeAreaView
+        style={[{ flex: 1 }, { backgroundColor: theme.colors.background }]}
+        edges={["top", "left", "right"]}
+      >
         {/* <ScrollView
           keyboardShouldPersistTaps="handled"
           contentContainerStyle={{ flexGrow: 1 }}
@@ -455,11 +441,7 @@ export default function Input() {
                   ]}
                   onPress={() => setShowCategoryModal(true)}
                 >
-                  <Feather
-                    name="edit"
-                    size={20}
-                    color={theme.colors.text}
-                  />
+                  <Feather name="edit" size={20} color={theme.colors.text} />
                 </Pressable>
               </View>
               <Dropdown
@@ -483,6 +465,18 @@ export default function Input() {
                   { color: theme.colors.text },
                 ]}
                 iconStyle={styles.iconStyle}
+                containerStyle={{
+                  backgroundColor: theme.colors.inputBackground,
+                  borderRadius: 8,
+                  borderColor: theme.colors.border,
+                }}
+                itemContainerStyle={{
+                  backgroundColor: theme.colors.inputBackground,
+                }}
+                itemTextStyle={{
+                  color: theme.colors.text,
+                }}
+                activeColor={theme.colors.primary + "20"}
                 data={categories}
                 search
                 maxHeight={220}
@@ -571,7 +565,10 @@ export default function Input() {
                           )}
                         </Pressable>
                         <Text
-                          style={[styles.modalTitle, { color: theme.colors.text }]}
+                          style={[
+                            styles.modalTitle,
+                            { color: theme.colors.text },
+                          ]}
                         >
                           Categorias
                         </Text>
@@ -591,6 +588,32 @@ export default function Input() {
                             />
                           )}
                         </Pressable>
+                      </View>
+                      <View style={styles.searchContainer}>
+                        <Feather
+                          name="search"
+                          size={18}
+                          color={theme.colors.placeholder}
+                          style={styles.searchIcon}
+                        />
+                        <TextInput
+                          style={[
+                            styles.searchInput,
+                            {
+                              backgroundColor: theme.colors.inputBackground,
+                              borderColor: theme.colors.border,
+                              color: theme.colors.text,
+                            },
+                          ]}
+                          placeholder="Buscar categoría..."
+                          placeholderTextColor={theme.colors.placeholder}
+                          defaultValue=""
+                          onChangeText={(text) => {
+                            searchCategory(text);
+                          }}
+                          autoCorrect={false}
+                          clearButtonMode="while-editing"
+                        />
                       </View>
                       {visibleInputCat && (
                         <View style={styles.inputRow}>
@@ -663,7 +686,9 @@ export default function Input() {
                                         },
                                       ]}
                                       placeholder="Nueva Subcategoria"
-                                      placeholderTextColor={theme.colors.placeholder}
+                                      placeholderTextColor={
+                                        theme.colors.placeholder
+                                      }
                                       value={inputSubcategory}
                                       onChangeText={(text) => {
                                         setInputSubcategory(text);
@@ -681,7 +706,9 @@ export default function Input() {
                                           styles.subCategoryAddButtonPressed,
                                       ]}
                                     >
-                                      <Text style={{ color: theme.colors.text }}>
+                                      <Text
+                                        style={{ color: theme.colors.text }}
+                                      >
                                         Agregar
                                       </Text>
                                     </Pressable>
@@ -854,6 +881,26 @@ const styles = StyleSheet.create({
   },
   subCategoryAddButtonPressed: {
     opacity: 0.8,
+  },
+  searchContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+  },
+  searchIcon: {
+    position: "absolute",
+    left: 28,
+    zIndex: 1,
+  },
+  searchInput: {
+    flex: 1,
+    height: 44,
+    borderRadius: 22,
+    paddingLeft: 40,
+    paddingRight: 16,
+    fontSize: 16,
+    borderWidth: 1,
   },
   submitButton: {
     width: "50%",

@@ -18,6 +18,7 @@ import Animated, {
   useSharedValue,
   withSpring,
 } from "react-native-reanimated";
+import { useTheme } from "../contexts/ThemeContext";
 
 export default function SwipeableCategoryItem({
   parentId = null,
@@ -28,6 +29,7 @@ export default function SwipeableCategoryItem({
   onEdit,
   isLoading = false,
 }) {
+  const { theme } = useTheme();
   const pressed = useSharedValue(false);
   const position = useSharedValue(0);
   const END_POSITION = -140;
@@ -65,7 +67,9 @@ export default function SwipeableCategoryItem({
     });
 
   const animatedStyles = useAnimatedStyle(() => ({
-    backgroundColor: pressed.value ? "#f0f0f0" : "white",
+    backgroundColor: pressed.value
+      ? theme.colors.inputBackground
+      : theme.colors.surface,
     transform: [{ translateX: position.value }],
   }));
 
@@ -77,7 +81,9 @@ export default function SwipeableCategoryItem({
   });
 
   const animatedStyleLabel = useAnimatedStyle(() => ({
-    backgroundColor: pressed.value ? "#f0f0f0" : "white",
+    backgroundColor: pressed.value
+      ? theme.colors.inputBackground
+      : theme.colors.surface,
     transform: [{ translateX: labelOffset.value }],
   }));
 
@@ -85,12 +91,13 @@ export default function SwipeableCategoryItem({
     <View style={styles.container}>
       <View style={styles.actionsContainer}>
         {isLoading ? (
-          <ActivityIndicator size="small" color="black" />
+          <ActivityIndicator size="small" color={theme.colors.text} />
         ) : isEditing ? (
           <Pressable
             style={({ pressed }) => [
               styles.actionButton,
               styles.sendButton,
+              { borderLeftColor: theme.colors.surface },
               pressed && styles.actionButtonPressed,
             ]}
             onPress={() => {
@@ -130,6 +137,7 @@ export default function SwipeableCategoryItem({
             style={({ pressed }) => [
               styles.actionButton,
               styles.editButton,
+              { borderLeftColor: theme.colors.surface },
               pressed && styles.actionButtonPressed,
             ]}
             disabled={isLoading}
@@ -155,6 +163,7 @@ export default function SwipeableCategoryItem({
           style={({ pressed }) => [
             styles.actionButton,
             styles.deleteButton,
+            { borderLeftColor: theme.colors.borderLight },
             pressed && styles.actionButtonPressed,
           ]}
         >
@@ -163,7 +172,11 @@ export default function SwipeableCategoryItem({
       </View>
       <GestureDetector gesture={pan}>
         <Animated.View
-          style={[animatedStyles, styles.swipeableContent]}
+          style={[
+            animatedStyles,
+            styles.swipeableContent,
+            { borderBottomColor: theme.colors.borderLight },
+          ]}
         >
           <Pressable
             style={styles.pressableContent}
@@ -177,34 +190,51 @@ export default function SwipeableCategoryItem({
                 {parent && (
                   <>
                     {isExpanded ? (
-                      <Octicons name="triangle-down" size={24} color="black" />
+                      <Octicons
+                        name="triangle-down"
+                        size={24}
+                        color={theme.colors.text}
+                      />
                     ) : (
-                      <Octicons name="triangle-right" size={24} color="black" />
+                      <Octicons
+                        name="triangle-right"
+                        size={24}
+                        color={theme.colors.text}
+                      />
                     )}
                   </>
                 )}
                 {isEditing ? (
                   <View style={styles.editingContainer}>
                     <TextInput
-                      style={styles.editingInput}
+                      style={[
+                        styles.editingInput,
+                        {
+                          color: theme.colors.text,
+                          borderColor: theme.colors.border,
+                          backgroundColor: theme.colors.inputBackground,
+                        },
+                      ]}
                       placeholder="Nuevo nombre..."
-                      placeholderTextColor="black"
+                      placeholderTextColor={theme.colors.placeholder}
                       inputMode="text"
                       value={categoryLabel}
                       onChangeText={(text) => setCategoryLabel(text)}
                       editable={!isLoading}
                     />
                     {isLoading && (
-                      <ActivityIndicator size="small" color="#0a84ff" />
+                      <ActivityIndicator size="small" color={theme.colors.primary} />
                     )}
                   </View>
                 ) : (
                   <Animated.View
                     style={[animatedStyleLabel, styles.labelContainer]}
                   >
-                    <Text style={styles.labelText}>{cat.label}</Text>
+                    <Text style={[styles.labelText, { color: theme.colors.text }]}>
+                      {cat.label}
+                    </Text>
                     {isLoading && (
-                      <ActivityIndicator size="small" color="#0a84ff" />
+                      <ActivityIndicator size="small" color={theme.colors.primary} />
                     )}
                   </Animated.View>
                 )}
@@ -238,15 +268,12 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   sendButton: {
-    borderLeftColor: "#ffffff",
     backgroundColor: "#bbf7d0",
   },
   editButton: {
-    borderLeftColor: "#ffffff",
     backgroundColor: "#bbf7d0",
   },
   deleteButton: {
-    borderLeftColor: "#e5e7eb",
     backgroundColor: "#fecaca",
   },
   actionButtonPressed: {
@@ -259,7 +286,6 @@ const styles = StyleSheet.create({
     padding: 16,
     paddingHorizontal: 8,
     borderBottomWidth: 1,
-    borderBottomColor: "#e5e7eb",
     flexDirection: "row",
     alignItems: "center",
     flex: 1,
@@ -277,9 +303,7 @@ const styles = StyleSheet.create({
   editingInput: {
     borderRadius: 8,
     paddingHorizontal: 16,
-    color: "#000000",
     borderWidth: 1,
-    borderColor: "#d1d5db",
     marginLeft: 140,
     height: 32,
   },
