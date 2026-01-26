@@ -5,8 +5,9 @@ import {
   useInfiniteQuery,
 } from "@tanstack/react-query";
 import { useCallback, useMemo, useState } from "react";
-import { Modal, Pressable, Text, View } from "react-native";
+import { Modal, Pressable, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { useTheme } from "../contexts/ThemeContext";
 import TxnTable from "../components/TxnTable";
 
 const queryClient = new QueryClient();
@@ -14,6 +15,7 @@ const API_URL = process.env.EXPO_PUBLIC_API_URL;
 const TABLE = "txns";
 
 export default function Txns() {
+  const { theme } = useTheme();
   const [date, setDate] = useState(new Date());
   const [show, setShow] = useState(false);
   const [selectedYear, setSelectedYear] = useState(
@@ -114,14 +116,25 @@ export default function Txns() {
     setSelectedMonth(tempMonth);
   }, [tempYear, tempMonth, showPicker]);
   return (
-    <SafeAreaView style={{ flex: 1 }} className="px-4 gap-2">
+    <SafeAreaView
+      style={[styles.container, { backgroundColor: theme.colors.background }]}
+    >
       <View>
-        <View className="flex flex-row justify-between items-center">
+        <View style={styles.headerRow}>
           <Pressable
             onPress={() => showPicker(true)}
-            className="rounded-2xl px-4 py-2 self-start border border-gray-400 bg-white active:bg-gray-200"
+            style={({ pressed }) => [
+              styles.dateButton,
+              {
+                backgroundColor: theme.colors.surface,
+                borderColor: theme.colors.border,
+              },
+              pressed && styles.dateButtonPressed,
+            ]}
           >
-            <Text className="text-lg text-slate-800 font-bold">
+            <Text
+              style={[styles.dateButtonText, { color: theme.colors.text }]}
+            >
               {date.toLocaleDateString("es-ES", {
                 month: "long",
                 year: "numeric",
@@ -136,41 +149,59 @@ export default function Txns() {
             visible={show}
             onRequestClose={() => showPicker(false)}
           >
-            <View className="flex-1 justify-end bg-black/50">
-              <View className="bg-white rounded-t-3xl p-4 h-1/3">
-                <View className="flex-row justify-between items-center mb-10">
+            <View style={styles.modalOverlay}>
+              <View
+                style={[
+                  styles.modalContent,
+                  { backgroundColor: theme.colors.modalBackground },
+                ]}
+              >
+                <View style={styles.modalHeader}>
                   <Pressable onPress={() => showPicker(false)}>
-                    <Text className="text-blue-500 text-lg">Cancel</Text>
+                    <Text
+                      style={[
+                        styles.modalButtonText,
+                        { color: theme.colors.primary },
+                      ]}
+                    >
+                      Cancel
+                    </Text>
                   </Pressable>
-                  <Text className="text-lg font-bold">Seleccionar fecha</Text>
+                  <Text
+                    style={[styles.modalTitle, { color: theme.colors.text }]}
+                  >
+                    Seleccionar fecha
+                  </Text>
                   <Pressable onPress={onValueChange}>
-                    <Text className="text-blue-500 text-lg">Done</Text>
+                    <Text
+                      style={[
+                        styles.modalButtonText,
+                        { color: theme.colors.primary },
+                      ]}
+                    >
+                      Done
+                    </Text>
                   </Pressable>
                 </View>
-                <View
-                  className="flex-row justify-center items-center"
-                  style={{ height: 200 }}
-                >
-                  <View className="flex-1">
-                    {/* <Text className="text-center mb-2 text-slate-600 font-semibold">Año</Text> */}
+                <View style={styles.pickerContainer}>
+                  <View style={styles.pickerColumn}>
                     <Picker
                       selectedValue={tempYear}
                       onValueChange={(itemValue) => setTempYear(itemValue)}
-                      style={{ color: "#000000" }}
-                      itemStyle={{ fontSize: 18, color: "#000000" }}
+                      style={{ color: theme.colors.text }}
+                      itemStyle={{ fontSize: 18, color: theme.colors.text }}
                     >
                       {yearOptions.map((year) => (
                         <Picker.Item key={year} label={year} value={year} />
                       ))}
                     </Picker>
                   </View>
-                  <View className="flex-1">
-                    {/* <Text className="text-center mb-2 text-slate-600 font-semibold">Mes</Text> */}
+                  <View style={styles.pickerColumn}>
                     <Picker
                       selectedValue={tempMonth}
                       onValueChange={(itemValue) => setTempMonth(itemValue)}
-                      style={{ color: "#000000" }}
-                      itemStyle={{ fontSize: 18, color: "#000000" }}
+                      style={{ color: theme.colors.text }}
+                      itemStyle={{ fontSize: 18, color: theme.colors.text }}
                     >
                       {monthOptions.map((month) => (
                         <Picker.Item
@@ -188,8 +219,7 @@ export default function Txns() {
         )}
         <QueryClientProvider client={queryClient}>
           <TxnTable
-            style={{ flex: 1 }}
-            className="px-4 gap-2"
+            style={styles.tableContainer}
             table={TABLE}
             txns={txns}
             error={error}
@@ -205,3 +235,68 @@ export default function Txns() {
     </SafeAreaView>
   );
 }
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    paddingHorizontal: 16,
+    gap: 8,
+  },
+  headerRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  dateButton: {
+    borderRadius: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    alignSelf: "flex-start",
+    borderWidth: 1,
+  },
+  dateButtonPressed: {
+    opacity: 0.7,
+  },
+  dateButtonText: {
+    fontSize: 18,
+    fontWeight: "bold",
+  },
+  modalOverlay: {
+    flex: 1,
+    justifyContent: "flex-end",
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
+  },
+  modalContent: {
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    padding: 16,
+    height: "33%",
+  },
+  modalHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 40,
+  },
+  modalButtonText: {
+    fontSize: 18,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: "bold",
+  },
+  pickerContainer: {
+    flexDirection: "row",
+    justifyContent: "center",
+    alignItems: "center",
+    height: 200,
+  },
+  pickerColumn: {
+    flex: 1,
+  },
+  tableContainer: {
+    flex: 1,
+    paddingHorizontal: 16,
+    gap: 8,
+  },
+});

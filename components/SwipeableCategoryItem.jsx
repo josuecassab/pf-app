@@ -2,7 +2,9 @@ import Octicons from "@expo/vector-icons/Octicons";
 import { useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
   Pressable,
+  StyleSheet,
   Text,
   TextInput,
   View,
@@ -18,6 +20,7 @@ import Animated, {
 } from "react-native-reanimated";
 
 export default function SwipeableCategoryItem({
+  parentId = null,
   cat,
   parent,
   onPress,
@@ -79,15 +82,58 @@ export default function SwipeableCategoryItem({
   }));
 
   return (
-    <View className="flex-row relative">
-      <View className="absolute right-0 h-full w-[140px] justify-center items-center flex-row">
-        <Pressable
-          onPress={() => {
-            if (isEditing === true) {
-              onEdit(cat.value, categoryLabel);
-              setIsEditing(false);
-              position.value = 0;
-            } else {
+    <View style={styles.container}>
+      <View style={styles.actionsContainer}>
+        {isLoading ? (
+          <ActivityIndicator size="small" color="black" />
+        ) : isEditing ? (
+          <Pressable
+            style={({ pressed }) => [
+              styles.actionButton,
+              styles.sendButton,
+              pressed && styles.actionButtonPressed,
+            ]}
+            onPress={() => {
+              if (categoryLabel.trim() === "") {
+                Alert.alert(
+                  "Error",
+                  "El nombre de la categoría no puede estar vacío.",
+                );
+                return;
+              }
+              console.log(categoryLabel);
+              Alert.alert(
+                "Cambiar nombre",
+                "Está seguro que desea cambiar el nombre de la categoría?",
+                [
+                  {
+                    text: "No",
+                  },
+                  {
+                    text: "Si",
+                    onPress: () => {
+                      onEdit(cat.value, categoryLabel, parentId);
+                      setIsEditing(false);
+                      position.value = 0;
+                      pressed.value = false;
+                      setCategoryLabel("");
+                    },
+                  },
+                ],
+              );
+            }}
+          >
+            <Text style={styles.actionButtonText}>Enviar</Text>
+          </Pressable>
+        ) : (
+          <Pressable
+            style={({ pressed }) => [
+              styles.actionButton,
+              styles.editButton,
+              pressed && styles.actionButtonPressed,
+            ]}
+            disabled={isLoading}
+            onPress={() => {
               setIsEditing(!isEditing);
               setDisplayedInputCat((prev) => {
                 const newSet = new Set(prev);
@@ -98,33 +144,29 @@ export default function SwipeableCategoryItem({
                 }
                 return newSet;
               });
-            }
-          }}
-          disabled={isLoading}
-          className="border-l border-white h-full px-4 justify-center bg-green-200 active:opacity-70"
-        >
-          {isLoading ? (
-            <ActivityIndicator size="small" color="black" />
-          ) : isEditing ? (
-            <Text className="text-black">Enviar</Text>
-          ) : (
-            <Text className="text-black">Editar</Text>
-          )}
-        </Pressable>
+            }}
+          >
+            <Text style={styles.actionButtonText}>Editar</Text>
+          </Pressable>
+        )}
+
         <Pressable
           onPress={() => onDelete(cat.value)}
-          className="border-l border-gray-200 h-full px-4 justify-center bg-red-200 active:opacity-70"
+          style={({ pressed }) => [
+            styles.actionButton,
+            styles.deleteButton,
+            pressed && styles.actionButtonPressed,
+          ]}
         >
-          <Text className="text-black">Eliminar</Text>
+          <Text style={styles.actionButtonText}>Eliminar</Text>
         </Pressable>
       </View>
       <GestureDetector gesture={pan}>
         <Animated.View
-          style={[animatedStyles]}
-          className="p-4 px-2 border-b border-gray-200 flex-row items-center flex-1"
+          style={[animatedStyles, styles.swipeableContent]}
         >
           <Pressable
-            className="flex-row items-center gap-2"
+            style={styles.pressableContent}
             onPress={() => {
               setIsExpanded(!isExpanded);
               parent && onPress();
@@ -142,10 +184,10 @@ export default function SwipeableCategoryItem({
                   </>
                 )}
                 {isEditing ? (
-                  <View className="flex-row items-center gap-2">
+                  <View style={styles.editingContainer}>
                     <TextInput
-                      className="rounded-lg px-2 text-black w-[150px] text-center border border-gray-200 ml-[140px] h-8"
-                      placeholder="Nuevo nombre"
+                      style={styles.editingInput}
+                      placeholder="Nuevo nombre..."
                       placeholderTextColor="black"
                       inputMode="text"
                       value={categoryLabel}
@@ -158,10 +200,9 @@ export default function SwipeableCategoryItem({
                   </View>
                 ) : (
                   <Animated.View
-                    style={[animatedStyleLabel]}
-                    className="flex-row items-center gap-2 h-8"
+                    style={[animatedStyleLabel, styles.labelContainer]}
                   >
-                    <Text className="text-l">{cat.label}</Text>
+                    <Text style={styles.labelText}>{cat.label}</Text>
                     {isLoading && (
                       <ActivityIndicator size="small" color="#0a84ff" />
                     )}
@@ -175,3 +216,80 @@ export default function SwipeableCategoryItem({
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  container: {
+    flexDirection: "row",
+    position: "relative",
+  },
+  actionsContainer: {
+    position: "absolute",
+    right: 0,
+    height: "100%",
+    width: 140,
+    justifyContent: "center",
+    alignItems: "center",
+    flexDirection: "row",
+  },
+  actionButton: {
+    borderLeftWidth: 1,
+    height: "100%",
+    paddingHorizontal: 16,
+    justifyContent: "center",
+  },
+  sendButton: {
+    borderLeftColor: "#ffffff",
+    backgroundColor: "#bbf7d0",
+  },
+  editButton: {
+    borderLeftColor: "#ffffff",
+    backgroundColor: "#bbf7d0",
+  },
+  deleteButton: {
+    borderLeftColor: "#e5e7eb",
+    backgroundColor: "#fecaca",
+  },
+  actionButtonPressed: {
+    opacity: 0.7,
+  },
+  actionButtonText: {
+    color: "#000000",
+  },
+  swipeableContent: {
+    padding: 16,
+    paddingHorizontal: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: "#e5e7eb",
+    flexDirection: "row",
+    alignItems: "center",
+    flex: 1,
+  },
+  pressableContent: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  editingContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  editingInput: {
+    borderRadius: 8,
+    paddingHorizontal: 16,
+    color: "#000000",
+    borderWidth: 1,
+    borderColor: "#d1d5db",
+    marginLeft: 140,
+    height: 32,
+  },
+  labelContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    height: 32,
+  },
+  labelText: {
+    fontSize: 16,
+  },
+});

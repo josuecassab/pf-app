@@ -11,10 +11,11 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { useTheme } from "../contexts/ThemeContext";
 import EllipsisMenu from "./EllipsisMenu";
 
 // 2. Configuration
-const LEFT_COL_WIDTH = "w-40";
+const LEFT_COL_WIDTH = 160; // w-40 = 160px
 // ROW_HEIGHT is only used for styling now, not calculation
 const ROW_HEIGHT = 40;
 const HEADER_HEIGHT = 40;
@@ -47,6 +48,7 @@ const months = [
 ];
 
 export default function GroupedTable() {
+  const { theme } = useTheme();
   const API_URL = process.env.EXPO_PUBLIC_API_URL;
   const leftRef = useRef(null);
   const rightRef = useRef(null);
@@ -168,29 +170,51 @@ export default function GroupedTable() {
   }, []);
 
   const renderHeaderCell = useCallback(
-    (label, widthClass = "w-40", key) => (
+    (label, width = 160, key) => (
       <View
         key={key}
-        className={`${widthClass} border-r border-b border-slate-200 bg-white justify-center p-3`}
-        style={styles.headerHeight}
+        style={[
+          groupedTableStyles.headerCell,
+          {
+            width,
+            backgroundColor: theme.colors.surface,
+            borderColor: theme.colors.border,
+          },
+          styles.headerHeight,
+        ]}
       >
-        <Text className="font-bold text-slate-800 text-right">{label}</Text>
+        <Text
+          style={[groupedTableStyles.headerText, { color: theme.colors.text }]}
+        >
+          {label}
+        </Text>
       </View>
     ),
-    []
+    [theme]
   );
 
   const renderFooterCell = useCallback(
-    (label, widthClass = "w-40", key) => (
+    (label, width = 160, key) => (
       <View
         key={key}
-        className={`${widthClass} border border-slate-200 bg-white justify-center p-3`}
-        style={styles.headerHeight}
+        style={[
+          groupedTableStyles.footerCell,
+          {
+            width,
+            backgroundColor: theme.colors.surface,
+            borderColor: theme.colors.border,
+          },
+          styles.headerHeight,
+        ]}
       >
-        <Text className="font-bold text-slate-800 text-right">{label}</Text>
+        <Text
+          style={[groupedTableStyles.headerText, { color: theme.colors.text }]}
+        >
+          {label}
+        </Text>
       </View>
     ),
-    []
+    [theme]
   );
 
   const renderLeftColumnItem = useCallback(
@@ -200,12 +224,25 @@ export default function GroupedTable() {
       return (
         <View>
           <TouchableOpacity
-            className={`${LEFT_COL_WIDTH} border-r border-b border-slate-200 justify-center p-3 ${isExpanded ? "bg-slate-50" : ""}`}
+            style={[
+              groupedTableStyles.leftCell,
+              {
+                width: LEFT_COL_WIDTH,
+                borderColor: theme.colors.border,
+                backgroundColor: isExpanded
+                  ? theme.colors.card
+                  : theme.colors.background,
+              },
+              styles.rowHeight,
+            ]}
             onPress={() => toggleCategory(item.categoria)}
-            style={styles.rowHeight}
           >
             <Text
-              className={`text-black ${isExpanded ? "font-semibold" : ""}`}
+              style={[
+                groupedTableStyles.leftCellText,
+                { color: theme.colors.text },
+                isExpanded && groupedTableStyles.leftCellTextExpanded,
+              ]}
               numberOfLines={1}
             >
               {isExpanded ? "▼ " : "▶ "}
@@ -216,10 +253,23 @@ export default function GroupedTable() {
             item.subcategorias.map((subItem, index) => (
               <View
                 key={index}
-                className={`${LEFT_COL_WIDTH} border-r border-b border-slate-200 justify-center p-3 pl-6`}
-                style={styles.rowHeight}
+                style={[
+                  groupedTableStyles.leftSubCell,
+                  {
+                    width: LEFT_COL_WIDTH,
+                    borderColor: theme.colors.border,
+                    backgroundColor: theme.colors.background,
+                  },
+                  styles.rowHeight,
+                ]}
               >
-                <Text className="text-black text-sm" numberOfLines={1}>
+                <Text
+                  style={[
+                    groupedTableStyles.leftSubCellText,
+                    { color: theme.colors.text },
+                  ]}
+                  numberOfLines={1}
+                >
                   {subItem?.sub_categoria || "(Sin subcategoría)"}
                 </Text>
               </View>
@@ -227,7 +277,7 @@ export default function GroupedTable() {
         </View>
       );
     },
-    [expandedCategories, toggleCategory]
+    [expandedCategories, toggleCategory, theme]
   );
 
   const renderRightColumnsItem = useCallback(
@@ -235,16 +285,32 @@ export default function GroupedTable() {
       const isExpanded = expandedCategories.has(item.categoria);
       const cellWidth = "w-32";
 
+      const cellWidthNum = 128; // w-32 = 128px
       return (
         <View>
-          <View className="flex-row" style={styles.rowHeight}>
+          <View style={[groupedTableStyles.row, styles.rowHeight]}>
             {activeColumns.map((month) => (
               <View
                 key={month}
-                className={`${cellWidth} border-r border-b border-slate-200 justify-center p-3 ${isExpanded ? "bg-slate-50" : ""}`}
-                style={styles.rowHeight}
+                style={[
+                  groupedTableStyles.rightCell,
+                  {
+                    width: cellWidthNum,
+                    borderColor: theme.colors.border,
+                    backgroundColor: isExpanded
+                      ? theme.colors.card
+                      : theme.colors.background,
+                  },
+                  styles.rowHeight,
+                ]}
               >
-                <Text className="text-black text-right" numberOfLines={1}>
+                <Text
+                  style={[
+                    groupedTableStyles.rightCellText,
+                    { color: theme.colors.text },
+                  ]}
+                  numberOfLines={1}
+                >
                   {formatNumber(item[month])}
                 </Text>
               </View>
@@ -252,14 +318,30 @@ export default function GroupedTable() {
           </View>
           {isExpanded &&
             item.subcategorias.map((subItem, index) => (
-              <View className="flex-row" key={index} style={styles.rowHeight}>
+              <View
+                key={index}
+                style={[groupedTableStyles.row, styles.rowHeight]}
+              >
                 {activeColumns.map((month) => (
                   <View
                     key={month}
-                    className={`${cellWidth} border-r border-b border-slate-200 justify-center p-3`}
-                    style={styles.rowHeight}
+                    style={[
+                      groupedTableStyles.rightCell,
+                      {
+                        width: cellWidthNum,
+                        borderColor: theme.colors.border,
+                        backgroundColor: theme.colors.background,
+                      },
+                      styles.rowHeight,
+                    ]}
                   >
-                    <Text className="text-black text-right" numberOfLines={1}>
+                    <Text
+                      style={[
+                        groupedTableStyles.rightCellText,
+                        { color: theme.colors.text },
+                      ]}
+                      numberOfLines={1}
+                    >
                       {formatNumber(subItem[month])}
                     </Text>
                   </View>
@@ -269,7 +351,7 @@ export default function GroupedTable() {
         </View>
       );
     },
-    [expandedCategories, activeColumns]
+    [expandedCategories, activeColumns, theme]
   );
 
   const handleSort = useCallback(
@@ -292,11 +374,20 @@ export default function GroupedTable() {
   const renderLeftHeader = useCallback(() => {
     return (
       <TouchableOpacity
-        className={`${LEFT_COL_WIDTH} border-r border-b border-slate-200 bg-white justify-center p-3`}
+        style={[
+          groupedTableStyles.leftHeader,
+          {
+            width: LEFT_COL_WIDTH,
+            backgroundColor: theme.colors.surface,
+            borderColor: theme.colors.border,
+          },
+          styles.headerHeight,
+        ]}
         onPress={() => handleSort("categoria")}
-        style={styles.headerHeight}
       >
-        <Text className="font-bold text-slate-900">
+        <Text
+          style={[groupedTableStyles.leftHeaderText, { color: theme.colors.text }]}
+        >
           Name{" "}
           {sortConfig.key === "categoria"
             ? sortConfig.direction === "asc"
@@ -306,12 +397,12 @@ export default function GroupedTable() {
         </Text>
       </TouchableOpacity>
     );
-  }, [handleSort, sortConfig.key, sortConfig.direction]);
+  }, [handleSort, sortConfig.key, sortConfig.direction, theme]);
 
   const renderRightHeader = useCallback(() => {
-    const headerCellWidth = "w-32";
+    const headerCellWidth = 128; // w-32 = 128px
     return (
-      <View className="flex-row">
+      <View style={groupedTableStyles.row}>
         {activeColumns.map((m, index) =>
           renderHeaderCell(m, headerCellWidth, index)
         )}
@@ -322,18 +413,29 @@ export default function GroupedTable() {
   const renderLeftFooter = useCallback(() => {
     return (
       <View
-        className={`${LEFT_COL_WIDTH} border-r-2 border-b border-slate-300 border-r-slate-300 bg-white justify-center p-3`}
-        style={styles.headerHeight}
+        style={[
+          groupedTableStyles.leftFooter,
+          {
+            width: LEFT_COL_WIDTH,
+            backgroundColor: theme.colors.surface,
+            borderColor: theme.colors.border,
+          },
+          styles.headerHeight,
+        ]}
       >
-        <Text className="font-bold text-slate-900">Total</Text>
+        <Text
+          style={[groupedTableStyles.leftFooterText, { color: theme.colors.text }]}
+        >
+          Total
+        </Text>
       </View>
     );
-  }, []);
+  }, [theme]);
 
   const renderRightFooter = useCallback(() => {
-    const headerCellWidth = "w-32";
+    const headerCellWidth = 128; // w-32 = 128px
     return (
-      <View className="flex-row">
+      <View style={groupedTableStyles.row}>
         {monthlyTotals.map((total, index) =>
           renderFooterCell(formatNumber(total), headerCellWidth, index)
         )}
@@ -365,54 +467,105 @@ export default function GroupedTable() {
   };
 
   return (
-    <View className="flex-1 bg-white px-2">
-      <Text className="text-2xl font-bold text-slate-900 mb-2 mt-2 text-center">
+    <View
+      style={[
+        groupedTableStyles.container,
+        { backgroundColor: theme.colors.background },
+      ]}
+    >
+      <Text style={[groupedTableStyles.title, { color: theme.colors.text }]}>
         Ingresos y gastos
       </Text>
-      <View className="flex-row items-center gap-4 my-3 px-1">
+      <View style={groupedTableStyles.controlsRow}>
         <EllipsisMenu
           handleColumns={handleColumns}
           activeColumns={activeColumns}
         />
         <TextInput
-          className="border border-gray-300 rounded-lg py-3 flex-1 text-black px-4"
+          style={[
+            groupedTableStyles.searchInput,
+            {
+              backgroundColor: theme.colors.surface,
+              borderColor: theme.colors.border,
+              color: theme.colors.text,
+            },
+          ]}
           placeholder="Escribe para filtrar categorías..."
-          placeholderTextColor="#666666"
+          placeholderTextColor={theme.colors.placeholder}
           onChangeText={(newText) => filterData(newText)}
           defaultValue={text}
           autoCapitalize="none"
         />
-        <View className="flex items-center relative">
+        <View style={groupedTableStyles.yearSelector}>
           <Pressable
-            className="border border-gray-300 rounded-lg p-3 active:bg-gray-200"
+            style={({ pressed }) => [
+              groupedTableStyles.yearButton,
+              {
+                backgroundColor: theme.colors.surface,
+                borderColor: theme.colors.border,
+              },
+              pressed && groupedTableStyles.yearButtonPressed,
+            ]}
             onPress={() => setShowYears(!showYears)}
           >
-            <Text className="font-semibold">{selectedYear}</Text>
+            <Text
+              style={[
+                groupedTableStyles.yearButtonText,
+                { color: theme.colors.text },
+              ]}
+            >
+              {selectedYear}
+            </Text>
           </Pressable>
           {showYears && (
             <ScrollView
-              className="absolute border border-gray-300 rounded-lg z-10 bg-white"
-              style={{ top: "100%" }}
+              style={[
+                groupedTableStyles.yearDropdown,
+                {
+                  top: "100%",
+                  backgroundColor: theme.colors.surface,
+                  borderColor: theme.colors.border,
+                },
+              ]}
             >
               {years.map((item, index) => (
                 <Pressable
                   key={index}
-                  className={`p-3 active:bg-gray-200 ${selectedYear === item ? "bg-gray-200" : ""}`}
+                  style={({ pressed }) => [
+                    groupedTableStyles.yearOption,
+                    {
+                      backgroundColor:
+                        selectedYear === item
+                          ? theme.colors.inputBackground
+                          : "transparent",
+                    },
+                    pressed && groupedTableStyles.yearOptionPressed,
+                  ]}
                   onPress={() => {
                     setSelectedYear(item);
                     setShowYears(!showYears);
                   }}
                 >
-                  <Text>{item}</Text>
+                  <Text style={{ color: theme.colors.text }}>{item}</Text>
                 </Pressable>
               ))}
             </ScrollView>
           )}
         </View>
       </View>
-      <View className="flex-1 flex-row border border-slate-300 rounded-lg overflow-hidden">
+      <View
+        style={[
+          groupedTableStyles.tableContainer,
+          { borderColor: theme.colors.border },
+        ]}
+      >
         {/* Frozen Left Column */}
-        <View className="z-10 bg-white shadow-lg">
+        <View
+          style={[
+            groupedTableStyles.leftColumn,
+            { backgroundColor: theme.colors.surface },
+          ]}
+        >
           <FlatList
             ref={leftRef}
             data={filteredData}
@@ -434,7 +587,7 @@ export default function GroupedTable() {
           />
         </View>
         {/* Scrollable Right Columns */}
-        <View className="flex-1" style={{ overflow: "hidden" }}>
+        <View style={groupedTableStyles.rightColumn}>
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={true}
@@ -463,9 +616,158 @@ export default function GroupedTable() {
             </View>
           </ScrollView>
         </View>
-        {isPending && <ActivityIndicator size="small" color="#0a84ff" />}
-        {error && <Text>{"An error has occurred: " + error.message}</Text>}
+        {isPending && (
+          <ActivityIndicator size="small" color={theme.colors.primary} />
+        )}
+        {error && (
+          <Text style={{ color: theme.colors.error }}>
+            {"An error has occurred: " + error.message}
+          </Text>
+        )}
       </View>
     </View>
   );
 }
+
+const groupedTableStyles = StyleSheet.create({
+  container: {
+    flex: 1,
+    paddingHorizontal: 8,
+  },
+  title: {
+    fontSize: 24,
+    fontWeight: "bold",
+    marginBottom: 8,
+    marginTop: 8,
+    textAlign: "center",
+  },
+  controlsRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 16,
+    marginVertical: 12,
+    paddingHorizontal: 4,
+  },
+  searchInput: {
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingVertical: 12,
+    flex: 1,
+    paddingHorizontal: 16,
+  },
+  yearSelector: {
+    flex: 0,
+    alignItems: "center",
+    position: "relative",
+  },
+  yearButton: {
+    borderWidth: 1,
+    borderRadius: 8,
+    padding: 12,
+  },
+  yearButtonPressed: {
+    opacity: 0.7,
+  },
+  yearButtonText: {
+    fontWeight: "600",
+  },
+  yearDropdown: {
+    position: "absolute",
+    borderWidth: 1,
+    borderRadius: 8,
+    zIndex: 10,
+  },
+  yearOption: {
+    padding: 12,
+  },
+  yearOptionPressed: {
+    opacity: 0.7,
+  },
+  tableContainer: {
+    flex: 1,
+    flexDirection: "row",
+    borderWidth: 1,
+    borderRadius: 8,
+    overflow: "hidden",
+  },
+  leftColumn: {
+    zIndex: 10,
+    shadowColor: "#000",
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    elevation: 5,
+  },
+  rightColumn: {
+    flex: 1,
+    overflow: "hidden",
+  },
+  row: {
+    flexDirection: "row",
+  },
+  headerCell: {
+    borderRightWidth: 1,
+    borderBottomWidth: 1,
+    justifyContent: "center",
+    padding: 12,
+  },
+  headerText: {
+    fontWeight: "bold",
+    textAlign: "right",
+  },
+  footerCell: {
+    borderWidth: 1,
+    justifyContent: "center",
+    padding: 12,
+  },
+  leftCell: {
+    borderRightWidth: 1,
+    borderBottomWidth: 1,
+    justifyContent: "center",
+    padding: 12,
+  },
+  leftCellText: {},
+  leftCellTextExpanded: {
+    fontWeight: "600",
+  },
+  leftSubCell: {
+    borderRightWidth: 1,
+    borderBottomWidth: 1,
+    justifyContent: "center",
+    padding: 12,
+    paddingLeft: 24,
+  },
+  leftSubCellText: {
+    fontSize: 14,
+  },
+  rightCell: {
+    borderRightWidth: 1,
+    borderBottomWidth: 1,
+    justifyContent: "center",
+    padding: 12,
+  },
+  rightCellText: {
+    textAlign: "right",
+  },
+  leftHeader: {
+    borderRightWidth: 1,
+    borderBottomWidth: 1,
+    justifyContent: "center",
+    padding: 12,
+  },
+  leftHeaderText: {
+    fontWeight: "bold",
+  },
+  leftFooter: {
+    borderRightWidth: 2,
+    borderBottomWidth: 1,
+    justifyContent: "center",
+    padding: 12,
+  },
+  leftFooterText: {
+    fontWeight: "bold",
+  },
+});

@@ -24,6 +24,7 @@ import {
   ScrollView as GHScrollView,
 } from "react-native-gesture-handler";
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
+import { useTheme } from "../contexts/ThemeContext";
 import SwipeableCategoryItem from "../components/SwipeableCategoryItem";
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL;
@@ -46,10 +47,12 @@ export default function Input() {
   const [updatingCategory, setUpdatingCategory] = useState(null);
   const [isSending, setIsSending] = useState(false);
 
+  const { theme } = useTheme();
+
   useEffect(() => {
     const fetchCategories = async () => {
       const res = await fetch(`${API_URL}/categories`).then((res) =>
-        res.json()
+        res.json(),
       );
       // console.log("Fetched Categories:", res);
       setCategories(res);
@@ -110,7 +113,7 @@ export default function Input() {
       if (!res.ok) {
         Alert.alert(
           "Error enviando la transacción",
-          data.message || JSON.stringify(data)
+          data.message || JSON.stringify(data),
         );
         return;
       }
@@ -144,7 +147,7 @@ export default function Input() {
         console.log("Error response data:", res);
         Alert.alert(
           "Error agregando la categoría",
-          data.message || JSON.stringify(data)
+          data.message || JSON.stringify(data),
         );
         return;
       }
@@ -176,13 +179,13 @@ export default function Input() {
         console.log("Error response data:", res);
         Alert.alert(
           "Error agregando la subcategoría",
-          data.message || JSON.stringify(data)
+          data.message || JSON.stringify(data),
         );
         return;
       }
 
       const categoryRef = categories.find(
-        (cat) => cat.value === data["id_categoria"]
+        (cat) => cat.value === data["id_categoria"],
       );
       if (!categoryRef) {
         Alert.alert("Error", "No se encontró la categoría");
@@ -206,14 +209,14 @@ export default function Input() {
         `${API_URL}/categories/delete_category/?id=${categoryValue}`,
         {
           method: "DELETE",
-        }
+        },
       );
 
       if (!res.ok) {
         const data = await res.json();
         Alert.alert(
           "Error eliminando la categoría",
-          data.message || JSON.stringify(data)
+          data.message || JSON.stringify(data),
         );
         return;
       }
@@ -231,28 +234,28 @@ export default function Input() {
         `${API_URL}/categories/delete_subcategory/?id=${categoryValue}`,
         {
           method: "DELETE",
-        }
+        },
       );
 
       const result = await res.json();
       if (!res.ok) {
         Alert.alert(
           "Error eliminando la subcategoría",
-          result.message || JSON.stringify(result)
+          result.message || JSON.stringify(result),
         );
         return;
       }
 
       console.log(result);
       const categoryRef = categories.find(
-        (cat) => cat.value === result["id_categoria"]
+        (cat) => cat.value === result["id_categoria"],
       );
       if (!categoryRef) {
         Alert.alert("Error", "No se encontró la categoría");
         return;
       }
       const newSubcategories = categoryRef.sub_categorias.filter(
-        (sub) => sub.value !== result["id"]
+        (sub) => sub.value !== result["id"],
       );
       categoryRef.sub_categorias = newSubcategories;
       console.log(categoryRef);
@@ -263,24 +266,64 @@ export default function Input() {
     }
   };
 
-  const updateCategory = async (value, newLabel) => {
+  const updateCategory = async (value, newLabel, parentId) => {
     console.log(value, newLabel);
     setUpdatingCategory(value);
     try {
-      const result = await fetch(
+      const res = await fetch(
         `${API_URL}/categories/update_category/?value=${value}&label=${newLabel}`,
         {
           method: "PUT",
-        }
-      ).then((res) => res.json());
-
+        },
+      );
+      const result = await res.json();
+      if (!res.ok) {
+        Alert.alert(
+          "Error actualizando categoría",
+          result.message || JSON.stringify(result),
+        );
+        return;
+      }
       const categoryRef = categories.find(
-        (cat) => cat.value === result["value"]
+        (cat) => cat.value === result["value"],
       );
       categoryRef.label = result["label"];
       setCategories([...categories]);
     } catch (error) {
-      console.error("Error deleting category:", error);
+      console.error("Error actualizando categoría:", error);
+    } finally {
+      setUpdatingCategory(null);
+    }
+  };
+
+  const updateSubcategory = async (value, newLabel, parentId) => {
+    console.log(value, newLabel);
+    setUpdatingCategory(value);
+    try {
+      const res = await fetch(
+        `${API_URL}/categories/update_subcategory/?value=${value}&label=${newLabel}`,
+        {
+          method: "PUT",
+        },
+      );
+      const result = await res.json();
+      if (!res.ok) {
+        Alert.alert(
+          "Error actualizando Subcategoría",
+          result.message || JSON.stringify(result),
+        );
+        return;
+      }
+      const categoryRef = categories.find((cat) => cat.value === parentId);
+      if (!categoryRef) {
+        Alert.alert("Error", "No se encontró la categoría");
+        return;
+      }
+      categoryRef.sub_categorias.find((sub) => sub.value === value).label =
+        result["label"];
+      setCategories([...categories]);
+    } catch (error) {
+      console.error("Error actualizando Subcategoría:", error);
     } finally {
       setUpdatingCategory(null);
     }
@@ -298,51 +341,81 @@ export default function Input() {
     });
   };
 
-  const containerStyle =
-    "border border-gray-400 justify-center items-center w-full rounded-lg p-5";
-
   return (
-    // <SafeAreaView style={{ flex: 1 }}>
     <KeyboardAvoidingView
       behavior={Platform.OS === "ios" ? "padding" : "height"}
       style={{ flex: 1 }}
       keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 20}
     >
-      <TouchableWithoutFeedback onPress={dismissKeyboard}>
+      <SafeAreaView style={{ flex: 1 }} edges={["top", "left", "right"]}>
         {/* <ScrollView
-        contentContainerStyle={{ flexGrow: 1 }}
-        keyboardShouldPersistTaps="handled"
-      > */}
-        <View className="flex-1 justify-center items-center bg-white gap-4 p-4">
-          <View className={containerStyle + " gap-2"}>
-            <Text className="font-semibold">Fecha</Text>
-            <DateTimePicker
-              testID="dateTimePicker"
-              value={date}
-              mode="date"
-              onChange={onChange}
-              textColor="black"
-              themeVariant="light"
-              display="default"
-              accentColor="#0a84ff"
-              // style={{ backgroundColor: "#e5e7eb" }}
-            />
-          </View>
-          <View className={containerStyle + " gap-2"}>
-            <Text className="font-semibold">Valor</Text>
-            <CurrencyInput
-              className="rounded-3xl py-2 px-4 text-black bg-gray-200/70 w-[150px] text-center"
-              value={value}
-              onChangeValue={handleValueChange}
-              delimiter="."
-              separator=","
-              precision={2}
-              minValue={0}
-              style={{ fontSize: 16 }}
-              keyboardType="number-pad"
-            />
-            {/* <TextInput
-              className="rounded-3xl py-3 px-4 text-black bg-gray-200 w-[150px] text-center"
+          keyboardShouldPersistTaps="handled"
+          contentContainerStyle={{ flexGrow: 1 }}
+          showsVerticalScrollIndicator={false}
+        > */}
+        <TouchableWithoutFeedback onPress={dismissKeyboard}>
+          <View
+            style={[
+              {
+                backgroundColor: theme.colors.background,
+                flex: 1,
+                justifyContent: "space-around",
+              },
+            ]}
+          >
+            <View style={styles.containerStyle}>
+              <Text style={[styles.labelText, { color: theme.colors.text }]}>
+                Fecha
+              </Text>
+              <View style={{ transform: [{ scale: 1.1 }] }}>
+                <DateTimePicker
+                  testID="dateTimePicker"
+                  value={date}
+                  mode="date"
+                  onChange={onChange}
+                  textColor={theme.colors.text}
+                  themeVariant={theme.isDark ? "dark" : "light"}
+                  display="default"
+                  accentColor={theme.colors.primary}
+                  style={{
+                    borderRadius: 30,
+                    height: 40,
+                  }}
+                />
+              </View>
+            </View>
+            <View style={styles.containerStyle}>
+              <Text style={[styles.labelText, { color: theme.colors.text }]}>
+                Valor
+              </Text>
+              <CurrencyInput
+                style={[
+                  styles.currencyInput,
+                  {
+                    backgroundColor: theme.colors.inputBackground,
+                    color: theme.colors.text,
+                  },
+                ]}
+                value={value}
+                onChangeValue={handleValueChange}
+                delimiter="."
+                separator=","
+                precision={2}
+                minValue={0}
+                inputStyle={{
+                  fontSize: 14,
+                  height: 40,
+                  textAlign: "center",
+                  borderRadius: 30,
+                  paddingHorizontal: 10,
+                  color: theme.colors.text,
+                }}
+                keyboardType="number-pad"
+                placeholder="ingresa el valor"
+                placeholderTextColor={theme.colors.placeholder}
+              />
+              {/* <TextInput
+              style={styles.currencyInput}
               placeholder="Ingresa el valor"
               placeholderTextColor="black"
               inputMode="decimal"
@@ -350,39 +423,65 @@ export default function Input() {
               value={value}
               onChangeText={handleValueChange}
             /> */}
-          </View>
-          <View className={containerStyle + " gap-2"}>
-            <Text className="font-semibold">Tipo</Text>
-            <View className="w-[300px]">
+            </View>
+            <View style={styles.containerStyle}>
+              <Text style={[styles.labelText, { color: theme.colors.text }]}>
+                Tipo
+              </Text>
               <SegmentedControl
+                style={{ width: 160, height: 40 }}
                 values={["Ingreso", "Egreso"]}
                 selectedIndex={txtType}
+                appearance={theme.isDark ? "dark" : "light"}
                 onChange={(event) => {
                   console.log(event);
                   setTxnType(event.nativeEvent.selectedSegmentIndex);
                 }}
-                tintColor="#0a84ff"
-                fontStyle={{ color: "#000000" }}
+                tintColor={theme.colors.primary}
                 activeFontStyle={{ color: "#ffffff" }}
               />
             </View>
-          </View>
-          <View className={`${containerStyle}` + " gap-4"}>
-            <View className="flex-row justify-center items-center w-full">
-              <Text className="font-semibold text-base">Categoria</Text>
-              <Pressable
-                className="absolute right-1 rounded-lg p-2 active:bg-gray-200"
-                onPress={() => setShowCategoryModal(true)}
-              >
-                <Feather name="edit" size={20} color="black" />
-              </Pressable>
-            </View>
-            <View className="justify-between w-full">
+            <View style={[styles.containerStyle, { gap: 16 }]}>
+              <View style={styles.categoryHeader}>
+                <Text
+                  style={[styles.categoryLabel, { color: theme.colors.text }]}
+                >
+                  Categoria
+                </Text>
+                <Pressable
+                  style={({ pressed }) => [
+                    styles.editButton,
+                    pressed && styles.editButtonPressed,
+                  ]}
+                  onPress={() => setShowCategoryModal(true)}
+                >
+                  <Feather
+                    name="edit"
+                    size={20}
+                    color={theme.colors.text}
+                  />
+                </Pressable>
+              </View>
               <Dropdown
-                style={styles.dropdown}
-                placeholderStyle={styles.placeholderStyle}
-                selectedTextStyle={styles.selectedTextStyle}
-                inputSearchStyle={styles.inputSearchStyle}
+                style={[
+                  styles.dropdown,
+                  {
+                    backgroundColor: theme.colors.inputBackground,
+                    borderBottomColor: theme.colors.border,
+                  },
+                ]}
+                placeholderStyle={[
+                  styles.placeholderStyle,
+                  { color: theme.colors.placeholder },
+                ]}
+                selectedTextStyle={[
+                  styles.selectedTextStyle,
+                  { color: theme.colors.text },
+                ]}
+                inputSearchStyle={[
+                  styles.inputSearchStyle,
+                  { color: theme.colors.text },
+                ]}
                 iconStyle={styles.iconStyle}
                 data={categories}
                 search
@@ -400,16 +499,27 @@ export default function Input() {
                   });
                   console.log(selectedCategory);
                 }}
-                // dropdownPosition="top"
               />
-              <View className="flex-row flex-1 justify-center">
-                <Text className="text-base font-semibold">Sub Categoria</Text>
-              </View>
               <Dropdown
-                style={styles.dropdown}
-                placeholderStyle={styles.placeholderStyle}
-                selectedTextStyle={styles.selectedTextStyle}
-                inputSearchStyle={styles.inputSearchStyle}
+                style={[
+                  styles.dropdown,
+                  {
+                    backgroundColor: theme.colors.inputBackground,
+                    borderBottomColor: theme.colors.border,
+                  },
+                ]}
+                placeholderStyle={[
+                  styles.placeholderStyle,
+                  { color: theme.colors.placeholder },
+                ]}
+                selectedTextStyle={[
+                  styles.selectedTextStyle,
+                  { color: theme.colors.text },
+                ]}
+                inputSearchStyle={[
+                  styles.inputSearchStyle,
+                  { color: theme.colors.text },
+                ]}
                 iconStyle={styles.iconStyle}
                 data={selectedCategory?.sub_categorias || []}
                 search
@@ -427,154 +537,215 @@ export default function Input() {
                 }}
                 dropdownPosition="top"
               />
-            </View>
-            <Modal
-              transparent={false}
-              animationType="slide"
-              visible={showCategoryModal}
-            >
-              <KeyboardAvoidingView
-                behavior={Platform.OS === "ios" ? "padding" : "height"}
-                style={{ flex: 1 }}
+              <Modal
+                transparent={false}
+                animationType="slide"
+                visible={showCategoryModal}
               >
-                <SafeAreaProvider>
-                  <SafeAreaView style={{ flex: 1 }}>
-                    <View className="flex-row justify-between items-center px-4 py-2">
-                      <Pressable
-                        onPress={() => setShowCategoryModal(false)}
-                        className="p-2"
-                      >
-                        {({ pressed }) => (
-                          <AntDesign
-                            name="close"
-                            size={24}
-                            color={pressed ? "#6b7280" : "black"}
-                          />
-                        )}
-                      </Pressable>
-                      <Text className="text-2xl font-semibold">Categorias</Text>
-                      <Pressable
-                        onPress={() => setVisibleInputCat(!visibleInputCat)}
-                        className="p-2"
-                      >
-                        {({ pressed }) => (
-                          <AntDesign
-                            name={visibleInputCat ? "close" : "plus"}
-                            size={24}
-                            color={pressed ? "#6b7280" : "black"}
-                          />
-                        )}
-                      </Pressable>
-                    </View>
-                    {visibleInputCat && (
-                      <View className="flex-row gap-2 px-4 py-2">
-                        <TextInput
-                          className="rounded-lg py-2 px-3 text-black flex-1 border-gray-300 border mb-2"
-                          placeholder="Nueva Categoria"
-                          placeholderTextColor="black"
-                          value={inputCategory}
-                          onChangeText={(text) => {
-                            setInputCategory(text);
-                          }}
-                        />
+                <KeyboardAvoidingView
+                  behavior={Platform.OS === "ios" ? "padding" : "height"}
+                  style={{ flex: 1 }}
+                >
+                  <SafeAreaProvider>
+                    <SafeAreaView
+                      style={[
+                        { flex: 1 },
+                        { backgroundColor: theme.colors.background },
+                      ]}
+                    >
+                      <View style={styles.modalHeader}>
                         <Pressable
-                          className="bg-[#0a84ff] rounded-lg p-3 active:bg-[#0a84ff]/50 mb-2"
-                          onPress={() => addCategory()}
+                          onPress={() => setShowCategoryModal(false)}
+                          style={styles.iconButton}
                         >
-                          <Text className=" text-white font-semibold ">
-                            Agregar
-                          </Text>
+                          {({ pressed }) => (
+                            <AntDesign
+                              name="close"
+                              size={24}
+                              color={
+                                pressed
+                                  ? theme.colors.textSecondary
+                                  : theme.colors.text
+                              }
+                            />
+                          )}
+                        </Pressable>
+                        <Text
+                          style={[styles.modalTitle, { color: theme.colors.text }]}
+                        >
+                          Categorias
+                        </Text>
+                        <Pressable
+                          onPress={() => setVisibleInputCat(!visibleInputCat)}
+                          style={styles.iconButton}
+                        >
+                          {({ pressed }) => (
+                            <AntDesign
+                              name={visibleInputCat ? "close" : "plus"}
+                              size={24}
+                              color={
+                                pressed
+                                  ? theme.colors.textSecondary
+                                  : theme.colors.text
+                              }
+                            />
+                          )}
                         </Pressable>
                       </View>
-                    )}
-                    <GestureHandlerRootView style={{ flex: 1 }}>
-                      <GHScrollView>
-                        {categories.map((cat) => (
-                          <View key={cat.value}>
-                            <SwipeableCategoryItem
-                              cat={cat}
-                              parent={true}
-                              onPress={() => expandCategories(cat)}
-                              onDelete={deleteCategory}
-                              onEdit={updateCategory}
-                              isLoading={updatingCategory === cat.value}
-                            />
-                            {expandedCategories.has(cat.value) && (
-                              <>
-                                {cat.sub_categorias.map((sub) => (
-                                  <View key={sub.value} className="pl-8 w-full">
-                                    <SwipeableCategoryItem
-                                      cat={sub}
-                                      onDelete={deleteSubcategory}
-                                    />
-                                  </View>
-                                ))}
-                                <View
-                                  key={cat.sub}
-                                  className="flex-row gap-2 px-4 py-2 ml-4"
-                                >
-                                  <TextInput
-                                    className="rounded-lg py-2 px-3 text-black flex-1 border-gray-300 border"
-                                    placeholder="Nueva Subcategoria"
-                                    placeholderTextColor="black"
-                                    value={inputSubcategory}
-                                    onChangeText={(text) => {
-                                      setInputSubcategory(text);
-                                    }}
-                                  />
-                                  <Pressable
-                                    onPress={() => addSubcategory(cat.value)}
-                                    className="px-4 bg-gray-200 justify-center rounded-lg active:bg-gray-300"
+                      {visibleInputCat && (
+                        <View style={styles.inputRow}>
+                          <TextInput
+                            style={[
+                              styles.categoryInput,
+                              {
+                                backgroundColor: theme.colors.surface,
+                                borderColor: theme.colors.border,
+                                color: theme.colors.text,
+                              },
+                            ]}
+                            placeholder="Nueva Categoria"
+                            placeholderTextColor={theme.colors.placeholder}
+                            value={inputCategory}
+                            onChangeText={(text) => {
+                              setInputCategory(text);
+                            }}
+                          />
+                          <Pressable
+                            style={({ pressed }) => [
+                              styles.addButton,
+                              { backgroundColor: theme.colors.primary },
+                              pressed && styles.addButtonPressed,
+                            ]}
+                            onPress={() => addCategory()}
+                          >
+                            <Text style={styles.addButtonText}>Agregar</Text>
+                          </Pressable>
+                        </View>
+                      )}
+                      <GestureHandlerRootView style={{ flex: 1 }}>
+                        <GHScrollView>
+                          {categories.map((cat) => (
+                            <View key={cat.value}>
+                              <SwipeableCategoryItem
+                                cat={cat}
+                                parent={true}
+                                onPress={() => expandCategories(cat)}
+                                onDelete={deleteCategory}
+                                onEdit={updateCategory}
+                                isLoading={updatingCategory === cat.value}
+                              />
+                              {expandedCategories.has(cat.value) && (
+                                <>
+                                  {cat.sub_categorias.map((sub) => (
+                                    <View
+                                      key={sub.value}
+                                      style={styles.subCategoryContainer}
+                                    >
+                                      <SwipeableCategoryItem
+                                        parentId={cat.value}
+                                        cat={sub}
+                                        onDelete={deleteSubcategory}
+                                        onEdit={updateSubcategory}
+                                      />
+                                    </View>
+                                  ))}
+                                  <View
+                                    key={cat.sub}
+                                    style={styles.subCategoryInputRow}
                                   >
-                                    <Text>Agregar</Text>
-                                  </Pressable>
-                                </View>
-                              </>
-                            )}
-                          </View>
-                        ))}
-                      </GHScrollView>
-                    </GestureHandlerRootView>
-                  </SafeAreaView>
-                </SafeAreaProvider>
-              </KeyboardAvoidingView>
-            </Modal>
+                                    <TextInput
+                                      style={[
+                                        styles.subCategoryInput,
+                                        {
+                                          backgroundColor: theme.colors.surface,
+                                          borderColor: theme.colors.border,
+                                          color: theme.colors.text,
+                                        },
+                                      ]}
+                                      placeholder="Nueva Subcategoria"
+                                      placeholderTextColor={theme.colors.placeholder}
+                                      value={inputSubcategory}
+                                      onChangeText={(text) => {
+                                        setInputSubcategory(text);
+                                      }}
+                                    />
+                                    <Pressable
+                                      onPress={() => addSubcategory(cat.value)}
+                                      style={({ pressed }) => [
+                                        styles.subCategoryAddButton,
+                                        {
+                                          backgroundColor:
+                                            theme.colors.inputBackground,
+                                        },
+                                        pressed &&
+                                          styles.subCategoryAddButtonPressed,
+                                      ]}
+                                    >
+                                      <Text style={{ color: theme.colors.text }}>
+                                        Agregar
+                                      </Text>
+                                    </Pressable>
+                                  </View>
+                                </>
+                              )}
+                            </View>
+                          ))}
+                        </GHScrollView>
+                      </GestureHandlerRootView>
+                    </SafeAreaView>
+                  </SafeAreaProvider>
+                </KeyboardAvoidingView>
+              </Modal>
+            </View>
+            <View style={styles.containerStyle}>
+              <Pressable
+                style={({ pressed }) => [
+                  styles.submitButton,
+                  { backgroundColor: theme.colors.primary },
+                  pressed && styles.submitButtonPressed,
+                ]}
+                onPress={submitTxn}
+              >
+                {isSending ? (
+                  <ActivityIndicator size="small" color="#ffffff" />
+                ) : (
+                  <Text style={styles.submitButtonText}>
+                    Enviar transacción
+                  </Text>
+                )}
+              </Pressable>
+            </View>
           </View>
-          <Pressable
-            onPress={submitTxn}
-            className="bg-[#0a84ff] rounded-lg p-3 items-center active:bg-[#0a84ff]/50"
-          >
-            {isSending ? (
-              <ActivityIndicator size="small" color="#ffffff" />
-            ) : (
-              <Text className="text-white font-semibold">
-                Enviar transacción
-              </Text>
-            )}
-          </Pressable>
-        </View>
+        </TouchableWithoutFeedback>
         {/* </ScrollView> */}
-      </TouchableWithoutFeedback>
+      </SafeAreaView>
     </KeyboardAvoidingView>
-    // </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
+  containerStyle: {
+    padding: 8,
+    gap: 8,
+    // borderWidth: 0.5,
+    borderColor: "gray",
+    alignItems: "center",
+    justifyContent: "space-around",
+  },
   dropdown: {
-    margin: 16,
-    height: 50,
-    borderBottomColor: "gray",
-    borderBottomWidth: 0.5,
+    height: 40,
+    width: "75%",
+    borderRadius: 40,
+    paddingHorizontal: 14,
   },
   icon: {
     marginRight: 5,
   },
   placeholderStyle: {
-    fontSize: 16,
+    fontSize: 14,
   },
   selectedTextStyle: {
-    fontSize: 16,
+    fontSize: 14,
   },
   iconStyle: {
     width: 20,
@@ -582,6 +753,119 @@ const styles = StyleSheet.create({
   },
   inputSearchStyle: {
     height: 40,
+    fontSize: 14,
+  },
+  labelText: {
+    fontWeight: "600",
+  },
+  currencyInput: {
+    borderRadius: 24,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    width: 150,
+    textAlign: "center",
+  },
+  categoryHeader: {
+    flexDirection: "row",
+    justifyContent: "center",
+    alignItems: "center",
+    width: "100%",
+  },
+  categoryLabel: {
+    fontWeight: "600",
     fontSize: 16,
+  },
+  editButton: {
+    position: "absolute",
+    right: 100,
+    borderRadius: 8,
+    padding: 8,
+  },
+  editButtonPressed: {
+    opacity: 0.5,
+  },
+  modalHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+  },
+  iconButton: {
+    padding: 8,
+  },
+  modalTitle: {
+    fontSize: 24,
+    fontWeight: "600",
+  },
+  inputRow: {
+    flexDirection: "row",
+    gap: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+  },
+  categoryInput: {
+    borderRadius: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    color: "#000000",
+    flex: 1,
+    borderWidth: 1,
+    borderColor: "#d1d5db",
+    marginBottom: 8,
+  },
+  addButton: {
+    backgroundColor: "#0a84ff",
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 8,
+  },
+  addButtonPressed: {
+    opacity: 0.8,
+  },
+  addButtonText: {
+    color: "#ffffff",
+    fontWeight: "600",
+  },
+  subCategoryContainer: {
+    paddingLeft: 32,
+    width: "100%",
+  },
+  subCategoryInputRow: {
+    flexDirection: "row",
+    gap: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    marginLeft: 16,
+  },
+  subCategoryInput: {
+    borderRadius: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    color: "#000000",
+    flex: 1,
+    borderWidth: 1,
+    borderColor: "#d1d5db",
+  },
+  subCategoryAddButton: {
+    paddingHorizontal: 16,
+    justifyContent: "center",
+    borderRadius: 8,
+  },
+  subCategoryAddButtonPressed: {
+    opacity: 0.8,
+  },
+  submitButton: {
+    width: "50%",
+    borderRadius: 30,
+    padding: 12,
+    alignItems: "center",
+  },
+  submitButtonPressed: {
+    opacity: 0.8,
+  },
+  submitButtonText: {
+    color: "#ffffff",
+    fontWeight: "600",
   },
 });

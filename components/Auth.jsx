@@ -1,8 +1,10 @@
 import { useState } from "react";
-import { Alert, Pressable, Text, TextInput, View } from "react-native";
+import { Alert, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { useTheme } from "../contexts/ThemeContext";
 import { supabase } from "../lib/supabase";
 
 export default function Auth() {
+  const { theme } = useTheme();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -82,17 +84,35 @@ export default function Auth() {
   }
 
   return (
-    <View className="flex-1 p-4">
-      <View className="my-10">
-        <Text className="text-5xl font-semibold text-center text-black">
+    <View
+      style={[styles.container, { backgroundColor: theme.colors.background }]}
+    >
+      <View style={styles.titleContainer}>
+        <Text style={[styles.title, { color: theme.colors.text }]}>
           Personal Finance App
         </Text>
       </View>
-      <View className="flex-1 justify-start items-center bg-white gap-4 px-4">
-        <View className="py-1 self-stretch mt-5">
-          <Text className="text-gray-700 text-sm font-medium mb-1">Email</Text>
+      <View
+        style={[
+          styles.formContainer,
+          { backgroundColor: theme.colors.background },
+        ]}
+      >
+        <View style={styles.inputContainer}>
+          <Text style={[styles.label, { color: theme.colors.text }]}>
+            Email
+          </Text>
           <TextInput
-            className={`border rounded-lg px-4 py-3 text-base bg-white ${emailError ? "border-red-500" : "border-gray-300"}`}
+            style={[
+              styles.input,
+              {
+                backgroundColor: theme.colors.surface,
+                borderColor: emailError
+                  ? theme.colors.error
+                  : theme.colors.border,
+                color: theme.colors.text,
+              },
+            ]}
             onChangeText={(text) => {
               setEmail(text);
               if (emailError) validateEmail(text);
@@ -100,20 +120,29 @@ export default function Auth() {
             onBlur={() => validateEmail(email)}
             value={email}
             placeholder="email@address.com"
-            placeholderTextColor="#9ca3af"
+            placeholderTextColor={theme.colors.placeholder}
             autoCapitalize="none"
             keyboardType="email-address"
           />
           {emailError ? (
-            <Text className="text-red-500 text-sm mt-1">{emailError}</Text>
+            <Text style={styles.errorText}>{emailError}</Text>
           ) : null}
         </View>
-        <View className="py-1 self-stretch">
-          <Text className="text-gray-700 text-sm font-medium mb-1">
+        <View style={styles.inputContainer}>
+          <Text style={[styles.label, { color: theme.colors.text }]}>
             Password
           </Text>
           <TextInput
-            className={`border rounded-lg px-4 py-3 text-base bg-white ${passwordError ? "border-red-500" : "border-gray-300"}`}
+            style={[
+              styles.input,
+              {
+                backgroundColor: theme.colors.surface,
+                borderColor: passwordError
+                  ? theme.colors.error
+                  : theme.colors.border,
+                color: theme.colors.text,
+              },
+            ]}
             onChangeText={(text) => {
               setPassword(text);
               if (passwordError) validatePassword(text);
@@ -122,36 +151,105 @@ export default function Auth() {
             value={password}
             secureTextEntry={true}
             placeholder="Password"
-            placeholderTextColor="#9ca3af"
+            placeholderTextColor={theme.colors.placeholder}
             autoCapitalize="none"
           />
           {passwordError ? (
-            <Text className="text-red-500 text-sm mt-1">{passwordError}</Text>
+            <Text style={styles.errorText}>{passwordError}</Text>
           ) : null}
         </View>
-        <View className="py-1 self-stretch mt-5">
+        <View style={[styles.inputContainer, styles.buttonContainer]}>
           <Pressable
-            className={`rounded-lg py-3 px-4 ${loading ? "bg-blue-300" : "bg-blue-600 active:bg-blue-700"}`}
+            style={({ pressed }) => [
+              styles.button,
+              { backgroundColor: theme.colors.primary },
+              loading ? styles.buttonDisabled : null,
+              pressed && !loading && styles.buttonPressed,
+            ]}
             disabled={loading}
             onPress={() => signInWithEmail()}
           >
-            <Text className="text-white text-center font-semibold text-base">
-              Sign in
-            </Text>
+            <Text style={styles.buttonText}>Sign in</Text>
           </Pressable>
         </View>
-        <View className="py-1 self-stretch">
+        <View style={styles.inputContainer}>
           <Pressable
-            className={`rounded-lg py-3 px-4 ${loading ? "bg-blue-300" : "bg-blue-600 active:bg-blue-700"}`}
+            style={({ pressed }) => [
+              styles.button,
+              { backgroundColor: theme.colors.primary },
+              loading ? styles.buttonDisabled : null,
+              pressed && !loading && styles.buttonPressed,
+            ]}
             disabled={loading}
             onPress={() => signUpWithEmail()}
           >
-            <Text className="text-white text-center font-semibold text-base">
-              Sign up
-            </Text>
+            <Text style={styles.buttonText}>Sign up</Text>
           </Pressable>
         </View>
       </View>
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    padding: 16,
+  },
+  titleContainer: {
+    marginVertical: 40,
+  },
+  title: {
+    fontSize: 48,
+    fontWeight: "600",
+    textAlign: "center",
+  },
+  formContainer: {
+    flex: 1,
+    justifyContent: "flex-start",
+    alignItems: "center",
+    gap: 16,
+    paddingHorizontal: 16,
+  },
+  inputContainer: {
+    paddingVertical: 4,
+    alignSelf: "stretch",
+  },
+  buttonContainer: {
+    marginTop: 20,
+  },
+  label: {
+    fontSize: 14,
+    fontWeight: "500",
+    marginBottom: 4,
+  },
+  input: {
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    fontSize: 16,
+  },
+  errorText: {
+    color: "#ef4444",
+    fontSize: 14,
+    marginTop: 4,
+  },
+  button: {
+    borderRadius: 8,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+  },
+  buttonDisabled: {
+    opacity: 0.5,
+  },
+  buttonPressed: {
+    opacity: 0.8,
+  },
+  buttonText: {
+    color: "#ffffff",
+    textAlign: "center",
+    fontWeight: "600",
+    fontSize: 16,
+  },
+});

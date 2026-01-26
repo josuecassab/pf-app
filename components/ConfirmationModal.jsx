@@ -1,5 +1,6 @@
 import AntDesign from "@expo/vector-icons/AntDesign";
 import {
+  Alert,
   Modal,
   Pressable,
   StyleSheet,
@@ -28,18 +29,16 @@ export default function MyCustomModal({
       }}
       {...rest}
     >
-      <View className="flex-1 justify-center items-center bg-black/50">
-        <View className="bg-white rounded-2xl p-6 m-4 shadow-lg w-80">
-          <View className="flex-row justify-end">
+      <View style={styles.modalOverlay}>
+        <View style={styles.modalContent}>
+          <View style={styles.modalHeader}>
             <TouchableHighlight onPress={SetModalFunc} underlayColor="#e2e8f0">
               <AntDesign name="close-circle" size={24} color="black" />
             </TouchableHighlight>
           </View>
 
-          <Text className="text-xl font-bold mb-4 text-slate-800">
-            Category Details
-          </Text>
-          <Text className="text-slate-600 mb-6">
+          <Text style={styles.modalTitle}>Category Details</Text>
+          <Text style={styles.modalDescription}>
             Select a new category for this transaction.
           </Text>
           <Dropdown
@@ -57,19 +56,9 @@ export default function MyCustomModal({
             searchPlaceholder="Search..."
             value={value}
             onChange={onChange}
-            // renderLeftIcon={() => (
-            //   <AntDesign
-            //     style={styles.icon}
-            //     color="black"
-            //     name="Safety"
-            //     size={20}
-            //   />
-            // )}
           />
-          <Pressable className="bg-blue-500 rounded-lg p-3" onPress={onAccept}>
-            <Text className="text-white text-center font-semibold">
-              Acceptar
-            </Text>
+          <Pressable style={styles.acceptButton} onPress={onAccept}>
+            <Text style={styles.acceptButtonText}>Acceptar</Text>
           </Pressable>
         </View>
       </View>
@@ -78,6 +67,41 @@ export default function MyCustomModal({
 }
 
 const styles = StyleSheet.create({
+  modalOverlay: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
+  },
+  modalContent: {
+    backgroundColor: "#ffffff",
+    borderRadius: 16,
+    padding: 24,
+    margin: 16,
+    width: 320,
+    shadowColor: "#000",
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    elevation: 5,
+  },
+  modalHeader: {
+    flexDirection: "row",
+    justifyContent: "flex-end",
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: "bold",
+    marginBottom: 16,
+    color: "#1e293b",
+  },
+  modalDescription: {
+    color: "#475569",
+    marginBottom: 24,
+  },
   dropdown: {
     margin: 16,
     height: 50,
@@ -100,5 +124,15 @@ const styles = StyleSheet.create({
   inputSearchStyle: {
     height: 40,
     fontSize: 16,
+  },
+  acceptButton: {
+    backgroundColor: "#3b82f6",
+    borderRadius: 8,
+    padding: 12,
+  },
+  acceptButtonText: {
+    color: "#ffffff",
+    textAlign: "center",
+    fontWeight: "600",
   },
 });

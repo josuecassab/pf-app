@@ -8,10 +8,12 @@ import {
   Pressable,
   RefreshControl,
   ScrollView,
+  StyleSheet,
   Text,
   TouchableHighlight,
   View,
 } from "react-native";
+import { useTheme } from "../contexts/ThemeContext";
 import MyCustomModal from "./MyCustomModal";
 
 const formatSpanishNumber = (num) => {
@@ -46,6 +48,7 @@ export default function TxnTable({
   queryKey,
   refetch,
 }) {
+  const { theme } = useTheme();
   const API_URL = process.env.EXPO_PUBLIC_API_URL;
   const queryClient = useQueryClient();
   const [categoryModalVisible, setCategoryModalVisible] = useState(false);
@@ -60,7 +63,7 @@ export default function TxnTable({
   useEffect(() => {
     const fetchCategories = async () => {
       const res = await fetch(`${API_URL}/categories`).then((res) =>
-        res.json()
+        res.json(),
       );
       setCategories(res);
     };
@@ -68,12 +71,12 @@ export default function TxnTable({
   }, []);
 
   const columnsWidth = {
-    fecha: "w-[98px]",
-    descripcion: "w-28",
-    valor: "w-28",
-    categoria: "w-28",
-    sub_categoria: "w-28",
-    editar: "w-[60px]",
+    fecha: 98,
+    descripcion: 112,
+    valor: 112,
+    categoria: 112,
+    sub_categoria: 112,
+    editar: 60,
   };
 
   const handleCategoriaPress = (id) => {
@@ -90,9 +93,19 @@ export default function TxnTable({
     setSubCategoryModalVisible(true);
   };
 
-  if (isPending) return <Text>Loading...</Text>;
+  if (isPending)
+    return (
+      <View style={{ padding: 16, alignItems: "center" }}>
+        <ActivityIndicator size="small" color={theme.colors.primary} />
+      </View>
+    );
 
-  if (error) return <Text>An error has occurred: {error.message}</Text>;
+  if (error)
+    return (
+      <Text style={{ color: theme.colors.error, padding: 16 }}>
+        An error has occurred: {error.message}
+      </Text>
+    );
 
   const handleLoadMore = () => {
     if (hasNextPage && !isFetchingNextPage) {
@@ -119,7 +132,7 @@ export default function TxnTable({
             "Content-Type": "application/json",
           },
           body: JSON.stringify(selectedCategory),
-        }
+        },
       );
       const result = await res.json();
       console.log("Update result:", result);
@@ -148,7 +161,7 @@ export default function TxnTable({
             "Content-Type": "application/json",
           },
           body: JSON.stringify(selectedSubcategory),
-        }
+        },
       );
       const result = await res.json();
       console.log("Update result:", result);
@@ -189,18 +202,27 @@ export default function TxnTable({
   };
 
   // Table rendering functions
-  const renderHeaderCell = (label, widthClass = "w-40") => (
+  const renderHeaderCell = (label, width = 160) => (
     <View
-      className={`${widthClass} border-b border-r justify-center p-2 border-slate-300 bg-white`}
+      style={[
+        styles.headerCell,
+        {
+          width,
+          backgroundColor: theme.colors.surface,
+          borderColor: theme.colors.border,
+        },
+      ]}
     >
-      <Text className="font-bold text-slate-800 text-right">{label}</Text>
+      <Text style={[styles.headerText, { color: theme.colors.text }]}>
+        {label}
+      </Text>
     </View>
   );
 
   const renderHeader = () => {
     if (!columnsWidth) return null;
     return (
-      <View className="flex-row">
+      <View style={styles.row}>
         {renderHeaderCell("Fecha", columnsWidth["fecha"])}
         {renderHeaderCell("Descripcion", columnsWidth["descripcion"])}
         {renderHeaderCell("Valor", columnsWidth["valor"])}
@@ -211,64 +233,111 @@ export default function TxnTable({
     );
   };
 
-  const renderCell = (value, widthClass) => (
-    <View className={"border-b border-r p-2 border-slate-300 " + widthClass}>
-      <Text className="text-right">{value}</Text>
+  const renderCell = (value, width) => (
+    <View
+      style={[
+        styles.cell,
+        { width, borderColor: theme.colors.border },
+        { backgroundColor: theme.colors.background },
+      ]}
+    >
+      <Text style={[styles.cellText, { color: theme.colors.text }]}>
+        {value}
+      </Text>
     </View>
   );
 
-  const renderValorCell = (value, widthClass) => {
+  const renderValorCell = (value, width) => {
     const formattedValue = formatSpanishNumber(value);
     return (
-      <View className={"border-b border-r p-2 border-slate-300 " + widthClass}>
-        <Text className="text-right">{formattedValue}</Text>
+      <View
+        style={[
+          styles.cell,
+          { width, borderColor: theme.colors.border },
+          { backgroundColor: theme.colors.background },
+        ]}
+      >
+        <Text style={[styles.cellText, { color: theme.colors.text }]}>
+          {formattedValue}
+        </Text>
       </View>
     );
   };
 
-  const renderDescripcionCell = (value, widthClass) => {
+  const renderDescripcionCell = (value, width) => {
     return (
-      <View className={"border-b border-r p-2 border-slate-300 " + widthClass}>
-        <Text className="text-right">{value && value.toLowerCase()}</Text>
+      <View
+        style={[
+          styles.cell,
+          { width, borderColor: theme.colors.border },
+          { backgroundColor: theme.colors.background },
+        ]}
+      >
+        <Text style={[styles.cellText, { color: theme.colors.text }]}>
+          {value && value.toLowerCase()}
+        </Text>
       </View>
     );
   };
 
-  const renderCategoryCell = (id, category, widthClass) => {
+  const renderCategoryCell = (id, category, width) => {
     return (
       <TouchableHighlight
-        className={"border-b border-r p-2 border-slate-300 " + widthClass}
+        style={[
+          styles.cell,
+          {
+            width,
+            borderColor: theme.colors.border,
+            backgroundColor: theme.colors.background,
+          },
+        ]}
         onPress={() => handleCategoriaPress(id)}
-        underlayColor="#e2e8f0"
+        underlayColor={theme.colors.inputBackground}
       >
         <View>
-          <Text className="text-right">{category?.toLowerCase()}</Text>
+          <Text style={[styles.cellText, { color: theme.colors.text }]}>
+            {category?.toLowerCase()}
+          </Text>
         </View>
       </TouchableHighlight>
     );
   };
 
-  const renderSubCategoryCell = (id, category, subCategory, widthClass) => {
+  const renderSubCategoryCell = (id, category, subCategory, width) => {
     return (
       <TouchableHighlight
-        className={"border-b border-r p-2 border-slate-300 " + widthClass}
+        style={[
+          styles.cell,
+          {
+            width,
+            borderColor: theme.colors.border,
+            backgroundColor: theme.colors.background,
+          },
+        ]}
         onPress={() => handleSubcategoryPress(id, category)}
-        underlayColor="#e2e8f0"
+        underlayColor={theme.colors.inputBackground}
       >
         <View>
-          <Text className="text-right">{subCategory?.toLowerCase()}</Text>
+          <Text style={[styles.cellText, { color: theme.colors.text }]}>
+            {subCategory?.toLowerCase()}
+          </Text>
         </View>
       </TouchableHighlight>
     );
   };
 
-  const renderEditCell = (id, widthClass) => {
+  const renderEditCell = (id, width) => {
     return (
       <Pressable
-        className={
-          "border-b border-r p-2 border-slate-300 items-center justify-center " +
-          widthClass
-        }
+        style={[
+          styles.cell,
+          styles.editCell,
+          {
+            width,
+            borderColor: theme.colors.border,
+            backgroundColor: theme.colors.background,
+          },
+        ]}
         onPress={() =>
           Alert.alert(
             "Eliminar",
@@ -281,7 +350,7 @@ export default function TxnTable({
                 text: "Si",
                 onPress: () => deleteTxn(id),
               },
-            ]
+            ],
           )
         }
       >
@@ -289,7 +358,7 @@ export default function TxnTable({
           <MaterialIcons
             name={pressed ? "delete" : "delete-outline"}
             size={24}
-            color="black"
+            color={theme.colors.text}
           />
         )}
       </Pressable>
@@ -299,7 +368,7 @@ export default function TxnTable({
   const renderTxns = (item) => {
     if (!columnsWidth) return null;
     return (
-      <View className="flex-row">
+      <View style={styles.row}>
         {renderCell(item.fecha, columnsWidth["fecha"])}
         {renderDescripcionCell(item?.descripcion, columnsWidth["descripcion"])}
         {renderValorCell(item.valor, columnsWidth["valor"])}
@@ -308,7 +377,7 @@ export default function TxnTable({
           item.id,
           item.categoria,
           item.sub_categoria,
-          columnsWidth["sub_categoria"]
+          columnsWidth["sub_categoria"],
         )}
         {renderEditCell(item.id, columnsWidth["editar"])}
       </View>
@@ -318,8 +387,8 @@ export default function TxnTable({
   const renderFooter = () => {
     if (!isFetchingNextPage) return null;
     return (
-      <View className="py-4">
-        <ActivityIndicator size="large" color="#3b82f6" />
+      <View style={styles.footer}>
+        <ActivityIndicator size="large" color={theme.colors.primary} />
       </View>
     );
   };
@@ -365,10 +434,13 @@ export default function TxnTable({
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={true}
-        className="border border-slate-300 rounded-2xl"
+        style={[
+          styles.scrollView,
+          { borderColor: theme.colors.border },
+        ]}
       >
         <FlatList
-          className="rounded-2xl border-slate-300"
+          style={[styles.flatList, { borderColor: theme.colors.border }]}
           keyExtractor={(item) => item.id}
           data={txns}
           ListHeaderComponent={renderHeader}
@@ -378,8 +450,8 @@ export default function TxnTable({
             <RefreshControl
               refreshing={refreshing}
               onRefresh={handleLoadRecent}
-              tintColor="#3b82f6"
-              colors={["#3b82f6"]}
+              tintColor={theme.colors.primary}
+              colors={[theme.colors.primary]}
             />
           }
           onEndReached={handleLoadMore}
@@ -390,3 +462,41 @@ export default function TxnTable({
     </>
   );
 }
+
+const styles = StyleSheet.create({
+  row: {
+    flexDirection: "row",
+  },
+  headerCell: {
+    borderBottomWidth: 1,
+    borderRightWidth: 1,
+    justifyContent: "center",
+    padding: 8,
+  },
+  headerText: {
+    fontWeight: "bold",
+    textAlign: "right",
+  },
+  cell: {
+    borderBottomWidth: 1,
+    borderRightWidth: 1,
+    padding: 8,
+  },
+  cellText: {
+    textAlign: "right",
+  },
+  editCell: {
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  footer: {
+    paddingVertical: 16,
+  },
+  scrollView: {
+    borderWidth: 1,
+    borderRadius: 16,
+  },
+  flatList: {
+    borderRadius: 16,
+  },
+});

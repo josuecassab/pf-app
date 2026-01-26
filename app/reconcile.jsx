@@ -18,11 +18,14 @@ import {
 } from "react-native";
 import { Dropdown } from "react-native-element-dropdown";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { useTheme } from "../contexts/ThemeContext";
 import TxnTable from "../components/TxnTable";
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL;
+const TXNS_TABLE = "txns";
 
 export default function Reconcile() {
+  const { theme } = useTheme();
   const queryClient = useQueryClient();
   const [file, setFile] = useState(null);
   const [statements, setStatements] = useState([]);
@@ -58,6 +61,7 @@ export default function Reconcile() {
     hasNextPage: hasNextMatchedTxnsPage,
     isFetchingNextPage: isFetchingNextMatchedTxnsPage,
     isPending: isMatchedTxnsPending,
+    refetch: refetchMatchedTxns,
   } = useInfiniteQuery({
     queryKey: ["matched_txns", `${selectedStatement?.label}_joined`],
     queryFn: ({ pageParam }) =>
@@ -65,7 +69,11 @@ export default function Reconcile() {
         `${API_URL}/reconcile_matched_txns/?table_name=${pageParam.table_name}&page=${pageParam.page}&limit=${pageParam.limit}`,
       ).then((res) => res.json()),
     enabled: !!selectedStatement?.label,
-    initialPageParam: {table_name: `${selectedStatement?.label}_joined`, page: 0, limit: 100 },
+    initialPageParam: {
+      table_name: selectedStatement?.label + "_joined",
+      page: 0,
+      limit: 100,
+    },
     getNextPageParam: (lastPage, allPages, lastPageParam) => {
       if (
         !lastPage ||
@@ -74,13 +82,13 @@ export default function Reconcile() {
       ) {
         return undefined;
       }
-      return { page: lastPageParam.page + 1, limit: lastPageParam.limit };
+      return {table_name: lastPageParam.table_name, page: lastPageParam.page + 1, limit: lastPageParam.limit };
     },
     enabled: !!selectedStatement?.label,
-    staleTime: 1000 * 60 * 5,
+    // staleTime: 1000 * 60 * 5,
     refetchOnWindowFocus: false,
     refetchOnReconnect: false,
-    refetchOnMount: false,
+    // refetchOnMount: false,
   });
 
   const {
@@ -90,6 +98,7 @@ export default function Reconcile() {
     hasNextPage: hasNextUnmatchedTxnsPage,
     isFetchingNextPage: isFetchingNextUnmatchedTxnsPage,
     isPending: isUnmatchedTxnsPending,
+    refetch: refetchUnmatchedTxns,
   } = useInfiniteQuery({
     queryKey: ["unmatched_txns", selectedStatement?.label],
     queryFn: ({ pageParam }) =>
@@ -108,14 +117,15 @@ export default function Reconcile() {
       }
       return { page: lastPageParam.page + 1, limit: lastPageParam.limit };
     },
-    staleTime: 1000 * 60 * 5,
-    refetchOnWindowFocus: false,
-    refetchOnReconnect: false,
-    refetchOnMount: false,
+    // staleTime: 1000 * 60 * 5,
+    // refetchOnWindowFocus: false,
+    // refetchOnReconnect: false,
+    // refetchOnMount: false,
   });
 
   // Flatten all pages into a single array of transactions
   const flattenedMatchedTxns = useMemo(() => {
+    console.log("matchedTxns:", matchedTxns?.pages);
     return matchedTxns?.pages?.flatMap((page) => page) ?? [];
   }, [matchedTxns]);
 
@@ -124,11 +134,11 @@ export default function Reconcile() {
   }, [unmatchedTxns]);
 
   const columnsWidth = {
-    fecha: "w-[98px]",
-    descripcion: "w-36",
-    valor: "w-28",
-    categoria: "w-28",
-    sub_categoria: "w-28",
+    fecha: 98,
+    descripcion: 144,
+    valor: 112,
+    categoria: 112,
+    sub_categoria: 112,
   };
 
   const { isPending, error, data, isFetching } = useQuery({
@@ -267,6 +277,55 @@ export default function Reconcile() {
     }
   };
 
+  const completeReconcile = async () => {
+    try {
+      // const res = await fetch(`${API_URL}/get_uncategorized_count/?table_name=${selectedStatement?.label}_joined`, {
+      //   method: "GET",
+      // });
+      // const response = await res.json();
+      // console.log("Uncategorized count:", response);
+      // if (!res.ok) {
+      //   Alert.alert("Error", response.message);
+      //   return;
+      // }
+      // if (response.count > 0) {
+      //   Alert.alert("Alerta", "Hay transacciones no categorizadas: porfavor categorice las transacciones antes de completar la conciliación");
+      //   return;
+      // }
+      const minMaxDatesRes = await fetch(`${API_URL}/min_and_max_dates/?table_name=${selectedStatement?.label}_joined`);
+      const minMaxDatesResponse = await minMaxDatesRes.json();
+      console.log("Min and max dates response:", minMaxDatesResponse);
+      if (!minMaxDatesRes.ok) {
+        Alert.alert("Error", minMaxDatesResponse.message);
+        return;
+      }
+      const deleteTxnsRes = await fetch(`${API_URL}/delete_txns/?table_name=${TXNS_TABLE}?from_date=${minMaxDatesResponse.min_date}&to_date=${minMaxDatesResponse.max_date}`, {
+        method: "DELETE",
+      });
+      const deleteTxnsResponse = await deleteTxnsRes.json();
+      console.log("Delete txns response:", deleteTxnsResponse.deleted_count);
+      if (!deleteTxnsRes.ok) {
+        Alert.alert("Error", deleteTxnsResponse.message);
+        return;
+      }
+      const insertTxnsRes = await fetch(`${API_URL}/insert_txns/?from_table=${selectedStatement?.label}_joined&to_table=${TXNS_TABLE}`, {
+        method: "POST",
+      });
+      const insertTxnsResponse = await insertTxnsRes.json();
+      console.log("Insert txns response:", insertTxnsResponse.inserted_count);
+      if (!insertTxnsRes.ok) {
+        Alert.alert("Error", insertTxnsResponse.message);
+        return;
+      }
+      Alert.alert("Éxito", "✅ Conciliación completada correctamente!");
+      setShowReconcile(false);
+    } catch (error) {
+      console.error("Error completing reconcile:", error);
+      Alert.alert("Error", "Error al completar la conciliación");
+    }
+
+  };
+
   const formatSpanishNumber = (num) => {
     const isNegative = num < 0;
     const absoluteNum = Math.abs(num);
@@ -288,18 +347,23 @@ export default function Reconcile() {
     return isNegative ? "-" + result : result;
   };
 
-  const renderHeaderCell = (label, widthClass = "w-40") => (
+  const renderHeaderCell = (label, width = 160) => (
     <View
-      className={`${widthClass} border-b border-r justify-center p-2 border-slate-300 bg-white`}
+      style={[
+        reconcileStyles.headerCell,
+        { width, backgroundColor: theme.colors.surface },
+      ]}
     >
-      <Text className="font-bold text-slate-800 text-right">{label}</Text>
+      <Text style={[reconcileStyles.headerText, { color: theme.colors.text }]}>
+        {label}
+      </Text>
     </View>
   );
 
   const renderHeader = () => {
     if (!columnsWidth) return null;
     return (
-      <View className="flex-row">
+      <View style={reconcileStyles.row}>
         {renderHeaderCell("Fecha", columnsWidth["fecha"])}
         {renderHeaderCell("Descripcion", columnsWidth["descripcion"])}
         {renderHeaderCell("Valor", columnsWidth["valor"])}
@@ -308,25 +372,46 @@ export default function Reconcile() {
     );
   };
 
-  const renderCell = (value, widthClass) => (
-    <View className={"border-b border-r p-2 border-slate-300 " + widthClass}>
-      <Text className="text-right">{value}</Text>
+  const renderCell = (value, width) => (
+    <View
+      style={[
+        reconcileStyles.cell,
+        { width, borderColor: theme.colors.border },
+      ]}
+    >
+      <Text style={[reconcileStyles.cellText, { color: theme.colors.text }]}>
+        {value}
+      </Text>
     </View>
   );
 
-  const renderNumberCell = (value, widthClass) => {
+  const renderNumberCell = (value, width) => {
     const formattedValue = formatSpanishNumber(value);
     return (
-      <View className={"border-b border-r p-2 border-slate-300 " + widthClass}>
-        <Text className="text-right">{formattedValue}</Text>
+      <View
+        style={[
+          reconcileStyles.cell,
+          { width, borderColor: theme.colors.border },
+        ]}
+      >
+        <Text style={[reconcileStyles.cellText, { color: theme.colors.text }]}>
+          {formattedValue}
+        </Text>
       </View>
     );
   };
 
-  const renderTextCell = (value, widthClass) => {
+  const renderTextCell = (value, width) => {
     return (
-      <View className={"border-b border-r p-2 border-slate-300 " + widthClass}>
-        <Text className="text-right">{value && value.toLowerCase()}</Text>
+      <View
+        style={[
+          reconcileStyles.cell,
+          { width, borderColor: theme.colors.border },
+        ]}
+      >
+        <Text style={[reconcileStyles.cellText, { color: theme.colors.text }]}>
+          {value && value.toLowerCase()}
+        </Text>
       </View>
     );
   };
@@ -334,7 +419,7 @@ export default function Reconcile() {
   const renderTxns = (item) => {
     if (!columnsWidth) return null;
     return (
-      <View className="flex-row">
+      <View style={reconcileStyles.row}>
         {renderCell(item.fecha, columnsWidth["fecha"])}
         {renderTextCell(item?.descripcion, columnsWidth["descripcion"])}
         {renderNumberCell(item.valor, columnsWidth["valor"])}
@@ -346,58 +431,117 @@ export default function Reconcile() {
   const renderFooter = () => {
     if (!isFetching) return null;
     return (
-      <View className="py-4">
-        <ActivityIndicator size="large" color="#3b82f6" />
+      <View style={reconcileStyles.footer}>
+        <ActivityIndicator size="large" color={theme.colors.primary} />
       </View>
     );
   };
   return (
-    <SafeAreaView className=" bg-white px-5 gap-4">
-      <View className="py-4 gap-4">
-        <Text className="text-4xl font-semibold">Conciliar</Text>
-        <StatusBar barStyle="dark-content" />
-        <View className="gap-2">
+    <SafeAreaView
+      style={[
+        reconcileStyles.container,
+        { backgroundColor: theme.colors.background },
+      ]}
+    >
+      <View style={reconcileStyles.headerSection}>
+        <Text style={[reconcileStyles.title, { color: theme.colors.text }]}>
+          Conciliar
+        </Text>
+        <StatusBar
+          barStyle={theme.isDark ? "light-content" : "dark-content"}
+        />
+        <View style={reconcileStyles.section}>
           <Pressable
-            className="px-4 py-3 bg-white rounded-xl active:bg-gray-200 justify-center shadow-sm shadow-black/20"
+            style={({ pressed }) => [
+              reconcileStyles.button,
+              { backgroundColor: theme.colors.primary },
+              pressed && reconcileStyles.buttonPressed,
+            ]}
             onPress={pickDocument}
           >
-            <Text className="text-black text-lg">Seleccionar extracto</Text>
+            <Text style={reconcileStyles.buttonText}>
+              Seleccionar extracto
+            </Text>
           </Pressable>
 
           {file && (
             <>
-              <View className="p-[15px] bg-white rounded-[10px] w-full shadow-sm shadow-black/10 border">
-                <Text className="font-bold mt-[10px] text-[#333]">
+              <View
+                style={[
+                  reconcileStyles.fileInfo,
+                  {
+                    backgroundColor: theme.colors.surface,
+                    borderColor: theme.colors.border,
+                  },
+                ]}
+              >
+                <Text
+                  style={[
+                    reconcileStyles.fileLabel,
+                    { color: theme.colors.textSecondary },
+                  ]}
+                >
                   File Name:
                 </Text>
-                <Text className="mt-0.5 text-[#666]">{file.name}</Text>
+                <Text
+                  style={[reconcileStyles.fileValue, { color: theme.colors.text }]}
+                >
+                  {file.name}
+                </Text>
 
-                <Text className="font-bold mt-[10px] text-[#333]">
+                <Text
+                  style={[
+                    reconcileStyles.fileLabel,
+                    { color: theme.colors.textSecondary },
+                  ]}
+                >
                   File Size:
                 </Text>
-                <Text className="mt-0.5 text-[#666]">
+                <Text
+                  style={[reconcileStyles.fileValue, { color: theme.colors.text }]}
+                >
                   {(file.size / 1024).toFixed(2)} KB
                 </Text>
 
-                <Text className="font-bold mt-[10px] text-[#333]">URI:</Text>
                 <Text
-                  className="mt-0.5 text-[#666]"
+                  style={[
+                    reconcileStyles.fileLabel,
+                    { color: theme.colors.textSecondary },
+                  ]}
+                >
+                  URI:
+                </Text>
+                <Text
+                  style={[reconcileStyles.fileValue, { color: theme.colors.text }]}
                   numberOfLines={1}
                   ellipsizeMode="middle"
                 >
                   {file.uri}
                 </Text>
 
-                <Text className="font-bold mt-[10px] text-[#333]">
+                <Text
+                  style={[
+                    reconcileStyles.fileLabel,
+                    { color: theme.colors.textSecondary },
+                  ]}
+                >
                   MIME Type:
                 </Text>
-                <Text className="mt-0.5 text-[#666]">{file.mimeType}</Text>
+                <Text
+                  style={[reconcileStyles.fileValue, { color: theme.colors.text }]}
+                >
+                  {file.mimeType}
+                </Text>
               </View>
               <Pressable
-                className="px-4 py-3 bg-[#0a84ff] rounded-xl active:bg-[#0a84ff]/50 shadow-sm shadow-black/20 self-start"
+                style={({ pressed }) => [
+                  reconcileStyles.uploadButton,
+                  { backgroundColor: theme.colors.primary },
+                  pressed && reconcileStyles.uploadButtonPressed,
+                ]}
                 onPress={handleUpload}
               >
-                <Text className="font-semibold text-white">
+                <Text style={reconcileStyles.uploadButtonText}>
                   {isLoading ? (
                     <ActivityIndicator size="small" color="#fff" />
                   ) : (
@@ -407,12 +551,24 @@ export default function Reconcile() {
               </Pressable>
             </>
           )}
-          <View className="flex flex-row">
+          <View style={reconcileStyles.dropdownRow}>
             <Dropdown
-              style={[styles.dropdown, { flex: 1 }]}
-              placeholderStyle={styles.placeholderStyle}
-              selectedTextStyle={styles.selectedTextStyle}
-              inputSearchStyle={styles.inputSearchStyle}
+              style={[
+                styles.dropdown,
+                { flex: 1, backgroundColor: theme.colors.inputBackground },
+              ]}
+              placeholderStyle={[
+                styles.placeholderStyle,
+                { color: theme.colors.placeholder },
+              ]}
+              selectedTextStyle={[
+                styles.selectedTextStyle,
+                { color: theme.colors.text },
+              ]}
+              inputSearchStyle={[
+                styles.inputSearchStyle,
+                { color: theme.colors.text },
+              ]}
               iconStyle={styles.iconStyle}
               data={statements}
               maxHeight={300}
@@ -430,8 +586,11 @@ export default function Reconcile() {
             />
             <Pressable
               onPress={reconcile}
-              className="justify-center bg-white active:bg-gray-200 shadow-sm shadow-black/20 rounded-xl mx-2"
-              style={styles.reconcileButton}
+              style={({ pressed }) => [
+                styles.reconcileButton,
+                { backgroundColor: theme.colors.primary },
+                pressed && reconcileStyles.reconcileButtonPressed,
+              ]}
             >
               <Text style={styles.reconcileButtonText}>Conciliar</Text>
             </Pressable>
@@ -442,10 +601,16 @@ export default function Reconcile() {
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={true}
-          className="border border-slate-300 rounded-2xl"
+          style={[
+            reconcileStyles.scrollView,
+            { borderColor: theme.colors.border },
+          ]}
         >
           <FlatList
-            className="rounded-2xl border-slate-300"
+            style={[
+              reconcileStyles.flatList,
+              { borderColor: theme.colors.border },
+            ]}
             keyExtractor={(item, index) => index}
             data={data}
             ListHeaderComponent={renderHeader}
@@ -454,18 +619,16 @@ export default function Reconcile() {
           />
         </ScrollView>
       )}
-      <Text className="text-black font-semibold text-xl">
-        Transacciones no concilidadas
-      </Text>
+
       {flattenedUnmatchedTxns.length > 0 && showReconcile && (
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={true}
-          className="border border-slate-300 rounded-2xl"
-        >
+        <View style={reconcileStyles.unmatchedSection}>
+          <Text
+            style={[reconcileStyles.sectionTitle, { color: theme.colors.text }]}
+          >
+            Transacciones no concilidadas
+          </Text>
           <TxnTable
-            style={{ flex: 1 }}
-            className="px-4 gap-2"
+            table={selectedStatement?.label}
             txns={flattenedUnmatchedTxns}
             error={unmatchedTxnsError}
             fetchNextPage={fetchNextUnmatchedTxnsPage}
@@ -473,22 +636,32 @@ export default function Reconcile() {
             isFetchingNextPage={isFetchingNextUnmatchedTxnsPage}
             isPending={isUnmatchedTxnsPending}
             queryKey={["unmatched_txns", selectedStatement?.label]}
+            refetch={refetchUnmatchedTxns}
           />
-        </ScrollView>
+        </View>
       )}
-      <Text className="text-black font-semibold text-xl">
-        Transacciones concilidadas
-      </Text>
+
       {flattenedMatchedTxns.length > 0 && showReconcile && (
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={true}
-          className="border border-slate-300 rounded-2xl"
-        >
+        <>
+          <View style={reconcileStyles.matchedHeader}>
+            <Text
+              style={[reconcileStyles.sectionTitle, { color: theme.colors.text }]}
+            >
+              Transacciones concilidadas
+            </Text>
+            <Pressable
+              style={({ pressed }) => [
+                reconcileStyles.completeButton,
+                { backgroundColor: theme.colors.primary },
+                pressed && reconcileStyles.completeButtonPressed,
+              ]}
+              onPress={completeReconcile}
+            >
+              <Text style={styles.reconcileButtonText}>Completar</Text>
+            </Pressable>
+          </View>
           <TxnTable
-            style={{ flex: 1 }}
-            className="px-4 gap-2"
-            table={selectedStatement?.label}
+            table={`${selectedStatement?.label}_joined`}
             txns={flattenedMatchedTxns}
             error={matchedTxnsError}
             fetchNextPage={fetchNextMatchedTxnsPage}
@@ -496,8 +669,9 @@ export default function Reconcile() {
             isFetchingNextPage={isFetchingNextMatchedTxnsPage}
             isPending={isMatchedTxnsPending}
             queryKey={["matched_txns", selectedStatement?.label]}
+            refetch={refetchMatchedTxns}
           />
-        </ScrollView>
+        </>
       )}
     </SafeAreaView>
   );
@@ -505,7 +679,6 @@ export default function Reconcile() {
 
 const styles = StyleSheet.create({
   dropdown: {
-    backgroundColor: "white",
     borderRadius: 12,
     padding: 12,
     shadowColor: "#000",
@@ -590,5 +763,154 @@ const styles = StyleSheet.create({
   value: {
     marginTop: 2,
     color: "#666",
+  },
+});
+
+const reconcileStyles = StyleSheet.create({
+  container: {
+    flex: 1,
+    paddingHorizontal: 20,
+    gap: 16,
+  },
+  headerSection: {
+    paddingVertical: 16,
+    gap: 16,
+  },
+  title: {
+    fontSize: 36,
+    fontWeight: "600",
+  },
+  section: {
+    gap: 8,
+  },
+  button: {
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 12,
+    justifyContent: "center",
+    shadowColor: "#000",
+    shadowOffset: {
+      width: 0,
+      height: 1,
+    },
+    shadowOpacity: 0.2,
+    shadowRadius: 1.41,
+    elevation: 2,
+  },
+  buttonPressed: {
+    opacity: 0.8,
+  },
+  buttonText: {
+    color: "#ffffff",
+    fontSize: 18,
+    fontWeight: "600",
+  },
+  fileInfo: {
+    padding: 15,
+    borderRadius: 10,
+    width: "100%",
+    shadowColor: "#000",
+    shadowOffset: {
+      width: 0,
+      height: 1,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 1.41,
+    elevation: 1,
+    borderWidth: 1,
+  },
+  fileLabel: {
+    fontWeight: "bold",
+    marginTop: 10,
+  },
+  fileValue: {
+    marginTop: 2,
+  },
+  uploadButton: {
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 12,
+    alignSelf: "flex-start",
+    shadowColor: "#000",
+    shadowOffset: {
+      width: 0,
+      height: 1,
+    },
+    shadowOpacity: 0.2,
+    shadowRadius: 1.41,
+    elevation: 2,
+  },
+  uploadButtonPressed: {
+    opacity: 0.8,
+  },
+  uploadButtonText: {
+    fontWeight: "600",
+    color: "#ffffff",
+  },
+  dropdownRow: {
+    flexDirection: "row",
+    gap: 8,
+  },
+  reconcileButtonPressed: {
+    opacity: 0.8,
+  },
+  scrollView: {
+    borderWidth: 1,
+    borderRadius: 16,
+  },
+  flatList: {
+    borderRadius: 16,
+  },
+  unmatchedSection: {
+    height: 160,
+  },
+  sectionTitle: {
+    fontWeight: "600",
+    fontSize: 20,
+  },
+  matchedHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  completeButton: {
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 12,
+    shadowColor: "#000",
+    shadowOffset: {
+      width: 0,
+      height: 1,
+    },
+    shadowOpacity: 0.2,
+    shadowRadius: 1.41,
+    elevation: 2,
+  },
+  completeButtonPressed: {
+    opacity: 0.8,
+  },
+  row: {
+    flexDirection: "row",
+  },
+  headerCell: {
+    borderBottomWidth: 1,
+    borderRightWidth: 1,
+    justifyContent: "center",
+    padding: 8,
+  },
+  headerText: {
+    fontWeight: "bold",
+    textAlign: "right",
+  },
+  cell: {
+    borderBottomWidth: 1,
+    borderRightWidth: 1,
+    padding: 8,
+  },
+  cellText: {
+    textAlign: "right",
+  },
+  footer: {
+    paddingVertical: 16,
   },
 });

@@ -5,6 +5,7 @@ import {
   FlatList,
   Modal,
   Pressable,
+  StyleSheet,
   Text,
   TouchableOpacity,
   View,
@@ -34,21 +35,20 @@ export default function EllipsisMenu({ handleColumns, activeColumns }) {
   const renderItem = ({ item }) => {
     return (
       <Pressable
-        className="active:bg-gray-100 rounded-lg"
+        style={({ pressed }) => [
+          styles.menuItem,
+          pressed && styles.menuItemPressed,
+        ]}
         onPress={() => handleColumns(item)}
       >
-        <View
-          className={`flex-row items-center gap-4 p-4 border-b border-gray-200`}
-        >
+        <View style={styles.menuItemContent}>
           {activeColumns.includes(item) ? (
-            // <FontAwesome5 name="minus-circle" size={24} color="black" />
             <AntDesign name="minus-circle" size={18} color="black" />
           ) : (
-            // <FontAwesome5 name="plus-circle" size={18} color="black" />
             <AntDesign name="plus-circle" size={18} color="black" />
           )}
 
-          <Text className="text-base">{item}</Text>
+          <Text style={styles.menuItemText}>{item}</Text>
         </View>
       </Pressable>
     );
@@ -73,16 +73,16 @@ export default function EllipsisMenu({ handleColumns, activeColumns }) {
         visible={visible}
         onRequestClose={() => setVisible(false)}
       >
-        <Pressable className="flex-1" onPress={() => setVisible(false)} />
-        <View className="absolute left-2 top-[160px] rounded-lg bg-white py-2 elevation-5 shadow-lg">
+        <Pressable style={styles.modalBackdrop} onPress={() => setVisible(false)} />
+        <View style={styles.menuContainer}>
           <TouchableOpacity
-            className="px-4 py-3"
+            style={styles.menuOption}
             onPress={() => {
               setVisible(false);
               setVisibleColOptions(true);
             }}
           >
-            <Text className="text-base">Editar Columnas</Text>
+            <Text style={styles.menuOptionText}>Editar Columnas</Text>
           </TouchableOpacity>
         </View>
       </Modal>
@@ -93,11 +93,13 @@ export default function EllipsisMenu({ handleColumns, activeColumns }) {
         onRequestClose={() => setVisibleColOptions(false)}
       >
         <View
-          className="flex-1 bg-white"
-          style={{ paddingTop: insets.top, paddingBottom: insets.bottom }}
+          style={[
+            styles.columnsModal,
+            { paddingTop: insets.top, paddingBottom: insets.bottom },
+          ]}
         >
-          <View className="flex-row items-center justify-between px-4 py-2">
-            <Text className="text-2xl font-bold">Editar Columnas</Text>
+          <View style={styles.columnsHeader}>
+            <Text style={styles.columnsTitle}>Editar Columnas</Text>
             <TouchableOpacity onPress={() => setVisibleColOptions(false)}>
               <AntDesign name="close" size={24} color="black" />
             </TouchableOpacity>
@@ -108,3 +110,64 @@ export default function EllipsisMenu({ handleColumns, activeColumns }) {
     </>
   );
 }
+
+const styles = StyleSheet.create({
+  menuItem: {
+    borderRadius: 8,
+  },
+  menuItemPressed: {
+    backgroundColor: "#f3f4f6",
+  },
+  menuItemContent: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 16,
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: "#e5e7eb",
+  },
+  menuItemText: {
+    fontSize: 16,
+  },
+  modalBackdrop: {
+    flex: 1,
+  },
+  menuContainer: {
+    position: "absolute",
+    left: 8,
+    top: 160,
+    borderRadius: 8,
+    backgroundColor: "#ffffff",
+    paddingVertical: 8,
+    shadowColor: "#000",
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    elevation: 5,
+  },
+  menuOption: {
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+  },
+  menuOptionText: {
+    fontSize: 16,
+  },
+  columnsModal: {
+    flex: 1,
+    backgroundColor: "#ffffff",
+  },
+  columnsHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+  },
+  columnsTitle: {
+    fontSize: 24,
+    fontWeight: "bold",
+  },
+});

@@ -7,8 +7,8 @@ import "react-native-url-polyfill/auto";
 
 import { SafeAreaView } from "react-native-safe-area-context";
 import Auth from "../components/Auth";
+import { ThemeProvider, useTheme } from "../contexts/ThemeContext";
 import { supabase } from "../lib/supabase";
-import "./global.css";
 import HomeScreen from "./index";
 import Input from "./input";
 import Reconcile from "./reconcile";
@@ -17,6 +17,49 @@ import Txns from "./txns";
 
 const Tab = createBottomTabNavigator();
 const queryClient = new QueryClient();
+
+function TabNavigator() {
+  const { theme } = useTheme();
+
+  return (
+    <Tab.Navigator
+      screenOptions={({ route }) => ({
+        headerShown: false,
+        tabBarIcon: ({ focused, color, size }) => {
+          let iconName;
+
+          if (route.name === "Inicio") {
+            iconName = focused ? "home" : "home-outline";
+          } else if (route.name === "Transaccion") {
+            iconName = focused ? "list" : "list-outline";
+          } else if (route.name === "Agregar") {
+            iconName = focused ? "add-circle" : "add-circle-outline";
+          } else if (route.name === "Conciliar") {
+            iconName = focused ? "receipt" : "receipt-outline";
+          } else if (route.name === "Configuracion") {
+            iconName = focused ? "settings" : "settings-outline";
+          } else {
+            iconName = "ellipse";
+          }
+
+          return <Ionicons name={iconName} size={size} color={color} />;
+        },
+        tabBarActiveTintColor: theme.colors.tabBarActive,
+        tabBarInactiveTintColor: theme.colors.tabBarInactive,
+        tabBarStyle: {
+          backgroundColor: theme.colors.surface,
+          borderTopColor: theme.colors.border,
+        },
+      })}
+    >
+      <Tab.Screen name="Inicio" component={HomeScreen} />
+      <Tab.Screen name="Transaccion" component={Txns} />
+      <Tab.Screen name="Agregar" component={Input} />
+      <Tab.Screen name="Conciliar" component={Reconcile} />
+      <Tab.Screen name="Configuracion" component={Settings} />
+    </Tab.Navigator>
+  );
+}
 
 export default function MyTabs() {
   const [session, setSession] = useState(null);
@@ -42,46 +85,19 @@ export default function MyTabs() {
 
   if (!session) {
     return (
-      <SafeAreaView className="flex-1">
-        <Auth />
-      </SafeAreaView>
+      <ThemeProvider>
+        <SafeAreaView style={{ flex: 1 }}>
+          <Auth />
+        </SafeAreaView>
+      </ThemeProvider>
     );
   }
 
   return (
-    <QueryClientProvider client={queryClient}>
-      <Tab.Navigator
-        screenOptions={({ route }) => ({
-          headerShown: false,
-          tabBarIcon: ({ focused, color, size }) => {
-            let iconName;
-
-            if (route.name === "Inicio") {
-              iconName = focused ? "home" : "home-outline";
-            } else if (route.name === "Transaccion") {
-              iconName = focused ? "list" : "list-outline";
-            } else if (route.name === "Agregar") {
-              iconName = focused ? "add-circle" : "add-circle-outline";
-            } else if (route.name === "Conciliar") {
-              iconName = focused ? "receipt" : "receipt-outline";
-            } else if (route.name === "Configuracion") {
-              iconName = focused ? "settings" : "settings-outline";
-            } else {
-              iconName = "ellipse";
-            }
-
-            return <Ionicons name={iconName} size={size} color={color} />;
-          },
-          tabBarActiveTintColor: "#0a84ff",
-          tabBarInactiveTintColor: "gray",
-        })}
-      >
-        <Tab.Screen name="Inicio" component={HomeScreen} />
-        <Tab.Screen name="Transaccion" component={Txns} />
-        <Tab.Screen name="Agregar" component={Input} />
-        <Tab.Screen name="Conciliar" component={Reconcile} />
-        <Tab.Screen name="Configuracion" component={Settings} />
-      </Tab.Navigator>
-    </QueryClientProvider>
+    <ThemeProvider>
+      <QueryClientProvider client={queryClient}>
+        <TabNavigator />
+      </QueryClientProvider>
+    </ThemeProvider>
   );
 }
