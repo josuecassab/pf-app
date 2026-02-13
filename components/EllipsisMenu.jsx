@@ -1,6 +1,6 @@
 import AntDesign from "@expo/vector-icons/AntDesign";
 import Ionicons from "@expo/vector-icons/Ionicons";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import {
   FlatList,
   Modal,
@@ -11,6 +11,7 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useTheme } from "../contexts/ThemeContext";
 
 const columns = [
   "enero",
@@ -28,9 +29,80 @@ const columns = [
 ];
 
 export default function EllipsisMenu({ handleColumns, activeColumns }) {
+  const { theme } = useTheme();
   const [visible, setVisible] = useState(false);
   const [visibleColOptions, setVisibleColOptions] = useState(false);
   const insets = useSafeAreaInsets();
+
+  const styles = useMemo(
+    () =>
+      StyleSheet.create({
+        menuItem: {
+          borderRadius: 8,
+        },
+        menuItemPressed: {
+          backgroundColor: theme.colors.inputBackground,
+        },
+        menuItemContent: {
+          flexDirection: "row",
+          alignItems: "center",
+          gap: 16,
+          padding: 16,
+          borderBottomWidth: 1,
+          borderBottomColor: theme.colors.borderLight,
+        },
+        menuItemText: {
+          fontSize: 16,
+          color: theme.colors.text,
+        },
+        modalBackdrop: {
+          flex: 1,
+        },
+        menuContainer: {
+          position: "absolute",
+          left: 8,
+          top: 160,
+          borderRadius: 8,
+          backgroundColor: theme.colors.modalBackground,
+          paddingVertical: 8,
+          shadowColor: "#000",
+          shadowOffset: {
+            width: 0,
+            height: 2,
+          },
+          shadowOpacity: 0.25,
+          shadowRadius: 3.84,
+          elevation: 5,
+        },
+        menuOption: {
+          paddingHorizontal: 16,
+          paddingVertical: 12,
+        },
+        menuOptionText: {
+          fontSize: 16,
+          color: theme.colors.text,
+        },
+        columnsModal: {
+          flex: 1,
+          backgroundColor: theme.colors.modalBackground,
+        },
+        columnsHeader: {
+          flexDirection: "row",
+          alignItems: "center",
+          justifyContent: "space-between",
+          paddingHorizontal: 16,
+          paddingVertical: 8,
+        },
+        columnsTitle: {
+          fontSize: 24,
+          fontWeight: "bold",
+          color: theme.colors.text,
+        },
+      }),
+    [theme]
+  );
+
+  const iconColor = theme.colors.text;
 
   const renderItem = ({ item }) => {
     return (
@@ -43,9 +115,9 @@ export default function EllipsisMenu({ handleColumns, activeColumns }) {
       >
         <View style={styles.menuItemContent}>
           {activeColumns.includes(item) ? (
-            <AntDesign name="minus-circle" size={18} color="black" />
+            <AntDesign name="minus-circle" size={18} color={iconColor} />
           ) : (
-            <AntDesign name="plus-circle" size={18} color="black" />
+            <AntDesign name="plus-circle" size={18} color={iconColor} />
           )}
 
           <Text style={styles.menuItemText}>{item}</Text>
@@ -61,10 +133,10 @@ export default function EllipsisMenu({ handleColumns, activeColumns }) {
           <Ionicons
             name="ellipsis-horizontal-circle-outline"
             size={30}
-            color="black"
+            color={iconColor}
           />
         ) : (
-          <Ionicons name="ellipsis-vertical-circle" size={30} color="black" />
+          <Ionicons name="ellipsis-vertical-circle" size={30} color={iconColor} />
         )}
       </Pressable>
       <Modal
@@ -101,7 +173,7 @@ export default function EllipsisMenu({ handleColumns, activeColumns }) {
           <View style={styles.columnsHeader}>
             <Text style={styles.columnsTitle}>Editar Columnas</Text>
             <TouchableOpacity onPress={() => setVisibleColOptions(false)}>
-              <AntDesign name="close" size={24} color="black" />
+              <AntDesign name="close" size={24} color={iconColor} />
             </TouchableOpacity>
           </View>
           <FlatList data={columns} renderItem={renderItem} />
@@ -110,64 +182,3 @@ export default function EllipsisMenu({ handleColumns, activeColumns }) {
     </>
   );
 }
-
-const styles = StyleSheet.create({
-  menuItem: {
-    borderRadius: 8,
-  },
-  menuItemPressed: {
-    backgroundColor: "#f3f4f6",
-  },
-  menuItemContent: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 16,
-    padding: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: "#e5e7eb",
-  },
-  menuItemText: {
-    fontSize: 16,
-  },
-  modalBackdrop: {
-    flex: 1,
-  },
-  menuContainer: {
-    position: "absolute",
-    left: 8,
-    top: 160,
-    borderRadius: 8,
-    backgroundColor: "#ffffff",
-    paddingVertical: 8,
-    shadowColor: "#000",
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
-    elevation: 5,
-  },
-  menuOption: {
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-  },
-  menuOptionText: {
-    fontSize: 16,
-  },
-  columnsModal: {
-    flex: 1,
-    backgroundColor: "#ffffff",
-  },
-  columnsHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-  },
-  columnsTitle: {
-    fontSize: 24,
-    fontWeight: "bold",
-  },
-});

@@ -1,95 +1,57 @@
-import { useQuery } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  ActivityIndicator,
   FlatList,
-  Pressable,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
 import { useTheme } from "../contexts/ThemeContext";
-import EllipsisMenu from "./EllipsisMenu";
 
-// 2. Configuration
-const LEFT_COL_WIDTH = 160; // w-40 = 160px
-// ROW_HEIGHT is only used for styling now, not calculation
+const LEFT_COL_WIDTH = 160;
 const ROW_HEIGHT = 40;
 const HEADER_HEIGHT = 40;
 
-// 3. Static styles
 const styles = StyleSheet.create({
   rowHeight: { height: ROW_HEIGHT },
   headerHeight: { height: HEADER_HEIGHT },
-  // color: { backgroundColor: "#d27a7a" },
 });
 
-// 4. Format number helper
 const formatNumber = (num) => {
   return parseFloat(num.toFixed(2)).toLocaleString("es-ES");
 };
 
-const months = [
-  "enero",
-  "febrero",
-  "marzo",
-  "abril",
-  "mayo",
-  "junio",
-  "julio",
-  "agosto",
-  "septiembre",
-  "octubre",
-  "noviembre",
-  "diciembre",
-];
-
-export default function GroupedTable() {
+export default function GroupedTable({
+  data = [],
+  activeColumns = [],
+  onRefresh,
+  refreshing = false,
+}) {
   const { theme } = useTheme();
-  const API_URL = process.env.EXPO_PUBLIC_API_URL;
   const leftRef = useRef(null);
   const rightRef = useRef(null);
-  const [text, setText] = useState("");
-  const [filteredData, setFilteredData] = useState([]);
+  const [sortedData, setSortedData] = useState(data);
   const [expandedCategories, setExpandedCategories] = useState(new Set());
   const [sortConfig, setSortConfig] = useState({
     key: null,
     direction: "asc",
   });
-  const [activeColumns, setActiveColumns] = useState(months);
-  const [showYears, setShowYears] = useState(false);
-  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   const scrollingListRef = useRef(null);
   const isScrollingRef = useRef(false);
   const isSyncingRef = useRef(false);
   const lastOffsetRef = useRef({ left: 0, right: 0 });
 
-  const years = [2026, 2025, 2024, 2023, 2022, 2021];
-
-  const { isPending, error, data, isFetching } = useQuery({
-    queryKey: [selectedYear],
-    queryFn: async () => {
-      const response = await fetch(
-        `${API_URL}/grouped_txns?year=${selectedYear}`
-      );
-      return await response.json();
-    },
-  });
-
   useEffect(() => {
-    if (data) {
-      setFilteredData(data);
-    }
+    setSortedData(data);
   }, [data]);
 
   const monthlyTotals = useMemo(() => {
     return activeColumns.map((month) =>
-      filteredData.reduce((sum, item) => sum + item[month], 0)
+      sortedData.reduce((sum, item) => sum + item[month], 0),
     );
-  }, [filteredData, activeColumns]);
+  }, [sortedData, activeColumns]);
 
   const toggleCategory = useCallback((categoria) => {
     setExpandedCategories((prev) => {
@@ -153,14 +115,14 @@ export default function GroupedTable() {
     (event) => {
       handleScroll("left", event);
     },
-    [handleScroll]
+    [handleScroll],
   );
 
   const onRightScroll = useCallback(
     (event) => {
       handleScroll("right", event);
     },
-    [handleScroll]
+    [handleScroll],
   );
 
   const handleScrollEnd = useCallback(() => {
@@ -190,7 +152,7 @@ export default function GroupedTable() {
         </Text>
       </View>
     ),
-    [theme]
+    [theme],
   );
 
   const renderFooterCell = useCallback(
@@ -214,7 +176,7 @@ export default function GroupedTable() {
         </Text>
       </View>
     ),
-    [theme]
+    [theme],
   );
 
   const renderLeftColumnItem = useCallback(
@@ -270,14 +232,14 @@ export default function GroupedTable() {
                   ]}
                   numberOfLines={1}
                 >
-                  {subItem?.sub_categoria || "(Sin subcategoría)"}
+                  {subItem?.sub_categoria || "Sin subcategoría"}
                 </Text>
               </View>
             ))}
         </View>
       );
     },
-    [expandedCategories, toggleCategory, theme]
+    [expandedCategories, toggleCategory, theme],
   );
 
   const renderRightColumnsItem = useCallback(
@@ -351,7 +313,7 @@ export default function GroupedTable() {
         </View>
       );
     },
-    [expandedCategories, activeColumns, theme]
+    [expandedCategories, activeColumns, theme],
   );
 
   const handleSort = useCallback(
@@ -360,15 +322,15 @@ export default function GroupedTable() {
       if (sortConfig.key === key && sortConfig.direction === "asc") {
         direction = "desc";
       }
-      const sortedData = [...filteredData].sort((a, b) => {
+      const next = [...sortedData].sort((a, b) => {
         if (a[key] < b[key]) return direction === "asc" ? -1 : 1;
         if (a[key] > b[key]) return direction === "asc" ? 1 : -1;
         return 0;
       });
       setSortConfig({ key, direction });
-      setFilteredData(sortedData);
+      setSortedData(next);
     },
-    [filteredData, sortConfig.key, sortConfig.direction]
+    [sortedData, sortConfig.key, sortConfig.direction],
   );
 
   const renderLeftHeader = useCallback(() => {
@@ -386,7 +348,10 @@ export default function GroupedTable() {
         onPress={() => handleSort("categoria")}
       >
         <Text
-          style={[groupedTableStyles.leftHeaderText, { color: theme.colors.text }]}
+          style={[
+            groupedTableStyles.leftHeaderText,
+            { color: theme.colors.text },
+          ]}
         >
           Name{" "}
           {sortConfig.key === "categoria"
@@ -404,7 +369,7 @@ export default function GroupedTable() {
     return (
       <View style={groupedTableStyles.row}>
         {activeColumns.map((m, index) =>
-          renderHeaderCell(m, headerCellWidth, index)
+          renderHeaderCell(m, headerCellWidth, index),
         )}
       </View>
     );
@@ -424,7 +389,10 @@ export default function GroupedTable() {
         ]}
       >
         <Text
-          style={[groupedTableStyles.leftFooterText, { color: theme.colors.text }]}
+          style={[
+            groupedTableStyles.leftFooterText,
+            { color: theme.colors.text },
+          ]}
         >
           Total
         </Text>
@@ -437,34 +405,11 @@ export default function GroupedTable() {
     return (
       <View style={groupedTableStyles.row}>
         {monthlyTotals.map((total, index) =>
-          renderFooterCell(formatNumber(total), headerCellWidth, index)
+          renderFooterCell(formatNumber(total), headerCellWidth, index),
         )}
       </View>
     );
   }, [monthlyTotals, renderFooterCell]);
-
-  const filterData = useCallback(
-    (text) => {
-      console.log("Filtering data with text:", text);
-      const result = data.filter((item) =>
-        item.categoria.toLowerCase().includes(text.toLowerCase())
-      );
-      setFilteredData(result);
-    },
-    [data]
-  );
-
-  const handleColumns = (item) => {
-    setActiveColumns((prev) => {
-      const prevMonths = new Set(prev);
-      if (prevMonths.has(item)) {
-        prevMonths.delete(item);
-      } else {
-        prevMonths.add(item);
-      }
-      return months.filter((col) => prevMonths.has(col));
-    });
-  };
 
   return (
     <View
@@ -473,93 +418,12 @@ export default function GroupedTable() {
         { backgroundColor: theme.colors.background },
       ]}
     >
-      <Text style={[groupedTableStyles.title, { color: theme.colors.text }]}>
-        Ingresos y gastos
-      </Text>
-      <View style={groupedTableStyles.controlsRow}>
-        <EllipsisMenu
-          handleColumns={handleColumns}
-          activeColumns={activeColumns}
-        />
-        <TextInput
-          style={[
-            groupedTableStyles.searchInput,
-            {
-              backgroundColor: theme.colors.surface,
-              borderColor: theme.colors.border,
-              color: theme.colors.text,
-            },
-          ]}
-          placeholder="Escribe para filtrar categorías..."
-          placeholderTextColor={theme.colors.placeholder}
-          onChangeText={(newText) => filterData(newText)}
-          defaultValue={text}
-          autoCapitalize="none"
-        />
-        <View style={groupedTableStyles.yearSelector}>
-          <Pressable
-            style={({ pressed }) => [
-              groupedTableStyles.yearButton,
-              {
-                backgroundColor: theme.colors.surface,
-                borderColor: theme.colors.border,
-              },
-              pressed && groupedTableStyles.yearButtonPressed,
-            ]}
-            onPress={() => setShowYears(!showYears)}
-          >
-            <Text
-              style={[
-                groupedTableStyles.yearButtonText,
-                { color: theme.colors.text },
-              ]}
-            >
-              {selectedYear}
-            </Text>
-          </Pressable>
-          {showYears && (
-            <ScrollView
-              style={[
-                groupedTableStyles.yearDropdown,
-                {
-                  top: "100%",
-                  backgroundColor: theme.colors.surface,
-                  borderColor: theme.colors.border,
-                },
-              ]}
-            >
-              {years.map((item, index) => (
-                <Pressable
-                  key={index}
-                  style={({ pressed }) => [
-                    groupedTableStyles.yearOption,
-                    {
-                      backgroundColor:
-                        selectedYear === item
-                          ? theme.colors.inputBackground
-                          : "transparent",
-                    },
-                    pressed && groupedTableStyles.yearOptionPressed,
-                  ]}
-                  onPress={() => {
-                    setSelectedYear(item);
-                    setShowYears(!showYears);
-                  }}
-                >
-                  <Text style={{ color: theme.colors.text }}>{item}</Text>
-                </Pressable>
-              ))}
-            </ScrollView>
-          )}
-        </View>
-      </View>
       <View
         style={[
           groupedTableStyles.tableContainer,
           { borderColor: theme.colors.border },
         ]}
       >
-        {/* Frozen Left Column */}
         <View
           style={[
             groupedTableStyles.leftColumn,
@@ -568,7 +432,7 @@ export default function GroupedTable() {
         >
           <FlatList
             ref={leftRef}
-            data={filteredData}
+            data={sortedData}
             keyExtractor={(item) => item.categoria}
             renderItem={renderLeftColumnItem}
             ListHeaderComponent={renderLeftHeader}
@@ -584,6 +448,16 @@ export default function GroupedTable() {
             updateCellsBatchingPeriod={50}
             initialNumToRender={15}
             windowSize={10}
+            // refreshControl={
+            //   onRefresh ? (
+            //     <RefreshControl
+            //       refreshing={refreshing}
+            //       onRefresh={onRefresh}
+            //       tintColor={theme.colors.primary}
+            //       colors={[theme.colors.primary]}
+            //     />
+            //   ) : undefined
+            // }
           />
         </View>
         {/* Scrollable Right Columns */}
@@ -596,7 +470,7 @@ export default function GroupedTable() {
             <View>
               <FlatList
                 ref={rightRef}
-                data={filteredData}
+                data={sortedData}
                 keyExtractor={(item) => item.categoria}
                 renderItem={renderRightColumnsItem}
                 ListHeaderComponent={renderRightHeader}
@@ -612,18 +486,20 @@ export default function GroupedTable() {
                 updateCellsBatchingPeriod={50}
                 initialNumToRender={15}
                 windowSize={10}
+                refreshControl={
+                  onRefresh ? (
+                    <RefreshControl
+                      refreshing={refreshing}
+                      onRefresh={onRefresh}
+                      tintColor={theme.colors.primary}
+                      colors={[theme.colors.primary]}
+                    />
+                  ) : undefined
+                }
               />
             </View>
           </ScrollView>
         </View>
-        {isPending && (
-          <ActivityIndicator size="small" color={theme.colors.primary} />
-        )}
-        {error && (
-          <Text style={{ color: theme.colors.error }}>
-            {"An error has occurred: " + error.message}
-          </Text>
-        )}
       </View>
     </View>
   );
@@ -632,56 +508,6 @@ export default function GroupedTable() {
 const groupedTableStyles = StyleSheet.create({
   container: {
     flex: 1,
-    paddingHorizontal: 8,
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: "bold",
-    marginBottom: 8,
-    marginTop: 8,
-    textAlign: "center",
-  },
-  controlsRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 16,
-    marginVertical: 12,
-    paddingHorizontal: 4,
-  },
-  searchInput: {
-    borderWidth: 1,
-    borderRadius: 8,
-    paddingVertical: 12,
-    flex: 1,
-    paddingHorizontal: 16,
-  },
-  yearSelector: {
-    flex: 0,
-    alignItems: "center",
-    position: "relative",
-  },
-  yearButton: {
-    borderWidth: 1,
-    borderRadius: 8,
-    padding: 12,
-  },
-  yearButtonPressed: {
-    opacity: 0.7,
-  },
-  yearButtonText: {
-    fontWeight: "600",
-  },
-  yearDropdown: {
-    position: "absolute",
-    borderWidth: 1,
-    borderRadius: 8,
-    zIndex: 10,
-  },
-  yearOption: {
-    padding: 12,
-  },
-  yearOptionPressed: {
-    opacity: 0.7,
   },
   tableContainer: {
     flex: 1,

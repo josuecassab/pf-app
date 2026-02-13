@@ -1,6 +1,6 @@
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import { useQueryClient } from "@tanstack/react-query";
-import { useEffect, useState } from "react";
+import { useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -14,6 +14,7 @@ import {
   View,
 } from "react-native";
 import { useTheme } from "../contexts/ThemeContext";
+import DropdownModal from "./DropdownModal";
 import MyCustomModal from "./MyCustomModal";
 
 const formatSpanishNumber = (num) => {
@@ -40,6 +41,7 @@ const formatSpanishNumber = (num) => {
 export default function TxnTable({
   table,
   txns,
+  categories,
   error,
   fetchNextPage,
   hasNextPage,
@@ -57,27 +59,20 @@ export default function TxnTable({
   const [selectedSubcategory, setSelectedSubcategory] = useState({});
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
-  const [categories, setCategories] = useState([]);
   const [subCategories, setSubCategories] = useState([]);
+  const [headerDropdownVisible, setHeaderDropdownVisible] = useState(false);
+  const [headerDropdownLabel, setHeaderDropdownLabel] = useState("");
+  const [filterCategory, setFilterCategory] = useState(null);
+  const [filterSubcategory, setFilterSubcategory] = useState(null);
+  const [filterDate, setFilterDate] = useState(null);
 
-  useEffect(() => {
-    const fetchCategories = async () => {
-      const res = await fetch(`${API_URL}/categories`).then((res) =>
-        res.json(),
-      );
-      setCategories(res);
-    };
-    fetchCategories();
-  }, []);
-
-  const columnsWidth = {
-    fecha: 98,
-    descripcion: 112,
-    valor: 112,
-    categoria: 112,
-    sub_categoria: 112,
-    editar: 60,
-  };
+  const allSubcategories = useMemo(
+    () =>
+      (categories || [])
+        .flatMap((c) => c.sub_categorias || [])
+        .filter(Boolean) ?? [],
+    [categories],
+  );
 
   const handleCategoriaPress = (id) => {
     setSelectedCategory({ id: id, label: null, value: null });
@@ -136,12 +131,23 @@ export default function TxnTable({
       );
       const result = await res.json();
       console.log("Update result:", result);
-      // Reset and refetch the infinite query to clear all cached pages
-      await queryClient.resetQueries({
-        queryKey,
-      });
-      if (refetch) {
-        await refetch();
+      if (!res.ok) return;
+      // Update the infinite query cache with the new category for this txn
+      const { id, label } = selectedCategory;
+      if (id != null && label != null) {
+        queryClient.setQueryData(queryKey, (oldData) => {
+          if (!oldData?.pages) return oldData;
+          return {
+            ...oldData,
+            pages: oldData.pages.map((page) =>
+              Array.isArray(page)
+                ? page.map((txn) =>
+                    txn.id === id ? { ...txn, categoria: label } : txn,
+                  )
+                : page,
+            ),
+          };
+        });
       }
     } catch (error) {
       console.error("Failed to update transactions:", error);
@@ -165,12 +171,23 @@ export default function TxnTable({
       );
       const result = await res.json();
       console.log("Update result:", result);
-      // Reset and refetch the infinite query to clear all cached pages
-      await queryClient.resetQueries({
-        queryKey: queryKey,
-      });
-      if (refetch) {
-        await refetch();
+      if (!res.ok) return;
+      // Update the infinite query cache with the new subcategory for this txn
+      const { id, label } = selectedSubcategory;
+      if (id != null && label != null) {
+        queryClient.setQueryData(queryKey, (oldData) => {
+          if (!oldData?.pages) return oldData;
+          return {
+            ...oldData,
+            pages: oldData.pages.map((page) =>
+              Array.isArray(page)
+                ? page.map((txn) =>
+                    txn.id === id ? { ...txn, sub_categoria: label } : txn,
+                  )
+                : page,
+            ),
+          };
+        });
       }
     } catch (error) {
       console.error("Failed to update transactions:", error);
@@ -201,44 +218,66 @@ export default function TxnTable({
     }
   };
 
-  // Table rendering functions
-  const renderHeaderCell = (label, width = 160) => (
-    <View
-      style={[
-        styles.headerCell,
-        {
-          width,
-          backgroundColor: theme.colors.surface,
-          borderColor: theme.colors.border,
-        },
-      ]}
+  // Table rendering functions — column widths come from StyleSheet only
+  const headerColumnStyle = {
+    Fecha: styles.colFecha,
+    Descripcion: styles.colDescripcion,
+    Valor: styles.colValor,
+    Categoria: styles.colCategoria,
+    Subcategoria: styles.colSubCategoria,
+    Editar: styles.colEditar,
+  };
+
+  const renderHeaderCell = (label) => (
+    <Pressable
+      style={[headerColumnStyle[label]]}
+      onPress={() => {
+        setHeaderDropdownLabel(label);
+        setHeaderDropdownVisible(true);
+      }}
     >
-      <Text style={[styles.headerText, { color: theme.colors.text }]}>
-        {label}
-      </Text>
+      {({ pressed }) => (
+        <View
+          style={[
+            styles.headerCell,
+            styles[`col${label}`],
+            {
+              flex: 1,
+              backgroundColor: theme.colors.surface,
+              borderColor: theme.colors.border,
+            },
+            pressed && { opacity: 0.7 },
+          ]}
+        >
+          <Text style={[styles.headerText, { color: theme.colors.text }]}>
+            {label}
+          </Text>
+        </View>
+      )}
+    </Pressable>
+  );
+
+  const renderHeader = () => (
+    <View style={styles.row}>
+      {renderHeaderCell("Fecha")}
+      {renderHeaderCell("Descripcion")}
+      {renderHeaderCell("Valor")}
+      {renderHeaderCell("Categoria")}
+      {renderHeaderCell("Subcategoria")}
+      {renderHeaderCell("Banco")}
+      {renderHeaderCell("Editar")}
     </View>
   );
 
-  const renderHeader = () => {
-    if (!columnsWidth) return null;
-    return (
-      <View style={styles.row}>
-        {renderHeaderCell("Fecha", columnsWidth["fecha"])}
-        {renderHeaderCell("Descripcion", columnsWidth["descripcion"])}
-        {renderHeaderCell("Valor", columnsWidth["valor"])}
-        {renderHeaderCell("Categoria", columnsWidth["categoria"])}
-        {renderHeaderCell("Sub categoria", columnsWidth["sub_categoria"])}
-        {renderHeaderCell("Editar", columnsWidth["editar"])}
-      </View>
-    );
-  };
-
-  const renderCell = (value, width) => (
+  const renderCell = (value) => (
     <View
       style={[
         styles.cell,
-        { width, borderColor: theme.colors.border },
-        { backgroundColor: theme.colors.background },
+        styles.colFecha,
+        {
+          borderColor: theme.colors.border,
+          backgroundColor: theme.colors.background,
+        },
       ]}
     >
       <Text style={[styles.cellText, { color: theme.colors.text }]}>
@@ -247,14 +286,17 @@ export default function TxnTable({
     </View>
   );
 
-  const renderValorCell = (value, width) => {
+  const renderValorCell = (value) => {
     const formattedValue = formatSpanishNumber(value);
     return (
       <View
         style={[
           styles.cell,
-          { width, borderColor: theme.colors.border },
-          { backgroundColor: theme.colors.background },
+          styles.colValor,
+          {
+            borderColor: theme.colors.border,
+            backgroundColor: theme.colors.background,
+          },
         ]}
       >
         <Text style={[styles.cellText, { color: theme.colors.text }]}>
@@ -264,125 +306,126 @@ export default function TxnTable({
     );
   };
 
-  const renderDescripcionCell = (value, width) => {
-    return (
-      <View
-        style={[
-          styles.cell,
-          { width, borderColor: theme.colors.border },
-          { backgroundColor: theme.colors.background },
-        ]}
-      >
+  const renderDescripcionCell = (value) => (
+    <View
+      style={[
+        styles.cell,
+        styles.colDescripcion,
+        {
+          borderColor: theme.colors.border,
+          backgroundColor: theme.colors.background,
+        },
+      ]}
+    >
+      <Text style={[styles.cellText, { color: theme.colors.text }]}>
+        {value && value.toLowerCase()}
+      </Text>
+    </View>
+  );
+
+  const renderCategoryCell = (id, category) => (
+    <TouchableHighlight
+      style={[
+        styles.cell,
+        styles.colCategoria,
+        {
+          borderColor: theme.colors.border,
+          backgroundColor: theme.colors.background,
+        },
+      ]}
+      onPress={() => handleCategoriaPress(id)}
+      underlayColor={theme.colors.inputBackground}
+    >
+      <View>
         <Text style={[styles.cellText, { color: theme.colors.text }]}>
-          {value && value.toLowerCase()}
+          {category?.toLowerCase()}
         </Text>
       </View>
-    );
-  };
+    </TouchableHighlight>
+  );
 
-  const renderCategoryCell = (id, category, width) => {
-    return (
-      <TouchableHighlight
-        style={[
-          styles.cell,
-          {
-            width,
-            borderColor: theme.colors.border,
-            backgroundColor: theme.colors.background,
-          },
-        ]}
-        onPress={() => handleCategoriaPress(id)}
-        underlayColor={theme.colors.inputBackground}
-      >
-        <View>
-          <Text style={[styles.cellText, { color: theme.colors.text }]}>
-            {category?.toLowerCase()}
-          </Text>
-        </View>
-      </TouchableHighlight>
-    );
-  };
-
-  const renderSubCategoryCell = (id, category, subCategory, width) => {
-    return (
-      <TouchableHighlight
-        style={[
-          styles.cell,
-          {
-            width,
-            borderColor: theme.colors.border,
-            backgroundColor: theme.colors.background,
-          },
-        ]}
-        onPress={() => handleSubcategoryPress(id, category)}
-        underlayColor={theme.colors.inputBackground}
-      >
-        <View>
-          <Text style={[styles.cellText, { color: theme.colors.text }]}>
-            {subCategory?.toLowerCase()}
-          </Text>
-        </View>
-      </TouchableHighlight>
-    );
-  };
-
-  const renderEditCell = (id, width) => {
-    return (
-      <Pressable
-        style={[
-          styles.cell,
-          styles.editCell,
-          {
-            width,
-            borderColor: theme.colors.border,
-            backgroundColor: theme.colors.background,
-          },
-        ]}
-        onPress={() =>
-          Alert.alert(
-            "Eliminar",
-            "Está seguro que desea eliminar la transaccion",
-            [
-              {
-                text: "No",
-              },
-              {
-                text: "Si",
-                onPress: () => deleteTxn(id),
-              },
-            ],
-          )
-        }
-      >
-        {({ pressed }) => (
-          <MaterialIcons
-            name={pressed ? "delete" : "delete-outline"}
-            size={24}
-            color={theme.colors.text}
-          />
-        )}
-      </Pressable>
-    );
-  };
-
-  const renderTxns = (item) => {
-    if (!columnsWidth) return null;
-    return (
-      <View style={styles.row}>
-        {renderCell(item.fecha, columnsWidth["fecha"])}
-        {renderDescripcionCell(item?.descripcion, columnsWidth["descripcion"])}
-        {renderValorCell(item.valor, columnsWidth["valor"])}
-        {renderCategoryCell(item.id, item.categoria, columnsWidth["categoria"])}
-        {renderSubCategoryCell(
-          item.id,
-          item.categoria,
-          item.sub_categoria,
-          columnsWidth["sub_categoria"],
-        )}
-        {renderEditCell(item.id, columnsWidth["editar"])}
+  const renderSubCategoryCell = (id, category, subCategory) => (
+    <TouchableHighlight
+      style={[
+        styles.cell,
+        styles.colSubCategoria,
+        {
+          borderColor: theme.colors.border,
+          backgroundColor: theme.colors.background,
+        },
+      ]}
+      onPress={() => handleSubcategoryPress(id, category)}
+      underlayColor={theme.colors.inputBackground}
+    >
+      <View>
+        <Text style={[styles.cellText, { color: theme.colors.text }]}>
+          {subCategory?.toLowerCase()}
+        </Text>
       </View>
-    );
-  };
+    </TouchableHighlight>
+  );
+
+  const renderBancoCell = (value) => (
+    <View
+      style={[
+        styles.cell,
+        styles.colBanco,
+        {
+          borderColor: theme.colors.border,
+          backgroundColor: theme.colors.background,
+        },
+      ]}
+    >
+      <Text
+        style={[styles.cellText, { color: theme.colors.text }]}
+        numberOfLines={1}
+        ellipsizeMode="tail"
+      >
+        {value && value.toLowerCase()}
+      </Text>
+    </View>
+  );
+
+  const renderEditCell = (id) => (
+    <Pressable
+      style={[
+        styles.cell,
+        styles.editCell,
+        styles.colEditar,
+        {
+          borderColor: theme.colors.border,
+          backgroundColor: theme.colors.background,
+        },
+      ]}
+      onPress={() =>
+        Alert.alert(
+          "Eliminar",
+          "Está seguro que desea eliminar la transaccion",
+          [{ text: "No" }, { text: "Si", onPress: () => deleteTxn(id) }],
+        )
+      }
+    >
+      {({ pressed }) => (
+        <MaterialIcons
+          name={pressed ? "delete" : "delete-outline"}
+          size={24}
+          color={theme.colors.text}
+        />
+      )}
+    </Pressable>
+  );
+
+  const renderTxns = (item) => (
+    <View style={styles.row}>
+      {renderCell(item.fecha)}
+      {renderDescripcionCell(item?.descripcion)}
+      {renderValorCell(item.valor)}
+      {renderCategoryCell(item.id, item.categoria)}
+      {renderSubCategoryCell(item.id, item.categoria, item.sub_categoria)}
+      {renderBancoCell(item.banco)}
+      {renderEditCell(item.id)}
+    </View>
+  );
 
   const renderFooter = () => {
     if (!isFetchingNextPage) return null;
@@ -392,6 +435,30 @@ export default function TxnTable({
       </View>
     );
   };
+
+  const filteredTxns = (() => {
+    let list = txns;
+    if (filterDate?.year && filterDate?.month) {
+      const prefix = `${filterDate.year}-${String(filterDate.month).padStart(2, "0")}`;
+      list = list.filter(
+        (item) => item.fecha && String(item.fecha).startsWith(prefix),
+      );
+    }
+    if (filterCategory) {
+      list = list.filter(
+        (item) =>
+          item.categoria?.toLowerCase() === filterCategory.label?.toLowerCase(),
+      );
+    }
+    if (filterSubcategory) {
+      list = list.filter(
+        (item) =>
+          item.sub_categoria?.toLowerCase() ===
+          filterSubcategory.label?.toLowerCase(),
+      );
+    }
+    return list;
+  })();
 
   return (
     <>
@@ -431,18 +498,148 @@ export default function TxnTable({
           setSubCategoryModalVisible(!subCategoryModalVisible)
         }
       />
+      <DropdownModal
+        visible={headerDropdownVisible}
+        onClose={() => setHeaderDropdownVisible(false)}
+        title={headerDropdownLabel}
+        cancelLabel="Cerrar"
+        data={
+          headerDropdownLabel === "Categoria"
+            ? categories
+            : headerDropdownLabel === "Subcategoria"
+              ? allSubcategories
+              : undefined
+        }
+        placeholder={
+          headerDropdownLabel === "Subcategoria"
+            ? "Seleccionar subcategoría"
+            : "Seleccionar categoría"
+        }
+        searchPlaceholder={
+          headerDropdownLabel === "Subcategoria"
+            ? "Buscar subcategoría..."
+            : "Buscar categoría..."
+        }
+        value={
+          headerDropdownLabel === "Subcategoria"
+            ? (filterSubcategory?.value ?? null)
+            : (filterCategory?.value ?? null)
+        }
+        pickerValue={filterDate}
+        onChange={(item) => {
+          if (headerDropdownLabel === "Categoria") {
+            setFilterCategory({
+              label: item.label,
+              value: item.value,
+              sub_categorias: item.sub_categorias,
+            });
+          } else if (headerDropdownLabel === "Subcategoria") {
+            setFilterSubcategory({
+              label: item.label,
+              value: item.value,
+            });
+          } else if (
+            headerDropdownLabel === "Fecha" &&
+            item?.year &&
+            item?.month
+          ) {
+            setFilterDate({ year: item.year, month: item.month });
+          }
+          setHeaderDropdownVisible(false);
+        }}
+        type={
+          headerDropdownLabel === "Categoria" ||
+          headerDropdownLabel === "Subcategoria"
+            ? "dropdown"
+            : "picker"
+        }
+      />
+      {(filterCategory || filterDate || filterSubcategory) && (
+        <View style={styles.filterChipsRow}>
+          {filterDate?.year && filterDate?.month && (
+            <Pressable
+              onPress={() => setFilterDate(null)}
+              style={[
+                styles.filterChip,
+                {
+                  backgroundColor: theme.colors.surface,
+                  borderColor: theme.colors.border,
+                },
+              ]}
+            >
+              <Text
+                style={[styles.filterChipText, { color: theme.colors.text }]}
+              >
+                Fecha: {String(filterDate.month).padStart(2, "0")}/
+                {filterDate.year}
+              </Text>
+              <MaterialIcons
+                name="close"
+                size={18}
+                color={theme.colors.text}
+                style={styles.filterChipIcon}
+              />
+            </Pressable>
+          )}
+          {filterCategory && (
+            <Pressable
+              onPress={() => setFilterCategory(null)}
+              style={[
+                styles.filterChip,
+                {
+                  backgroundColor: theme.colors.surface,
+                  borderColor: theme.colors.border,
+                },
+              ]}
+            >
+              <Text
+                style={[styles.filterChipText, { color: theme.colors.text }]}
+              >
+                Categoría: {filterCategory.label}
+              </Text>
+              <MaterialIcons
+                name="close"
+                size={18}
+                color={theme.colors.text}
+                style={styles.filterChipIcon}
+              />
+            </Pressable>
+          )}
+          {filterSubcategory && (
+            <Pressable
+              onPress={() => setFilterSubcategory(null)}
+              style={[
+                styles.filterChip,
+                {
+                  backgroundColor: theme.colors.surface,
+                  borderColor: theme.colors.border,
+                },
+              ]}
+            >
+              <Text
+                style={[styles.filterChipText, { color: theme.colors.text }]}
+              >
+                Subcategoría: {filterSubcategory.label}
+              </Text>
+              <MaterialIcons
+                name="close"
+                size={18}
+                color={theme.colors.text}
+                style={styles.filterChipIcon}
+              />
+            </Pressable>
+          )}
+        </View>
+      )}
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={true}
-        style={[
-          styles.scrollView,
-          { borderColor: theme.colors.border },
-        ]}
+        style={[styles.scrollView, { borderColor: theme.colors.border }]}
       >
         <FlatList
           style={[styles.flatList, { borderColor: theme.colors.border }]}
           keyExtractor={(item) => item.id}
-          data={txns}
+          data={filteredTxns}
           ListHeaderComponent={renderHeader}
           renderItem={({ item }) => renderTxns(item)}
           stickyHeaderIndices={[0]}
@@ -467,6 +664,13 @@ const styles = StyleSheet.create({
   row: {
     flexDirection: "row",
   },
+  colFecha: { width: 99 },
+  colDescripcion: { width: 112 },
+  colValor: { width: 112 },
+  colCategoria: { width: 112 },
+  colSubCategoria: { width: 112 },
+  colBanco: { width: 80 },
+  colEditar: { width: 60 },
   headerCell: {
     borderBottomWidth: 1,
     borderRightWidth: 1,
@@ -498,5 +702,27 @@ const styles = StyleSheet.create({
   },
   flatList: {
     borderRadius: 16,
+  },
+  filterChipsRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+    marginBottom: 8,
+  },
+  filterChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 8,
+    paddingLeft: 12,
+    paddingRight: 8,
+    borderRadius: 20,
+    borderWidth: 1,
+  },
+  filterChipText: {
+    fontSize: 14,
+    marginRight: 6,
+  },
+  filterChipIcon: {
+    marginLeft: 2,
   },
 });

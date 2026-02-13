@@ -8,11 +8,12 @@ import "react-native-url-polyfill/auto";
 import { SafeAreaView } from "react-native-safe-area-context";
 import Auth from "../components/Auth";
 import { ThemeProvider, useTheme } from "../contexts/ThemeContext";
+import { useCategories } from "../hooks/useCategories";
 import { supabase } from "../lib/supabase";
 import HomeScreen from "./index";
-import Input from "./input";
 import Reconcile from "./reconcile";
 import Settings from "./settings";
+import Summary from "./summary";
 import Txns from "./txns";
 
 const Tab = createBottomTabNavigator();
@@ -20,9 +21,12 @@ const queryClient = new QueryClient();
 
 function TabNavigator() {
   const { theme } = useTheme();
+  // Prefetch global categories so they're cached for reconcile, txns, input
+  useCategories();
 
   return (
     <Tab.Navigator
+      initialRouteName="Agregar"
       screenOptions={({ route }) => ({
         headerShown: false,
         tabBarIcon: ({ focused, color, size }) => {
@@ -30,6 +34,8 @@ function TabNavigator() {
 
           if (route.name === "Inicio") {
             iconName = focused ? "home" : "home-outline";
+          } else if (route.name === "Resumen") {
+            iconName = focused ? "grid" : "grid-outline";
           } else if (route.name === "Transaccion") {
             iconName = focused ? "list" : "list-outline";
           } else if (route.name === "Agregar") {
@@ -52,9 +58,9 @@ function TabNavigator() {
         },
       })}
     >
-      <Tab.Screen name="Inicio" component={HomeScreen} />
+      <Tab.Screen name="Agregar" component={HomeScreen} />
+      <Tab.Screen name="Resumen" component={Summary} />
       <Tab.Screen name="Transaccion" component={Txns} />
-      <Tab.Screen name="Agregar" component={Input} />
       <Tab.Screen name="Conciliar" component={Reconcile} />
       <Tab.Screen name="Configuracion" component={Settings} />
     </Tab.Navigator>

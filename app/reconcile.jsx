@@ -18,8 +18,9 @@ import {
 } from "react-native";
 import { Dropdown } from "react-native-element-dropdown";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useTheme } from "../contexts/ThemeContext";
 import TxnTable from "../components/TxnTable";
+import { useTheme } from "../contexts/ThemeContext";
+import { useCategories } from "../hooks/useCategories";
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL;
 const TXNS_TABLE = "txns";
@@ -55,6 +56,13 @@ export default function Reconcile() {
   }, []);
 
   const {
+    isPending: categoriesIsPending,
+    error: categoriesError,
+    data: categoriesData,
+    isFetching: categoriesIsFetching,
+  } = useCategories();
+
+  const {
     data: matchedTxns,
     error: matchedTxnsError,
     fetchNextPage: fetchNextMatchedTxnsPage,
@@ -82,7 +90,11 @@ export default function Reconcile() {
       ) {
         return undefined;
       }
-      return {table_name: lastPageParam.table_name, page: lastPageParam.page + 1, limit: lastPageParam.limit };
+      return {
+        table_name: lastPageParam.table_name,
+        page: lastPageParam.page + 1,
+        limit: lastPageParam.limit,
+      };
     },
     enabled: !!selectedStatement?.label,
     // staleTime: 1000 * 60 * 5,
@@ -279,38 +291,52 @@ export default function Reconcile() {
 
   const completeReconcile = async () => {
     try {
-      // const res = await fetch(`${API_URL}/get_uncategorized_count/?table_name=${selectedStatement?.label}_joined`, {
-      //   method: "GET",
-      // });
-      // const response = await res.json();
-      // console.log("Uncategorized count:", response);
-      // if (!res.ok) {
-      //   Alert.alert("Error", response.message);
-      //   return;
-      // }
-      // if (response.count > 0) {
-      //   Alert.alert("Alerta", "Hay transacciones no categorizadas: porfavor categorice las transacciones antes de completar la conciliación");
-      //   return;
-      // }
-      const minMaxDatesRes = await fetch(`${API_URL}/min_and_max_dates/?table_name=${selectedStatement?.label}_joined`);
+      const res = await fetch(
+        `${API_URL}/get_uncategorized_count/?table_name=${selectedStatement?.label}_joined`,
+        {
+          method: "GET",
+        },
+      );
+      const response = await res.json();
+      console.log("Uncategorized count:", response);
+      if (!res.ok) {
+        Alert.alert("Error", response.message);
+        return;
+      }
+      if (response.count > 0) {
+        Alert.alert(
+          "Alerta",
+          "Hay transacciones no categorizadas: porfavor categorice las transacciones antes de completar la conciliación",
+        );
+        return;
+      }
+      const minMaxDatesRes = await fetch(
+        `${API_URL}/min_and_max_dates/?table_name=${selectedStatement?.label}_joined`,
+      );
       const minMaxDatesResponse = await minMaxDatesRes.json();
       console.log("Min and max dates response:", minMaxDatesResponse);
       if (!minMaxDatesRes.ok) {
         Alert.alert("Error", minMaxDatesResponse.message);
         return;
       }
-      const deleteTxnsRes = await fetch(`${API_URL}/delete_txns/?table_name=${TXNS_TABLE}?from_date=${minMaxDatesResponse.min_date}&to_date=${minMaxDatesResponse.max_date}`, {
-        method: "DELETE",
-      });
+      const deleteTxnsRes = await fetch(
+        `${API_URL}/delete_txns/?table=${TXNS_TABLE}&from_date=${minMaxDatesResponse.min_date}&to_date=${minMaxDatesResponse.max_date}`,
+        {
+          method: "DELETE",
+        },
+      );
       const deleteTxnsResponse = await deleteTxnsRes.json();
-      console.log("Delete txns response:", deleteTxnsResponse.deleted_count);
+      console.log("Delete txns response:", deleteTxnsResponse.message);
       if (!deleteTxnsRes.ok) {
         Alert.alert("Error", deleteTxnsResponse.message);
         return;
       }
-      const insertTxnsRes = await fetch(`${API_URL}/insert_txns/?from_table=${selectedStatement?.label}_joined&to_table=${TXNS_TABLE}`, {
-        method: "POST",
-      });
+      const insertTxnsRes = await fetch(
+        `${API_URL}/insert_txns/?from_table=${selectedStatement?.label}_joined&to_table=${TXNS_TABLE}`,
+        {
+          method: "POST",
+        },
+      );
       const insertTxnsResponse = await insertTxnsRes.json();
       console.log("Insert txns response:", insertTxnsResponse.inserted_count);
       if (!insertTxnsRes.ok) {
@@ -323,7 +349,6 @@ export default function Reconcile() {
       console.error("Error completing reconcile:", error);
       Alert.alert("Error", "Error al completar la conciliación");
     }
-
   };
 
   const formatSpanishNumber = (num) => {
@@ -447,9 +472,7 @@ export default function Reconcile() {
         <Text style={[reconcileStyles.title, { color: theme.colors.text }]}>
           Conciliar
         </Text>
-        <StatusBar
-          barStyle={theme.isDark ? "light-content" : "dark-content"}
-        />
+        <StatusBar barStyle={theme.isDark ? "light-content" : "dark-content"} />
         <View style={reconcileStyles.section}>
           <Pressable
             style={({ pressed }) => [
@@ -459,9 +482,7 @@ export default function Reconcile() {
             ]}
             onPress={pickDocument}
           >
-            <Text style={reconcileStyles.buttonText}>
-              Seleccionar extracto
-            </Text>
+            <Text style={reconcileStyles.buttonText}>Seleccionar extracto</Text>
           </Pressable>
 
           {file && (
@@ -484,7 +505,10 @@ export default function Reconcile() {
                   File Name:
                 </Text>
                 <Text
-                  style={[reconcileStyles.fileValue, { color: theme.colors.text }]}
+                  style={[
+                    reconcileStyles.fileValue,
+                    { color: theme.colors.text },
+                  ]}
                 >
                   {file.name}
                 </Text>
@@ -498,7 +522,10 @@ export default function Reconcile() {
                   File Size:
                 </Text>
                 <Text
-                  style={[reconcileStyles.fileValue, { color: theme.colors.text }]}
+                  style={[
+                    reconcileStyles.fileValue,
+                    { color: theme.colors.text },
+                  ]}
                 >
                   {(file.size / 1024).toFixed(2)} KB
                 </Text>
@@ -512,7 +539,10 @@ export default function Reconcile() {
                   URI:
                 </Text>
                 <Text
-                  style={[reconcileStyles.fileValue, { color: theme.colors.text }]}
+                  style={[
+                    reconcileStyles.fileValue,
+                    { color: theme.colors.text },
+                  ]}
                   numberOfLines={1}
                   ellipsizeMode="middle"
                 >
@@ -528,7 +558,10 @@ export default function Reconcile() {
                   MIME Type:
                 </Text>
                 <Text
-                  style={[reconcileStyles.fileValue, { color: theme.colors.text }]}
+                  style={[
+                    reconcileStyles.fileValue,
+                    { color: theme.colors.text },
+                  ]}
                 >
                   {file.mimeType}
                 </Text>
@@ -645,7 +678,10 @@ export default function Reconcile() {
         <>
           <View style={reconcileStyles.matchedHeader}>
             <Text
-              style={[reconcileStyles.sectionTitle, { color: theme.colors.text }]}
+              style={[
+                reconcileStyles.sectionTitle,
+                { color: theme.colors.text },
+              ]}
             >
               Transacciones concilidadas
             </Text>
@@ -661,6 +697,7 @@ export default function Reconcile() {
             </Pressable>
           </View>
           <TxnTable
+            categories={categoriesData}
             table={`${selectedStatement?.label}_joined`}
             txns={flattenedMatchedTxns}
             error={matchedTxnsError}

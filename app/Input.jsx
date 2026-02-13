@@ -2,7 +2,7 @@ import AntDesign from "@expo/vector-icons/AntDesign";
 import Feather from "@expo/vector-icons/Feather";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import SegmentedControl from "@react-native-segmented-control/segmented-control";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
@@ -27,8 +27,13 @@ import {
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 import SwipeableCategoryItem from "../components/SwipeableCategoryItem";
 import { useTheme } from "../contexts/ThemeContext";
+import { useCategories } from "../hooks/useCategories";
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL;
+const BANK_LIST = [
+  { label: "Bancolombia", value: "bancolombia" },
+  { label: "Nubank", value: "nubank" },
+];
 
 export default function Input() {
   const queryClient = useQueryClient();
@@ -39,7 +44,6 @@ export default function Input() {
   const [txtType, setTxnType] = useState(1);
   const [txtData, setTxnData] = useState({});
   const [value, setValue] = useState("");
-
   const [categories, setCategories] = useState([]);
   const [visibleInputCat, setVisibleInputCat] = useState(false);
   const [inputCategory, setInputCategory] = useState("");
@@ -49,17 +53,11 @@ export default function Input() {
   const [updatingCategory, setUpdatingCategory] = useState(null);
   const [isSending, setIsSending] = useState(false);
   const [filteredCategories, setFilteredCategories] = useState([]);
+  const [selectedBank, setSelectedBank] = useState(BANK_LIST[0]);
 
   const { theme } = useTheme();
 
-  const { isPending, error, data, isFetching } = useQuery({
-    queryKey: ["categories"],
-    queryFn: async () => {
-      const response = await fetch(`${API_URL}/categories`);
-      return await response.json();
-    },
-    select: (data) => data.sort((a, b) => a.label.localeCompare(b.label)),
-  });
+  const { isPending, error, data, isFetching } = useCategories();
 
   useEffect(() => {
     if (data) {
@@ -103,6 +101,7 @@ export default function Input() {
     txn.id_subcategoria = selectedSubcategory?.value
       ? selectedSubcategory.value
       : null;
+    txn.banco = selectedBank.value;
 
     console.log(txn);
     try {
@@ -332,9 +331,9 @@ export default function Input() {
     >
       <SafeAreaView
         style={[{ flex: 1 }, { backgroundColor: theme.colors.background }]}
-        edges={["top", "left", "right"]}
+        edges={["left", "right"]}
       >
-        {/* <ScrollView
+        {/* <ScrollView`
           keyboardShouldPersistTaps="handled"
           contentContainerStyle={{ flexGrow: 1 }}
           showsVerticalScrollIndicator={false}
@@ -345,10 +344,13 @@ export default function Input() {
               {
                 backgroundColor: theme.colors.background,
                 flex: 1,
-                justifyContent: "space-around",
+                justifyContent: "space-between",
               },
             ]}
           >
+            <Text style={[styles.titleText, { color: theme.colors.text }]}>
+              Agregar
+            </Text>
             <View style={styles.containerStyle}>
               <Text style={[styles.labelText, { color: theme.colors.text }]}>
                 Fecha
@@ -380,6 +382,10 @@ export default function Input() {
                   {
                     backgroundColor: theme.colors.inputBackground,
                     color: theme.colors.text,
+                    fontSize: 16,
+                    textAlign: "center",
+                    borderRadius: 30,
+                    paddingHorizontal: 10,
                   },
                 ]}
                 value={value}
@@ -388,14 +394,6 @@ export default function Input() {
                 separator=","
                 precision={2}
                 minValue={0}
-                inputStyle={{
-                  fontSize: 14,
-                  height: 40,
-                  textAlign: "center",
-                  borderRadius: 30,
-                  paddingHorizontal: 10,
-                  color: theme.colors.text,
-                }}
                 keyboardType="number-pad"
                 placeholder="ingresa el valor"
                 placeholderTextColor={theme.colors.placeholder}
@@ -425,6 +423,59 @@ export default function Input() {
                 }}
                 tintColor={theme.colors.primary}
                 activeFontStyle={{ color: "#ffffff" }}
+              />
+            </View>
+            <View style={styles.containerStyle}>
+              <Text style={[styles.labelText, { color: theme.colors.text }]}>
+                Banco
+              </Text>
+              <Dropdown
+                style={[
+                  styles.dropdown,
+                  {
+                    backgroundColor: theme.colors.inputBackground,
+                    borderBottomColor: theme.colors.border,
+                    width: "50%",
+                  },
+                ]}
+                placeholderStyle={[
+                  styles.placeholderStyle,
+                  { color: theme.colors.placeholder },
+                ]}
+                selectedTextStyle={[
+                  styles.selectedTextStyle,
+                  { color: theme.colors.text, textAlign: "center" },
+                ]}
+                inputSearchStyle={[
+                  styles.inputSearchStyle,
+                  { color: theme.colors.text },
+                ]}
+                iconStyle={styles.iconStyle}
+                containerStyle={{
+                  backgroundColor: theme.colors.inputBackground,
+                  borderColor: theme.colors.border,
+                  borderRadius: 30,
+                }}
+                itemContainerStyle={{
+                  backgroundColor: theme.colors.inputBackground,
+                  borderRadius: 30,
+                }}
+                itemTextStyle={{
+                  color: theme.colors.text,
+                  fontSize: 14,
+                  textAlign: "center",
+                }}
+                activeColor={theme.colors.primary + "20"}
+                data={BANK_LIST}
+                maxHeight={220}
+                labelField="label"
+                valueField="value"
+                placeholder="Seleccionar categoria"
+                searchPlaceholder="Buscar..."
+                value={selectedBank?.value}
+                onChange={(item) => {
+                  setSelectedBank(item);
+                }}
               />
             </View>
             <View style={[styles.containerStyle, { gap: 16 }]}>
@@ -467,7 +518,7 @@ export default function Input() {
                 iconStyle={styles.iconStyle}
                 containerStyle={{
                   backgroundColor: theme.colors.inputBackground,
-                  borderRadius: 8,
+                  borderRadius: 30,
                   borderColor: theme.colors.border,
                 }}
                 itemContainerStyle={{
@@ -514,6 +565,14 @@ export default function Input() {
                   styles.inputSearchStyle,
                   { color: theme.colors.text },
                 ]}
+                containerStyle={{
+                  backgroundColor: theme.colors.inputBackground,
+                  borderRadius: 30,
+                  borderColor: theme.colors.border,
+                }}
+                itemTextStyle={{
+                  color: theme.colors.text,
+                }}
                 iconStyle={styles.iconStyle}
                 data={selectedCategory?.sub_categorias || []}
                 search
@@ -529,7 +588,7 @@ export default function Input() {
                     value: item.value,
                   });
                 }}
-                dropdownPosition="top"
+                dropdownPosition="bottom"
               />
               <Modal
                 transparent={false}
@@ -751,6 +810,11 @@ export default function Input() {
 }
 
 const styles = StyleSheet.create({
+  titleText: {
+    fontSize: 24,
+    fontWeight: "bold",
+    textAlign: "center",
+  },
   containerStyle: {
     padding: 8,
     gap: 8,
@@ -781,10 +845,12 @@ const styles = StyleSheet.create({
   inputSearchStyle: {
     height: 40,
     fontSize: 14,
+    borderRadius: 20,
   },
   labelText: {
     fontWeight: "600",
   },
+
   currencyInput: {
     borderRadius: 24,
     paddingVertical: 8,

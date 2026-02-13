@@ -10,6 +10,7 @@ import {
   View,
 } from "react-native";
 import { Dropdown } from "react-native-element-dropdown";
+import { useTheme } from "../contexts/ThemeContext";
 
 export default function MyCustomModal({
   labels,
@@ -20,6 +21,7 @@ export default function MyCustomModal({
   onAccept,
   ...rest
 }) {
+  const { theme } = useTheme();
   return (
     <Modal
       animationType="slide"
@@ -35,30 +37,68 @@ export default function MyCustomModal({
         behavior={Platform.OS === "ios" ? "padding" : "height"}
         keyboardVerticalOffset={0}
       >
-        <View style={styles.modalContent}>
+        <View
+          style={[
+            styles.modalContent,
+            {
+              backgroundColor: theme.colors.background,
+              borderColor: theme.colors.borderLight,
+            },
+          ]}
+        >
           <View style={styles.modalHeader}>
             <Pressable onPress={SetModalFunc}>
               {({ pressed }) => (
                 <AntDesign
                   name="close-circle"
                   size={24}
-                  color={pressed ? "#4d4d4d" : "black"}
+                  color={pressed ? "#4d4d4d" : theme.colors.text}
                 />
               )}
             </Pressable>
           </View>
-          <Text style={styles.modalTitle}>Category Details</Text>
-          <Text style={styles.modalDescription}>
+          <Text style={[styles.modalTitle, { color: theme.colors.text }]}>
+            Category Details
+          </Text>
+          <Text style={[styles.modalDescription, { color: theme.colors.text }]}>
             Select a new category for this transaction.
           </Text>
           <Dropdown
-            style={styles.dropdown}
-            placeholderStyle={styles.placeholderStyle}
-            selectedTextStyle={styles.selectedTextStyle}
-            inputSearchStyle={styles.inputSearchStyle}
+            style={[
+              styles.dropdown,
+              {
+                backgroundColor: theme.colors.inputBackground,
+                borderBottomColor: theme.colors.border,
+              },
+            ]}
+            placeholderStyle={[
+              styles.placeholderStyle,
+              { color: theme.colors.placeholder },
+            ]}
+            selectedTextStyle={[
+              styles.selectedTextStyle,
+              { color: theme.colors.text },
+            ]}
+            inputSearchStyle={[
+              styles.inputSearchStyle,
+              { color: theme.colors.text },
+            ]}
             iconStyle={styles.iconStyle}
+            containerStyle={{
+              backgroundColor: theme.colors.inputBackground,
+              borderRadius: 8,
+              borderColor: theme.colors.border,
+            }}
+            itemContainerStyle={{
+              backgroundColor: theme.colors.inputBackground,
+            }}
+            itemTextStyle={{
+              color: theme.colors.text,
+            }}
+            activeColor={theme.colors.primary + "20"}
             data={labels}
             search
+            maxHeight={220}
             labelField="label"
             valueField="value"
             placeholder="Seleccionar item"
@@ -80,11 +120,11 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
-    backgroundColor: "rgba(0, 0, 0, 0.25)",
+    // backgroundColor: "rgba(0, 0, 0, 0.25)",
   },
   modalContent: {
-    backgroundColor: "#ffffff",
     borderRadius: 16,
+    borderWidth: 1,
     padding: 24,
     margin: 16,
     width: 320,
@@ -105,26 +145,25 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: "bold",
     marginBottom: 16,
-    color: "#1e293b",
   },
   modalDescription: {
-    color: "#475569",
     marginBottom: 24,
   },
   dropdown: {
-    margin: 16,
-    height: 50,
-    borderBottomColor: "gray",
-    borderBottomWidth: 0.5,
+    marginBottom: 16,
+    height: 40,
+    width: "100%",
+    borderRadius: 40,
+    paddingHorizontal: 14,
   },
-  icon: {
-    marginRight: 5,
-  },
+  // icon: {
+  //   marginRight: 5,
+  // },
   placeholderStyle: {
-    fontSize: 16,
+    fontSize: 14,
   },
   selectedTextStyle: {
-    fontSize: 16,
+    fontSize: 14,
   },
   iconStyle: {
     width: 20,
@@ -132,7 +171,7 @@ const styles = StyleSheet.create({
   },
   inputSearchStyle: {
     height: 40,
-    fontSize: 16,
+    fontSize: 14,
   },
   acceptButton: {
     backgroundColor: "#3b82f6",
