@@ -28,10 +28,18 @@ const columns = [
   "diciembre",
 ];
 
-export default function EllipsisMenu({ handleColumns, activeColumns }) {
+export default function EllipsisMenu({
+  handleColumns,
+  activeColumns,
+  activeRows,
+  handleRows,
+  columnOptions = columns,
+  rowOptions = [],
+}) {
   const { theme } = useTheme();
   const [visible, setVisible] = useState(false);
-  const [visibleColOptions, setVisibleColOptions] = useState(false);
+  const [visibleOptions, setVisibleOptions] = useState(false);
+  const [editMode, setEditMode] = useState(null);
   const insets = useSafeAreaInsets();
 
   const styles = useMemo(
@@ -42,6 +50,11 @@ export default function EllipsisMenu({ handleColumns, activeColumns }) {
         },
         menuItemPressed: {
           backgroundColor: theme.colors.inputBackground,
+        },
+        menuItemSelected: {
+          backgroundColor: theme.isDark
+            ? "rgba(10, 132, 255, 0.18)"
+            : "rgba(10, 132, 255, 0.08)",
         },
         menuItemContent: {
           flexDirection: "row",
@@ -99,28 +112,50 @@ export default function EllipsisMenu({ handleColumns, activeColumns }) {
           color: theme.colors.text,
         },
       }),
-    [theme]
+    [theme],
   );
 
   const iconColor = theme.colors.text;
 
-  const renderItem = ({ item }) => {
+  const renderOptionItem = ({ item }) => {
+    const isColumns = editMode === "columns";
+    const isSelected = isColumns
+      ? activeColumns.includes(item)
+      : activeRows.includes(item);
+    const onPress = isColumns ? () => handleColumns(item) : () => handleRows(item);
+
     return (
       <Pressable
         style={({ pressed }) => [
           styles.menuItem,
+          isSelected && styles.menuItemSelected,
           pressed && styles.menuItemPressed,
         ]}
-        onPress={() => handleColumns(item)}
+        onPress={onPress}
       >
         <View style={styles.menuItemContent}>
-          {activeColumns.includes(item) ? (
-            <AntDesign name="minus-circle" size={18} color={iconColor} />
+          {isSelected ? (
+            <Ionicons
+              name="checkmark-circle"
+              size={24}
+              color={theme.colors.primary}
+            />
           ) : (
-            <AntDesign name="plus-circle" size={18} color={iconColor} />
+            <Ionicons
+              name="ellipse-outline"
+              size={24}
+              color={theme.colors.textSecondary}
+            />
           )}
 
-          <Text style={styles.menuItemText}>{item}</Text>
+          <Text
+            style={[
+              styles.menuItemText,
+              isSelected && { color: theme.colors.primary, fontWeight: "600" },
+            ]}
+          >
+            {item}
+          </Text>
         </View>
       </Pressable>
     );
@@ -136,7 +171,11 @@ export default function EllipsisMenu({ handleColumns, activeColumns }) {
             color={iconColor}
           />
         ) : (
-          <Ionicons name="ellipsis-vertical-circle" size={30} color={iconColor} />
+          <Ionicons
+            name="ellipsis-vertical-circle"
+            size={30}
+            color={iconColor}
+          />
         )}
       </Pressable>
       <Modal
@@ -145,24 +184,38 @@ export default function EllipsisMenu({ handleColumns, activeColumns }) {
         visible={visible}
         onRequestClose={() => setVisible(false)}
       >
-        <Pressable style={styles.modalBackdrop} onPress={() => setVisible(false)} />
+        <Pressable
+          style={styles.modalBackdrop}
+          onPress={() => setVisible(false)}
+        />
         <View style={styles.menuContainer}>
           <TouchableOpacity
             style={styles.menuOption}
             onPress={() => {
               setVisible(false);
-              setVisibleColOptions(true);
+              setEditMode("columns");
+              setVisibleOptions(true);
             }}
           >
             <Text style={styles.menuOptionText}>Editar Columnas</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.menuOption}
+            onPress={() => {
+              setVisible(false);
+              setEditMode("rows");
+              setVisibleOptions(true);
+            }}
+          >
+            <Text style={styles.menuOptionText}>Editar Filas</Text>
           </TouchableOpacity>
         </View>
       </Modal>
       <Modal
         transparent
         animationType="fade"
-        visible={visibleColOptions}
-        onRequestClose={() => setVisibleColOptions(false)}
+        visible={visibleOptions}
+        onRequestClose={() => setVisibleOptions(false)}
       >
         <View
           style={[
@@ -171,12 +224,17 @@ export default function EllipsisMenu({ handleColumns, activeColumns }) {
           ]}
         >
           <View style={styles.columnsHeader}>
-            <Text style={styles.columnsTitle}>Editar Columnas</Text>
-            <TouchableOpacity onPress={() => setVisibleColOptions(false)}>
+            <Text style={styles.columnsTitle}>
+              {editMode === "columns" ? "Editar Columnas" : "Editar Filas"}
+            </Text>
+            <TouchableOpacity onPress={() => setVisibleOptions(false)}>
               <AntDesign name="close" size={24} color={iconColor} />
             </TouchableOpacity>
           </View>
-          <FlatList data={columns} renderItem={renderItem} />
+          <FlatList
+            data={editMode === "columns" ? columnOptions : rowOptions}
+            renderItem={renderOptionItem}
+          />
         </View>
       </Modal>
     </>

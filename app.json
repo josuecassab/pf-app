@@ -1,16 +1,18 @@
 {
   "expo": {
-    "name": "pf-app",
-    "slug": "pf-app",
+    "name": "ZeroGasto",
+    "slug": "ZeroGasto",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/icon.png",
-    "scheme": "pfapp",
+    "icon": "./assets/images/zerogasto.png",
+    "scheme": "zerogasto",
     "userInterfaceStyle": "dark",
     "newArchEnabled": true,
     "ios": {
-      "supportsTablet": true,
-      "bundleIdentifier": "com.josuecassab.pfapp"
+      "supportsTablet": false,
+      "bundleIdentifier": "com.josuecassab.zerogasto",
+      "buildNumber": "1",
+      "appleTeamId": "D95BATD6PK"
     },
     "android": {
       "adaptiveIcon": {
@@ -21,7 +23,7 @@
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
-      "package": "com.anonymous.pfapp"
+      "package": "com.anonymous.zerogasto"
     },
     "web": {
       "output": "static",

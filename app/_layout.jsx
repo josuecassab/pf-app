@@ -1,15 +1,14 @@
 import { Ionicons } from "@expo/vector-icons";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { useEffect, useState } from "react";
 import { ActivityIndicator, View } from "react-native";
 import "react-native-url-polyfill/auto";
 
 import { SafeAreaView } from "react-native-safe-area-context";
 import Auth from "../components/Auth";
+import { AuthProvider, useAuth } from "../contexts/AuthContext";
 import { ThemeProvider, useTheme } from "../contexts/ThemeContext";
 import { useCategories } from "../hooks/useCategories";
-import { supabase } from "../lib/supabase";
 import HomeScreen from "./index";
 import Reconcile from "./reconcile";
 import Settings from "./settings";
@@ -67,19 +66,8 @@ function TabNavigator() {
   );
 }
 
-export default function MyTabs() {
-  const [session, setSession] = useState(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setLoading(false);
-    });
-    supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session);
-    });
-  }, []);
+function RootNavigator() {
+  const { session, loading } = useAuth();
 
   if (loading) {
     return (
@@ -105,5 +93,13 @@ export default function MyTabs() {
         <TabNavigator />
       </QueryClientProvider>
     </ThemeProvider>
+  );
+}
+
+export default function MyTabs() {
+  return (
+    <AuthProvider>
+      <RootNavigator />
+    </AuthProvider>
   );
 }

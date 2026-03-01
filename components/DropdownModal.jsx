@@ -9,6 +9,7 @@ import {
   Text,
   View,
 } from "react-native";
+import CurrencyInput from "react-native-currency-input";
 import { Dropdown } from "react-native-element-dropdown";
 import { useTheme } from "../contexts/ThemeContext";
 
@@ -33,6 +34,9 @@ export default function DropdownModal({
   type,
   // For type="picker": initial { year, month } and receive selection on Done
   pickerValue,
+  // For type="currency": filter by value
+  currencyValue,
+  onCurrencyValueChange,
   // Custom content when no dropdown data
   children,
 }) {
@@ -166,7 +170,28 @@ export default function DropdownModal({
               </Pressable>
             </View>
             <View style={styles.body}>
-              {type === "dropdown" ? (
+              {type === "currency" ? (
+                <View style={styles.currencyContainer}>
+                  <CurrencyInput
+                    style={[
+                      styles.currencyInput,
+                      {
+                        backgroundColor: theme.colors.inputBackground,
+                        color: theme.colors.text,
+                        borderColor: theme.colors.border,
+                      },
+                    ]}
+                    value={currencyValue ?? null}
+                    onChangeValue={onCurrencyValueChange}
+                    delimiter="."
+                    separator=","
+                    precision={2}
+                    keyboardType="number-pad"
+                    placeholder="Filtrar por valor"
+                    placeholderTextColor={theme.colors.placeholder}
+                  />
+                </View>
+              ) : type === "dropdown" ? (
                 <Dropdown
                   data={data}
                   value={value}
@@ -339,5 +364,16 @@ const styles = StyleSheet.create({
   },
   pickerColumn: {
     flex: 1,
+  },
+  currencyContainer: {
+    paddingVertical: 8,
+  },
+  currencyInput: {
+    fontSize: 16,
+    textAlign: "center",
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderWidth: 1,
   },
 });

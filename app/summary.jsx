@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Pressable,
@@ -12,6 +12,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import EllipsisMenu from "../components/EllipsisMenu";
 import GroupedTable from "../components/GroupedTable";
+import { useAuth } from "../contexts/AuthContext";
 import { useTheme } from "../contexts/ThemeContext";
 
 const months = [
@@ -34,10 +35,11 @@ const years = [2026, 2025, 2024, 2023, 2022, 2021];
 
 export default function Summary() {
   const { theme } = useTheme();
+  const { schema } = useAuth();
   const API_URL = process.env.EXPO_PUBLIC_API_URL;
   const [text, setText] = useState("");
-  const [filteredData, setFilteredData] = useState([]);
   const [activeColumns, setActiveColumns] = useState(months);
+  const [activeRows, setActiveRows] = useState([]);
   const [showYears, setShowYears] = useState(false);
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
 
@@ -45,21 +47,42 @@ export default function Summary() {
     queryKey: [selectedYear],
     queryFn: async () => {
       const response = await fetch(
-        `${API_URL}/grouped_txns?year=${selectedYear}`,
+        `${API_URL}/grouped_txns?year=${selectedYear}&schema=${schema}`,
       );
       return await response.json();
     },
   });
 
+  // When data loads or changes (e.g. year), set activeRows to all categories
   useEffect(() => {
     if (!data) return;
-    const result = text
-      ? data.filter((item) =>
-          item.categoria.toLowerCase().includes(text.toLowerCase()),
-        )
-      : data;
-    setFilteredData(result);
-  }, [data, text]);
+    setActiveRows(data.map((item) => item.categoria));
+  }, [data]);
+
+  const handleRows = useCallback((category) => {
+    setActiveRows((prev) => {
+      const set = new Set(prev);
+      if (set.has(category)) {
+        set.delete(category);
+      } else {
+        set.add(category);
+      }
+      return Array.from(set);
+    });
+  }, []);
+
+  // filteredData: data filtered by activeRows, then by search text
+  const filteredData = useMemo(() => {
+    if (!data) return [];
+    const byActive =
+      activeRows.length === 0
+        ? data
+        : data.filter((item) => activeRows.includes(item.categoria));
+    if (!text.trim()) return byActive;
+    return byActive.filter((item) =>
+      item.categoria.toLowerCase().includes(text.toLowerCase()),
+    );
+  }, [data, activeRows, text]);
 
   const filterData = useCallback((searchText) => {
     setText(searchText);
@@ -89,6 +112,10 @@ export default function Summary() {
           <EllipsisMenu
             handleColumns={handleColumns}
             activeColumns={activeColumns}
+            activeRows={activeRows}
+            handleRows={handleRows}
+            columnOptions={months}
+            rowOptions={data?.map((d) => d.categoria) ?? []}
           />
           <TextInput
             style={[

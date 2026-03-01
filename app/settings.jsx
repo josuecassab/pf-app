@@ -1,13 +1,26 @@
 import { Pressable, StyleSheet, Switch, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { useAuth } from "../contexts/AuthContext";
 import { useTheme } from "../contexts/ThemeContext";
-import { supabase } from "../lib/supabase";
+
+const API_URL = process.env.EXPO_PUBLIC_API_URL;
 
 export default function Settings() {
   const { theme } = useTheme();
+  const { signOut: clearSession, getAuthHeaders } = useAuth();
 
   async function signOut() {
-    const { error } = await supabase.auth.signOut();
+    try {
+      await fetch(`${API_URL}/auth/sign_out`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...getAuthHeaders(),
+        },
+      });
+    } finally {
+      await clearSession();
+    }
   }
 
   return (

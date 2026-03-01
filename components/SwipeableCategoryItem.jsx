@@ -34,6 +34,8 @@ export default function SwipeableCategoryItem({
   const position = useSharedValue(0);
   const END_POSITION = -140;
   const MIDDLE_POSITION = -70;
+  // Minimum left-swipe distance to trigger edit (avoids accidental triggers)
+  const MIN_SWIPE_TO_EDIT = -40;
   const [isExpanded, setIsExpanded] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [displayedInputCat, setDisplayedInputCat] = useState(new Set());
@@ -60,16 +62,17 @@ export default function SwipeableCategoryItem({
         if (finalPosition > 0) {
           // Swiped right - set isEditing to false
           runOnJS(setIsEditing)(false);
-        } else {
-          runOnJS(toggleEditing)();
+        } else if (finalPosition < MIN_SWIPE_TO_EDIT) {
+          // Intentional left swipe past threshold - show edit
+          // runOnJS(toggleEditing)();
         }
+        // Barely swiped left (between 0 and MIN_SWIPE_TO_EDIT): just snap back, no action
       }
     });
 
+  const defaultBg = parentId != null ? theme.colors.card : theme.colors.surface;
   const animatedStyles = useAnimatedStyle(() => ({
-    backgroundColor: pressed.value
-      ? theme.colors.inputBackground
-      : theme.colors.surface,
+    backgroundColor: pressed.value ? theme.colors.inputBackground : defaultBg,
     transform: [{ translateX: position.value }],
   }));
 
@@ -81,9 +84,7 @@ export default function SwipeableCategoryItem({
   });
 
   const animatedStyleLabel = useAnimatedStyle(() => ({
-    backgroundColor: pressed.value
-      ? theme.colors.inputBackground
-      : theme.colors.surface,
+    backgroundColor: pressed.value ? theme.colors.inputBackground : defaultBg,
     transform: [{ translateX: labelOffset.value }],
   }));
 
@@ -130,7 +131,7 @@ export default function SwipeableCategoryItem({
               );
             }}
           >
-            <Text style={styles.actionButtonText}>Enviar</Text>
+            <Octicons name="check" size={22} color="#ffffff" />
           </Pressable>
         ) : (
           <Pressable
@@ -154,10 +155,9 @@ export default function SwipeableCategoryItem({
               });
             }}
           >
-            <Text style={styles.actionButtonText}>Editar</Text>
+            <Octicons name="pencil" size={22} color="#ffffff" />
           </Pressable>
         )}
-
         <Pressable
           onPress={() => onDelete(cat.value)}
           style={({ pressed }) => [
@@ -167,7 +167,7 @@ export default function SwipeableCategoryItem({
             pressed && styles.actionButtonPressed,
           ]}
         >
-          <Text style={styles.actionButtonText}>Eliminar</Text>
+          <Octicons name="trash" size={22} color="#ffffff" />
         </Pressable>
       </View>
       <GestureDetector gesture={pan}>
@@ -176,6 +176,7 @@ export default function SwipeableCategoryItem({
             animatedStyles,
             styles.swipeableContent,
             { borderBottomColor: theme.colors.borderLight },
+            parentId != null && { paddingLeft: 40 },
           ]}
         >
           <Pressable
@@ -223,18 +224,26 @@ export default function SwipeableCategoryItem({
                       editable={!isLoading}
                     />
                     {isLoading && (
-                      <ActivityIndicator size="small" color={theme.colors.primary} />
+                      <ActivityIndicator
+                        size="small"
+                        color={theme.colors.primary}
+                      />
                     )}
                   </View>
                 ) : (
                   <Animated.View
                     style={[animatedStyleLabel, styles.labelContainer]}
                   >
-                    <Text style={[styles.labelText, { color: theme.colors.text }]}>
+                    <Text
+                      style={[styles.labelText, { color: theme.colors.text }]}
+                    >
                       {cat.label}
                     </Text>
                     {isLoading && (
-                      <ActivityIndicator size="small" color={theme.colors.primary} />
+                      <ActivityIndicator
+                        size="small"
+                        color={theme.colors.primary}
+                      />
                     )}
                   </Animated.View>
                 )}
@@ -255,35 +264,35 @@ const styles = StyleSheet.create({
   actionsContainer: {
     position: "absolute",
     right: 0,
-    height: "100%",
+    top: 0,
+    bottom: 0,
     width: 140,
-    justifyContent: "center",
-    alignItems: "center",
     flexDirection: "row",
+    alignItems: "stretch",
+    justifyContent: "end",
   },
   actionButton: {
     borderLeftWidth: 1,
-    height: "100%",
-    paddingHorizontal: 16,
+    flex: 1,
+    maxWidth: 70,
+    paddingHorizontal: 12,
     justifyContent: "center",
+    alignItems: "center",
   },
   sendButton: {
-    backgroundColor: "#bbf7d0",
+    backgroundColor: "#16a34a",
   },
   editButton: {
-    backgroundColor: "#bbf7d0",
+    backgroundColor: "#2563eb",
   },
   deleteButton: {
-    backgroundColor: "#fecaca",
+    backgroundColor: "#dc2626",
   },
   actionButtonPressed: {
     opacity: 0.7,
   },
-  actionButtonText: {
-    color: "#000000",
-  },
   swipeableContent: {
-    padding: 16,
+    padding: 10,
     paddingHorizontal: 8,
     borderBottomWidth: 1,
     flexDirection: "row",
@@ -314,6 +323,6 @@ const styles = StyleSheet.create({
     height: 32,
   },
   labelText: {
-    fontSize: 16,
+    fontSize: 14,
   },
 });

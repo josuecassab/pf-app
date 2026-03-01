@@ -26,6 +26,7 @@ import {
 } from "react-native-gesture-handler";
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 import SwipeableCategoryItem from "../components/SwipeableCategoryItem";
+import { useAuth } from "../contexts/AuthContext";
 import { useTheme } from "../contexts/ThemeContext";
 import { useCategories } from "../hooks/useCategories";
 
@@ -50,14 +51,18 @@ export default function Input() {
   const [inputSubcategory, setInputSubcategory] = useState("");
   const [showCategoryModal, setShowCategoryModal] = useState(false);
   const [expandedCategories, setExpandedCategories] = useState(new Set());
+  const [addingSubcategoryForId, setAddingSubcategoryForId] = useState(null);
   const [updatingCategory, setUpdatingCategory] = useState(null);
   const [isSending, setIsSending] = useState(false);
   const [filteredCategories, setFilteredCategories] = useState([]);
   const [selectedBank, setSelectedBank] = useState(BANK_LIST[0]);
+  const { session, schema } = useAuth();
 
   const { theme } = useTheme();
 
   const { isPending, error, data, isFetching } = useCategories();
+
+  console.log(session);
 
   useEffect(() => {
     if (data) {
@@ -105,13 +110,16 @@ export default function Input() {
 
     console.log(txn);
     try {
-      const res = await fetch(`${API_URL}/insert_txn/`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
+      const res = await fetch(
+        `${API_URL}/insert_txn/?schema=${schema}`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(txn),
         },
-        body: JSON.stringify(txn),
-      });
+      );
 
       const data = await res.json();
       console.log(data);
@@ -140,13 +148,16 @@ export default function Input() {
     if (inputCategory.trim() === "") return;
     try {
       console.log("Adding category:", inputCategory);
-      const res = await fetch(`${API_URL}/categories/insert_category/`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
+      const res = await fetch(
+        `${API_URL}/categories/insert_category/?schema=${schema}`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ label: inputCategory }),
         },
-        body: JSON.stringify({ label: inputCategory }),
-      });
+      );
 
       const data = await res.json();
       if (!res.ok) {
@@ -169,16 +180,19 @@ export default function Input() {
   const addSubcategory = async (category) => {
     if (inputSubcategory.trim() === "") return;
     try {
-      const res = await fetch(`${API_URL}/categories/insert_subcategory/`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
+      const res = await fetch(
+        `${API_URL}/categories/insert_subcategory/?schema=${schema}`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            sub_categoria: inputSubcategory,
+            id_categoria: category,
+          }),
         },
-        body: JSON.stringify({
-          sub_categoria: inputSubcategory,
-          id_categoria: category,
-        }),
-      });
+      );
 
       const data = await res.json();
       if (!res.ok) {
@@ -192,6 +206,7 @@ export default function Input() {
 
       await queryClient.invalidateQueries({ queryKey: ["categories"] });
       setInputSubcategory("");
+      setAddingSubcategoryForId(null);
     } catch (error) {
       console.error("Error adding subcategory:", error);
       Alert.alert("Error agregando la subcategoría", error.message);
@@ -201,7 +216,7 @@ export default function Input() {
   const deleteCategory = async (categoryValue) => {
     try {
       const res = await fetch(
-        `${API_URL}/categories/delete_category/?id=${categoryValue}`,
+        `${API_URL}/categories/delete_category/?id=${categoryValue}&schema=${schema}`,
         {
           method: "DELETE",
         },
@@ -226,7 +241,7 @@ export default function Input() {
   const deleteSubcategory = async (categoryValue) => {
     try {
       const res = await fetch(
-        `${API_URL}/categories/delete_subcategory/?id=${categoryValue}`,
+        `${API_URL}/categories/delete_subcategory/?id=${categoryValue}&schema=${schema}`,
         {
           method: "DELETE",
         },
@@ -253,7 +268,7 @@ export default function Input() {
     setUpdatingCategory(value);
     try {
       const res = await fetch(
-        `${API_URL}/categories/update_category/?value=${value}&label=${newLabel}`,
+        `${API_URL}/categories/update_category/?value=${value}&label=${newLabel}&schema=${schema}`,
         {
           method: "PUT",
         },
@@ -279,7 +294,7 @@ export default function Input() {
     setUpdatingCategory(value);
     try {
       const res = await fetch(
-        `${API_URL}/categories/update_subcategory/?value=${value}&label=${newLabel}`,
+        `${API_URL}/categories/update_subcategory/?value=${value}&label=${newLabel}&schema=${schema}`,
         {
           method: "PUT",
         },
@@ -348,9 +363,9 @@ export default function Input() {
               },
             ]}
           >
-            <Text style={[styles.titleText, { color: theme.colors.text }]}>
+            {/* <Text style={[styles.titleText, { color: theme.colors.text }]}>
               Agregar
-            </Text>
+            </Text> */}
             <View style={styles.containerStyle}>
               <Text style={[styles.labelText, { color: theme.colors.text }]}>
                 Fecha
@@ -425,59 +440,7 @@ export default function Input() {
                 activeFontStyle={{ color: "#ffffff" }}
               />
             </View>
-            <View style={styles.containerStyle}>
-              <Text style={[styles.labelText, { color: theme.colors.text }]}>
-                Banco
-              </Text>
-              <Dropdown
-                style={[
-                  styles.dropdown,
-                  {
-                    backgroundColor: theme.colors.inputBackground,
-                    borderBottomColor: theme.colors.border,
-                    width: "50%",
-                  },
-                ]}
-                placeholderStyle={[
-                  styles.placeholderStyle,
-                  { color: theme.colors.placeholder },
-                ]}
-                selectedTextStyle={[
-                  styles.selectedTextStyle,
-                  { color: theme.colors.text, textAlign: "center" },
-                ]}
-                inputSearchStyle={[
-                  styles.inputSearchStyle,
-                  { color: theme.colors.text },
-                ]}
-                iconStyle={styles.iconStyle}
-                containerStyle={{
-                  backgroundColor: theme.colors.inputBackground,
-                  borderColor: theme.colors.border,
-                  borderRadius: 30,
-                }}
-                itemContainerStyle={{
-                  backgroundColor: theme.colors.inputBackground,
-                  borderRadius: 30,
-                }}
-                itemTextStyle={{
-                  color: theme.colors.text,
-                  fontSize: 14,
-                  textAlign: "center",
-                }}
-                activeColor={theme.colors.primary + "20"}
-                data={BANK_LIST}
-                maxHeight={220}
-                labelField="label"
-                valueField="value"
-                placeholder="Seleccionar categoria"
-                searchPlaceholder="Buscar..."
-                value={selectedBank?.value}
-                onChange={(item) => {
-                  setSelectedBank(item);
-                }}
-              />
-            </View>
+
             <View style={[styles.containerStyle, { gap: 16 }]}>
               <View style={styles.categoryHeader}>
                 <Text
@@ -501,6 +464,7 @@ export default function Input() {
                   {
                     backgroundColor: theme.colors.inputBackground,
                     borderBottomColor: theme.colors.border,
+                    width: "60%",
                   },
                 ]}
                 placeholderStyle={[
@@ -523,9 +487,11 @@ export default function Input() {
                 }}
                 itemContainerStyle={{
                   backgroundColor: theme.colors.inputBackground,
+                  borderRadius: 30,
                 }}
                 itemTextStyle={{
                   color: theme.colors.text,
+                  fontSize: 14,
                 }}
                 activeColor={theme.colors.primary + "20"}
                 data={categories}
@@ -551,6 +517,7 @@ export default function Input() {
                   {
                     backgroundColor: theme.colors.inputBackground,
                     borderBottomColor: theme.colors.border,
+                    width: "60%",
                   },
                 ]}
                 placeholderStyle={[
@@ -572,6 +539,7 @@ export default function Input() {
                 }}
                 itemTextStyle={{
                   color: theme.colors.text,
+                  fontSize: 14,
                 }}
                 iconStyle={styles.iconStyle}
                 data={selectedCategory?.sub_categorias || []}
@@ -579,7 +547,7 @@ export default function Input() {
                 maxHeight={220}
                 labelField="label"
                 valueField="value"
-                placeholder="Seleccionar sub categoria"
+                placeholder="Seleccionar subcategoria"
                 searchPlaceholder="Buscar..."
                 value={selectedSubcategory?.value}
                 onChange={(item) => {
@@ -608,7 +576,11 @@ export default function Input() {
                     >
                       <View style={styles.modalHeader}>
                         <Pressable
-                          onPress={() => setShowCategoryModal(false)}
+                          onPress={() => {
+                            setShowCategoryModal(false);
+                            setAddingSubcategoryForId(null);
+                            setInputSubcategory("");
+                          }}
                           style={styles.iconButton}
                         >
                           {({ pressed }) => (
@@ -731,47 +703,103 @@ export default function Input() {
                                       />
                                     </View>
                                   ))}
-                                  <View
-                                    key={cat.sub}
-                                    style={styles.subCategoryInputRow}
-                                  >
-                                    <TextInput
-                                      style={[
-                                        styles.subCategoryInput,
-                                        {
-                                          backgroundColor: theme.colors.surface,
-                                          borderColor: theme.colors.border,
-                                          color: theme.colors.text,
-                                        },
-                                      ]}
-                                      placeholder="Nueva Subcategoria"
-                                      placeholderTextColor={
-                                        theme.colors.placeholder
-                                      }
-                                      value={inputSubcategory}
-                                      onChangeText={(text) => {
-                                        setInputSubcategory(text);
-                                      }}
-                                    />
+                                  {addingSubcategoryForId === cat.value ? (
+                                    <View
+                                      key={`${cat.value}-input`}
+                                      style={styles.subCategoryInputRow}
+                                    >
+                                      <TextInput
+                                        style={[
+                                          styles.subCategoryInput,
+                                          {
+                                            backgroundColor:
+                                              theme.colors.surface,
+                                            borderColor: theme.colors.border,
+                                            color: theme.colors.text,
+                                          },
+                                        ]}
+                                        placeholder="Nueva subcategoría"
+                                        placeholderTextColor={
+                                          theme.colors.placeholder
+                                        }
+                                        value={inputSubcategory}
+                                        onChangeText={setInputSubcategory}
+                                        autoFocus
+                                      />
+                                      <Pressable
+                                        onPress={() => {
+                                          setAddingSubcategoryForId(null);
+                                          setInputSubcategory("");
+                                        }}
+                                        style={[
+                                          styles.subCategoryAddButton,
+                                          {
+                                            backgroundColor:
+                                              theme.colors.inputBackground,
+                                          },
+                                        ]}
+                                      >
+                                        <Text
+                                          style={{
+                                            color: theme.colors.text,
+                                            fontSize: 14,
+                                          }}
+                                        >
+                                          Cancelar
+                                        </Text>
+                                      </Pressable>
+                                      <Pressable
+                                        onPress={() =>
+                                          addSubcategory(cat.value)
+                                        }
+                                        style={({ pressed }) => [
+                                          styles.subCategoryAddButton,
+                                          {
+                                            backgroundColor:
+                                              theme.colors.primary,
+                                          },
+                                          pressed &&
+                                            styles.subCategoryAddButtonPressed,
+                                        ]}
+                                      >
+                                        <Text
+                                          style={{
+                                            color: "#ffffff",
+                                            fontWeight: "600",
+                                            fontSize: 14,
+                                          }}
+                                        >
+                                          Agregar
+                                        </Text>
+                                      </Pressable>
+                                    </View>
+                                  ) : (
                                     <Pressable
-                                      onPress={() => addSubcategory(cat.value)}
-                                      style={({ pressed }) => [
-                                        styles.subCategoryAddButton,
+                                      onPress={() =>
+                                        setAddingSubcategoryForId(cat.value)
+                                      }
+                                      style={[
+                                        styles.addSubcategoryButton,
                                         {
-                                          backgroundColor:
-                                            theme.colors.inputBackground,
+                                          borderColor: theme.colors.border,
                                         },
-                                        pressed &&
-                                          styles.subCategoryAddButtonPressed,
                                       ]}
                                     >
+                                      <Feather
+                                        name="plus"
+                                        size={16}
+                                        color={theme.colors.primary}
+                                      />
                                       <Text
-                                        style={{ color: theme.colors.text }}
+                                        style={[
+                                          styles.addSubcategoryButtonText,
+                                          { color: theme.colors.primary },
+                                        ]}
                                       >
-                                        Agregar
+                                        Agregar subcategoría
                                       </Text>
                                     </Pressable>
-                                  </View>
+                                  )}
                                 </>
                               )}
                             </View>
@@ -782,6 +810,59 @@ export default function Input() {
                   </SafeAreaProvider>
                 </KeyboardAvoidingView>
               </Modal>
+            </View>
+            <View style={styles.containerStyle}>
+              <Text style={[styles.labelText, { color: theme.colors.text }]}>
+                Banco
+              </Text>
+              <Dropdown
+                style={[
+                  styles.dropdown,
+                  {
+                    backgroundColor: theme.colors.inputBackground,
+                    borderBottomColor: theme.colors.border,
+                    width: "60%",
+                  },
+                ]}
+                placeholderStyle={[
+                  styles.placeholderStyle,
+                  { color: theme.colors.placeholder },
+                ]}
+                selectedTextStyle={[
+                  styles.selectedTextStyle,
+                  { color: theme.colors.text, textAlign: "center" },
+                ]}
+                inputSearchStyle={[
+                  styles.inputSearchStyle,
+                  { color: theme.colors.text },
+                ]}
+                iconStyle={styles.iconStyle}
+                containerStyle={{
+                  backgroundColor: theme.colors.inputBackground,
+                  borderColor: theme.colors.border,
+                  borderRadius: 30,
+                }}
+                itemContainerStyle={{
+                  backgroundColor: theme.colors.inputBackground,
+                  borderRadius: 30,
+                }}
+                itemTextStyle={{
+                  color: theme.colors.text,
+                  fontSize: 14,
+                  textAlign: "center",
+                }}
+                activeColor={theme.colors.primary + "20"}
+                data={BANK_LIST}
+                // maxHeight={220}
+                labelField="label"
+                valueField="value"
+                placeholder="Seleccionar categoria"
+                searchPlaceholder="Buscar..."
+                value={selectedBank?.value}
+                onChange={(item) => {
+                  setSelectedBank(item);
+                }}
+              />
             </View>
             <View style={styles.containerStyle}>
               <Pressable
@@ -814,6 +895,12 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: "bold",
     textAlign: "center",
+  },
+  dropdownContainerStyle: {
+    flexDirection: "row",
+    gap: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
   },
   containerStyle: {
     padding: 8,
@@ -921,7 +1008,6 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
   subCategoryContainer: {
-    paddingLeft: 32,
     width: "100%",
   },
   subCategoryInputRow: {
@@ -947,6 +1033,22 @@ const styles = StyleSheet.create({
   },
   subCategoryAddButtonPressed: {
     opacity: 0.8,
+  },
+  addSubcategoryButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    marginLeft: 16,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderRadius: 8,
+    borderStyle: "dashed",
+  },
+  addSubcategoryButtonText: {
+    fontSize: 14,
+    fontWeight: "500",
   },
   searchContainer: {
     flexDirection: "row",

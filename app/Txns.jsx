@@ -3,6 +3,7 @@ import { useMemo, useState } from "react";
 import { StyleSheet, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import TxnTable from "../components/TxnTable";
+import { useAuth } from "../contexts/AuthContext";
 import { useTheme } from "../contexts/ThemeContext";
 import { useCategories } from "../hooks/useCategories";
 
@@ -11,6 +12,7 @@ const TABLE = "txns";
 
 export default function Txns() {
   const { theme } = useTheme();
+  const { schema } = useAuth();
   const [date, setDate] = useState(new Date());
   const [show, setShow] = useState(false);
   const [selectedYear, setSelectedYear] = useState(
@@ -29,10 +31,10 @@ export default function Txns() {
     isPending,
     refetch,
   } = useInfiniteQuery({
-    queryKey: ["txns"],
+    queryKey: ["txns", schema],
     queryFn: ({ pageParam }) =>
       fetch(
-        `${API_URL}/latests_txns/?page=${pageParam.page}&limit=${pageParam.limit}`,
+        `${API_URL}/latests_txns/?page=${pageParam.page}&limit=${pageParam.limit}&schema=${schema}`,
       ).then((res) => res.json()),
     initialPageParam: { page: 0, limit: 100 },
     getNextPageParam: (lastPage, allPages, lastPageParam) => {
@@ -121,7 +123,7 @@ export default function Txns() {
           hasNextPage={hasNextPage}
           isFetchingNextPage={isFetchingNextPage}
           isPending={isPending}
-          queryKey={["txns"]}
+          queryKey={["txns", schema]}
           refetch={refetch}
         />
       </View>

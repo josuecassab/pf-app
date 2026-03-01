@@ -13,9 +13,15 @@ import {
   TouchableHighlight,
   View,
 } from "react-native";
+import { useAuth } from "../contexts/AuthContext";
 import { useTheme } from "../contexts/ThemeContext";
 import DropdownModal from "./DropdownModal";
 import MyCustomModal from "./MyCustomModal";
+
+const BANK_LIST = [
+  { label: "Bancolombia", value: "bancolombia" },
+  { label: "Nubank", value: "nubank" },
+];
 
 const formatSpanishNumber = (num) => {
   const isNegative = num < 0;
@@ -51,6 +57,7 @@ export default function TxnTable({
   refetch,
 }) {
   const { theme } = useTheme();
+  const { schema } = useAuth();
   const API_URL = process.env.EXPO_PUBLIC_API_URL;
   const queryClient = useQueryClient();
   const [categoryModalVisible, setCategoryModalVisible] = useState(false);
@@ -64,7 +71,9 @@ export default function TxnTable({
   const [headerDropdownLabel, setHeaderDropdownLabel] = useState("");
   const [filterCategory, setFilterCategory] = useState(null);
   const [filterSubcategory, setFilterSubcategory] = useState(null);
+  const [filterBank, setFilterBank] = useState(null);
   const [filterDate, setFilterDate] = useState(null);
+  const [filterValue, setFilterValue] = useState(null);
 
   const allSubcategories = useMemo(
     () =>
@@ -120,7 +129,7 @@ export default function TxnTable({
     setLoading(true);
     try {
       const res = await fetch(
-        `${API_URL}/update_txn_category/?table=${table}`,
+        `${API_URL}/update_txn_category/?table=${table}&schema=${schema}`,
         {
           method: "PUT",
           headers: {
@@ -160,7 +169,7 @@ export default function TxnTable({
     setLoading(true);
     try {
       const res = await fetch(
-        `${API_URL}/update_txn_subcategory/?table=${table}`,
+        `${API_URL}/update_txn_subcategory/?table=${table}&schema=${schema}`,
         {
           method: "PUT",
           headers: {
@@ -199,17 +208,20 @@ export default function TxnTable({
   const deleteTxn = async (id) => {
     setLoading(true);
     try {
-      const res = await fetch(`${API_URL}/delete_txn/?id=${id}`, {
-        method: "DELETE",
-        headers: {
-          "Content-Type": "application/json",
+      const res = await fetch(
+        `${API_URL}/delete_txn/?id=${id}&schema=${schema}`,
+        {
+          method: "DELETE",
+          headers: {
+            "Content-Type": "application/json",
+          },
         },
-      });
+      );
       const result = await res.json();
       console.log("deleted result:", result);
       // Invalidate and refetch the transactions query to update the UI
       queryClient.invalidateQueries({
-        queryKey: ["txns", selectedYear, selectedMonth],
+        queryKey,
       });
     } catch (error) {
       console.error("Failed to update transactions:", error);
@@ -457,6 +469,15 @@ export default function TxnTable({
           filterSubcategory.label?.toLowerCase(),
       );
     }
+    if (filterBank) {
+      list = list.filter(
+        (item) => item.banco?.toLowerCase() === filterBank.label?.toLowerCase(),
+      );
+    }
+    if (filterValue != null && filterValue !== "") {
+      const target = Number(filterValue);
+      list = list.filter((item) => Number(item.valor) === target);
+    }
     return list;
   })();
 
@@ -504,28 +525,43 @@ export default function TxnTable({
         title={headerDropdownLabel}
         cancelLabel="Cerrar"
         data={
-          headerDropdownLabel === "Categoria"
-            ? categories
-            : headerDropdownLabel === "Subcategoria"
-              ? allSubcategories
-              : undefined
+          {
+            Categoria: categories,
+            Subcategoria: allSubcategories,
+            Banco: BANK_LIST,
+          }[headerDropdownLabel]
         }
         placeholder={
-          headerDropdownLabel === "Subcategoria"
-            ? "Seleccionar subcategoría"
-            : "Seleccionar categoría"
+          {
+            Categoria: "Seleccionar categoría",
+            Subcategoria: "Seleccionar subcategoría",
+            Banco: "Seleccionar banco",
+          }[headerDropdownLabel]
         }
         searchPlaceholder={
-          headerDropdownLabel === "Subcategoria"
-            ? "Buscar subcategoría..."
-            : "Buscar categoría..."
+          {
+            Categoria: "Buscar categoría...",
+            Subcategoria: "Buscar subcategoría...",
+            Banco: "Buscar banco...",
+          }[headerDropdownLabel]
         }
         value={
-          headerDropdownLabel === "Subcategoria"
-            ? (filterSubcategory?.value ?? null)
-            : (filterCategory?.value ?? null)
+          {
+            Categoria: filterCategory?.value,
+            Subcategoria: filterSubcategory?.value,
+            Banco: filterBank?.value,
+          }[headerDropdownLabel]
         }
         pickerValue={filterDate}
+        type={
+          headerDropdownLabel === "Valor"
+            ? "currency"
+            : headerDropdownLabel !== "Fecha"
+              ? "dropdown"
+              : "picker"
+        }
+        currencyValue={filterValue}
+        onCurrencyValueChange={setFilterValue}
         onChange={(item) => {
           if (headerDropdownLabel === "Categoria") {
             setFilterCategory({
@@ -538,6 +574,11 @@ export default function TxnTable({
               label: item.label,
               value: item.value,
             });
+          } else if (headerDropdownLabel === "Banco") {
+            setFilterBank({
+              label: item.label,
+              value: item.value,
+            });
           } else if (
             headerDropdownLabel === "Fecha" &&
             item?.year &&
@@ -547,14 +588,12 @@ export default function TxnTable({
           }
           setHeaderDropdownVisible(false);
         }}
-        type={
-          headerDropdownLabel === "Categoria" ||
-          headerDropdownLabel === "Subcategoria"
-            ? "dropdown"
-            : "picker"
-        }
       />
-      {(filterCategory || filterDate || filterSubcategory) && (
+      {(filterCategory ||
+        filterDate ||
+        filterSubcategory ||
+        filterBank ||
+        filterValue != null) && (
         <View style={styles.filterChipsRow}>
           {filterDate?.year && filterDate?.month && (
             <Pressable
@@ -620,6 +659,54 @@ export default function TxnTable({
                 style={[styles.filterChipText, { color: theme.colors.text }]}
               >
                 Subcategoría: {filterSubcategory.label}
+              </Text>
+              <MaterialIcons
+                name="close"
+                size={18}
+                color={theme.colors.text}
+                style={styles.filterChipIcon}
+              />
+            </Pressable>
+          )}
+          {filterBank && (
+            <Pressable
+              onPress={() => setFilterBank(null)}
+              style={[
+                styles.filterChip,
+                {
+                  backgroundColor: theme.colors.surface,
+                  borderColor: theme.colors.border,
+                },
+              ]}
+            >
+              <Text
+                style={[styles.filterChipText, { color: theme.colors.text }]}
+              >
+                Banco: {filterBank.label}
+              </Text>
+              <MaterialIcons
+                name="close"
+                size={18}
+                color={theme.colors.text}
+                style={styles.filterChipIcon}
+              />
+            </Pressable>
+          )}
+          {filterValue != null && filterValue !== "" && (
+            <Pressable
+              onPress={() => setFilterValue(null)}
+              style={[
+                styles.filterChip,
+                {
+                  backgroundColor: theme.colors.surface,
+                  borderColor: theme.colors.border,
+                },
+              ]}
+            >
+              <Text
+                style={[styles.filterChipText, { color: theme.colors.text }]}
+              >
+                Valor: {formatSpanishNumber(Number(filterValue))}
               </Text>
               <MaterialIcons
                 name="close"

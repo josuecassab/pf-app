@@ -19,6 +19,7 @@ import {
 import { Dropdown } from "react-native-element-dropdown";
 import { SafeAreaView } from "react-native-safe-area-context";
 import TxnTable from "../components/TxnTable";
+import { useAuth } from "../contexts/AuthContext";
 import { useTheme } from "../contexts/ThemeContext";
 import { useCategories } from "../hooks/useCategories";
 
@@ -27,6 +28,7 @@ const TXNS_TABLE = "txns";
 
 export default function Reconcile() {
   const { theme } = useTheme();
+  const { schema } = useAuth();
   const queryClient = useQueryClient();
   const [file, setFile] = useState(null);
   const [statements, setStatements] = useState([]);
@@ -36,9 +38,9 @@ export default function Reconcile() {
 
   const fetchStatements = async () => {
     try {
-      const data = await fetch(`${API_URL}/list_statements`).then((res) =>
-        res.json(),
-      );
+      const data = await fetch(
+        `${API_URL}/list_statements?schema=${schema}`,
+      ).then((res) => res.json());
       const statements = data.map((item) => ({
         label: item.split("/").at(-1).split(".")[0],
         value: item,
@@ -74,7 +76,7 @@ export default function Reconcile() {
     queryKey: ["matched_txns", `${selectedStatement?.label}_joined`],
     queryFn: ({ pageParam }) =>
       fetch(
-        `${API_URL}/reconcile_matched_txns/?table_name=${pageParam.table_name}&page=${pageParam.page}&limit=${pageParam.limit}`,
+        `${API_URL}/reconcile_matched_txns/?table_name=${pageParam.table_name}&page=${pageParam.page}&limit=${pageParam.limit}&schema=${schema}`,
       ).then((res) => res.json()),
     enabled: !!selectedStatement?.label,
     initialPageParam: {
@@ -115,7 +117,7 @@ export default function Reconcile() {
     queryKey: ["unmatched_txns", selectedStatement?.label],
     queryFn: ({ pageParam }) =>
       fetch(
-        `${API_URL}/reconcile_unmatched_txns/?table_name=${selectedStatement.label}&page=${pageParam.page}&limit=${pageParam.limit}`,
+        `${API_URL}/reconcile_unmatched_txns/?table_name=${selectedStatement.label}&page=${pageParam.page}&limit=${pageParam.limit}&schema=${schema}`,
       ).then((res) => res.json()),
     enabled: !!selectedStatement?.label,
     initialPageParam: { page: 0, limit: 100 },
@@ -157,7 +159,7 @@ export default function Reconcile() {
     queryKey: [selectedStatement?.label],
     queryFn: async () => {
       const response = await fetch(
-        `${API_URL}/statements?table=${selectedStatement.label}`,
+        `${API_URL}/statements?table=${selectedStatement.label}&schema=${schema}`,
       );
       return await response.json();
     },
@@ -177,7 +179,7 @@ export default function Reconcile() {
     try {
       // 1️⃣ Get signed URL from backend
       const res = await fetch(
-        `${API_URL}/generate_upload_url?filename=${encodeURIComponent(file.name)}`,
+        `${API_URL}/generate_upload_url?filename=${encodeURIComponent(file.name)}&schema=${schema}`,
       );
       const { url } = await res.json();
       console.log("Uploading file:", file);
@@ -207,15 +209,18 @@ export default function Reconcile() {
           .split("https://storage.googleapis.com/")[1];
         console.log("GCS URI:", "gs://" + gcsURI);
         try {
-          const result = await fetch(`${API_URL}/create_statement_table`, {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
+          const result = await fetch(
+            `${API_URL}/create_statement_table?schema=${schema}`,
+            {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({
+                gcs_uri: "gs://" + gcsURI,
+              }),
             },
-            body: JSON.stringify({
-              gcs_uri: "gs://" + gcsURI,
-            }),
-          }).then((res) => res.json());
+          ).then((res) => res.json());
           console.log(result);
         } catch (error) {
           console.error("Error processing statement:", error);
@@ -263,7 +268,7 @@ export default function Reconcile() {
     }
     try {
       const res = await fetch(
-        `${API_URL}/create_statement_joined?table_name=${selectedStatement.label}`,
+        `${API_URL}/create_statement_joined?table_name=${selectedStatement.label}&schema=${schema}`,
         {
           method: "POST",
         },
@@ -292,7 +297,7 @@ export default function Reconcile() {
   const completeReconcile = async () => {
     try {
       const res = await fetch(
-        `${API_URL}/get_uncategorized_count/?table_name=${selectedStatement?.label}_joined`,
+        `${API_URL}/get_uncategorized_count/?table_name=${selectedStatement?.label}_joined&schema=${schema}`,
         {
           method: "GET",
         },
@@ -311,7 +316,7 @@ export default function Reconcile() {
         return;
       }
       const minMaxDatesRes = await fetch(
-        `${API_URL}/min_and_max_dates/?table_name=${selectedStatement?.label}_joined`,
+        `${API_URL}/min_and_max_dates/?table_name=${selectedStatement?.label}_joined&schema=${schema}`,
       );
       const minMaxDatesResponse = await minMaxDatesRes.json();
       console.log("Min and max dates response:", minMaxDatesResponse);
@@ -320,7 +325,7 @@ export default function Reconcile() {
         return;
       }
       const deleteTxnsRes = await fetch(
-        `${API_URL}/delete_txns/?table=${TXNS_TABLE}&from_date=${minMaxDatesResponse.min_date}&to_date=${minMaxDatesResponse.max_date}`,
+        `${API_URL}/delete_txns/?table=${TXNS_TABLE}&from_date=${minMaxDatesResponse.min_date}&to_date=${minMaxDatesResponse.max_date}&schema=${schema}`,
         {
           method: "DELETE",
         },
@@ -332,7 +337,7 @@ export default function Reconcile() {
         return;
       }
       const insertTxnsRes = await fetch(
-        `${API_URL}/insert_txns/?from_table=${selectedStatement?.label}_joined&to_table=${TXNS_TABLE}`,
+        `${API_URL}/insert_txns/?from_table=${selectedStatement?.label}_joined&to_table=${TXNS_TABLE}&schema=${schema}`,
         {
           method: "POST",
         },
