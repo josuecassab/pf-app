@@ -1,5 +1,7 @@
-import { useState } from "react";
+import * as Linking from "expo-linking";
+import { useEffect, useState } from "react";
 import {
+  ActivityIndicator,
   Alert,
   Keyboard,
   KeyboardAvoidingView,
@@ -14,12 +16,15 @@ import {
 import { useAuth } from "../contexts/AuthContext";
 import { useTheme } from "../contexts/ThemeContext";
 
+const redirectTo = Linking.createURL("");
+console.log(redirectTo);
+
 const API_URL = process.env.EXPO_PUBLIC_API_URL;
 
 export default function Auth() {
   const { theme } = useTheme();
   const { setSession } = useAuth();
-  const [mode, setMode] = useState("signIn"); // "signIn" | "signUp"
+  const [mode, setMode] = useState("signIn"); // "signIn" | "signUp" | "resetPassword" | "changePassword"
   const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -27,6 +32,63 @@ export default function Auth() {
   const [usernameError, setUsernameError] = useState("");
   const [emailError, setEmailError] = useState("");
   const [passwordError, setPasswordError] = useState("");
+  const [accessToken, setAccessToken] = useState(null);
+  const [refreshToken, setRefreshToken] = useState(null);
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [newPasswordError, setNewPasswordError] = useState("");
+  const [confirmPasswordError, setConfirmPasswordError] = useState("");
+
+  const url = Linking.useLinkingURL();
+  console.log(url);
+  useEffect(() => {
+    if (!url) return;
+    try {
+      const { path, queryParams, hostname } = Linking.parse(url);
+      // Supabase (and many OAuth flows) put tokens in the URL fragment (#), not query (?).
+      // Linking.parse() only gives queryParams from the query string, so we must parse the fragment.
+      const hashIndex = url.indexOf("#");
+      const fragmentParams =
+        hashIndex >= 0
+          ? Object.fromEntries(
+              new URLSearchParams(url.slice(hashIndex + 1)).entries(),
+            )
+          : {};
+      const params = { ...queryParams, ...fragmentParams };
+      // For zerogasto://reset#... the parser treats "reset" as hostname, not path, so path is null.
+      const pathLower = (path || hostname || "")
+        .toLowerCase()
+        .replace(/^\/+/, "");
+      console.log("path", pathLower);
+      const accessToken = params.access_token ?? queryParams?.access_token;
+      const refreshToken = params.refresh_token ?? queryParams?.refresh_token;
+      const isResetPath =
+        pathLower === "reset" ||
+        pathLower === "/reset" ||
+        pathLower.endsWith("/reset") ||
+        (pathLower === "/" && !!accessToken);
+      console.log("isResetPath", isResetPath);
+      console.log("accessToken", accessToken);
+      if (isResetPath && accessToken) {
+        setAccessToken(accessToken);
+        setRefreshToken(refreshToken);
+        setMode("changePassword");
+      }
+      // Recovery / magic link: set session from URL tokens so user is signed in
+      // if (accessToken && (params.type === "recovery" || params.type === "magiclink")) {
+      //   setSession({
+      //     access_token: accessToken,
+      //     refresh_token: refreshToken || undefined,
+      //     user: params.user ? JSON.parse(decodeURIComponent(params.user)) : { email: params.email },
+      //   });
+      // }
+
+      console.log("accessToken", accessToken);
+      console.log("refreshToken", refreshToken);
+    } catch (_) {
+      // ignore parse errors
+    }
+  }, [url, setSession]);
 
   function validateUsername(username) {
     if (!username || !username.trim()) {
@@ -91,6 +153,100 @@ export default function Auth() {
     return true;
   }
 
+  function validateNewPassword(value) {
+    if (!value) {
+      setNewPasswordError("La contraseña es obligatoria");
+      return false;
+    }
+    if (value.length < 8) {
+      setNewPasswordError("Mínimo 8 caracteres");
+      return false;
+    }
+    if (!/[A-Z]/.test(value)) {
+      setNewPasswordError("Al menos una mayúscula");
+      return false;
+    }
+    if (!/[a-z]/.test(value)) {
+      setNewPasswordError("Al menos una minúscula");
+      return false;
+    }
+    if (!/[0-9]/.test(value)) {
+      setNewPasswordError("Al menos un número");
+      return false;
+    }
+    setNewPasswordError("");
+    return true;
+  }
+
+  function validateConfirmPassword(confirm) {
+    if (!confirm) {
+      setConfirmPasswordError("Confirma tu nueva contraseña");
+      return false;
+    }
+    if (confirm !== newPassword) {
+      setConfirmPasswordError("Las contraseñas no coinciden");
+      return false;
+    }
+    setConfirmPasswordError("");
+    return true;
+  }
+
+  async function submitChangePassword() {
+    const isNewValid = validateNewPassword(newPassword);
+    const isConfirmValid = validateConfirmPassword(confirmPassword);
+    if (!isNewValid || !isConfirmValid) return;
+    if (!accessToken || !refreshToken) {
+      Alert.alert("Error", "Enlace inválido o expirado. Solicita uno nuevo.");
+      setMode("signIn");
+      return;
+    }
+    setLoading(true);
+    try {
+      const res = await fetch(`${API_URL}/auth/reset_password`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          access_token: accessToken,
+          refresh_token: refreshToken,
+          new_password: newPassword,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        Alert.alert(
+          "Error",
+          data.detail ||
+            data.message ||
+            "No se pudo restablecer la contraseña.",
+        );
+        return;
+      }
+      Alert.alert(
+        "Contraseña actualizada",
+        "Ya puedes iniciar sesión con tu nueva contraseña.",
+        [
+          {
+            text: "OK",
+            onPress: () => {
+              setAccessToken(null);
+              setRefreshToken(null);
+              setNewPassword("");
+              setConfirmPassword("");
+              setMode("signIn");
+            },
+          },
+        ],
+      );
+    } catch (err) {
+      Alert.alert(
+        "Error",
+        err.message ?? "Error de conexión. Intenta de nuevo.",
+      );
+    } finally {
+      setLoading(false);
+    }
+  }
+
   async function signInWithEmail() {
     const isEmailValid = validateEmail(email);
     const isPasswordValid = validatePassword(password);
@@ -121,6 +277,46 @@ export default function Auth() {
       Alert.alert(
         "Error al iniciar sesión",
         err.message ?? "Error de conexión",
+      );
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function requestPasswordReset() {
+    const isEmailValid = validateEmail(email);
+    if (!isEmailValid) return;
+    setLoading(true);
+    try {
+      const res = await fetch(`${API_URL}/auth/forgot_password`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          email,
+          redirect_to: "zerogasto://reset",
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        Alert.alert(
+          "Error",
+          data.detail ||
+            data.message ||
+            "No se pudo enviar el correo de recuperación.",
+        );
+        return;
+      }
+      Alert.alert(
+        "Correo enviado",
+        "Si existe una cuenta con ese correo, recibirás un enlace para restablecer tu contraseña.",
+        [{ text: "OK", onPress: () => setMode("signIn") }],
+      );
+    } catch (err) {
+      Alert.alert(
+        "Error",
+        err.message ?? "Error de conexión. Intenta de nuevo.",
       );
     } finally {
       setLoading(false);
@@ -202,7 +398,83 @@ export default function Auth() {
             </Text>
 
             <View style={styles.inputContainer}>
-              {mode === "signUp" ? (
+              {mode === "changePassword" ? (
+                <>
+                  <Text
+                    style={[
+                      styles.modeLinkText,
+                      {
+                        color: theme.colors.text,
+                        textAlign: "center",
+                        marginBottom: 8,
+                      },
+                    ]}
+                  >
+                    Introduce tu nueva contraseña.
+                  </Text>
+                  <Text style={[styles.label, { color: theme.colors.text }]}>
+                    Nueva contraseña
+                  </Text>
+                  <TextInput
+                    style={[
+                      styles.input,
+                      {
+                        backgroundColor: theme.colors.surface,
+                        borderColor: newPasswordError
+                          ? theme.colors.error
+                          : theme.colors.border,
+                        color: theme.colors.text,
+                      },
+                    ]}
+                    onChangeText={(text) => {
+                      setNewPassword(text);
+                      if (newPasswordError) validateNewPassword(text);
+                    }}
+                    onBlur={() => validateNewPassword(newPassword)}
+                    value={newPassword}
+                    secureTextEntry
+                    placeholder="Nueva contraseña"
+                    placeholderTextColor={theme.colors.placeholder}
+                    autoCapitalize="none"
+                  />
+                  {newPasswordError ? (
+                    <Text style={styles.errorText}>{newPasswordError}</Text>
+                  ) : null}
+                  <Text style={[styles.label, { color: theme.colors.text }]}>
+                    Confirmar contraseña
+                  </Text>
+                  <TextInput
+                    style={[
+                      styles.input,
+                      {
+                        backgroundColor: theme.colors.surface,
+                        borderColor: confirmPasswordError
+                          ? theme.colors.error
+                          : theme.colors.border,
+                        color: theme.colors.text,
+                      },
+                    ]}
+                    onChangeText={(text) => {
+                      setConfirmPassword(text);
+                      if (confirmPasswordError)
+                        setConfirmPasswordError(
+                          text !== newPassword
+                            ? "Las contraseñas no coinciden"
+                            : "",
+                        );
+                    }}
+                    onBlur={() => validateConfirmPassword(confirmPassword)}
+                    value={confirmPassword}
+                    secureTextEntry
+                    placeholder="Confirmar contraseña"
+                    placeholderTextColor={theme.colors.placeholder}
+                    autoCapitalize="none"
+                  />
+                  {confirmPasswordError ? (
+                    <Text style={styles.errorText}>{confirmPasswordError}</Text>
+                  ) : null}
+                </>
+              ) : mode === "signUp" ? (
                 <>
                   <Text style={[styles.label, { color: theme.colors.text }]}>
                     Username
@@ -234,97 +506,231 @@ export default function Auth() {
                   ) : null}
                 </>
               ) : null}
-              <Text style={[styles.label, { color: theme.colors.text }]}>
-                Email
-              </Text>
-              <TextInput
-                style={[
-                  styles.input,
-                  {
-                    backgroundColor: theme.colors.surface,
-                    borderColor: emailError
-                      ? theme.colors.error
-                      : theme.colors.border,
-                    color: theme.colors.text,
-                  },
-                ]}
-                onChangeText={(text) => {
-                  setEmail(text);
-                  if (emailError) validateEmail(text);
-                }}
-                onBlur={() => validateEmail(email)}
-                value={email}
-                placeholder="email@address.com"
-                placeholderTextColor={theme.colors.placeholder}
-                autoCapitalize="none"
-                keyboardType="email-address"
-              />
-              {emailError ? (
-                <Text style={styles.errorText}>{emailError}</Text>
-              ) : null}
-              <Text style={[styles.label, { color: theme.colors.text }]}>
-                Password
-              </Text>
-              <TextInput
-                style={[
-                  styles.input,
-                  {
-                    backgroundColor: theme.colors.surface,
-                    borderColor: passwordError
-                      ? theme.colors.error
-                      : theme.colors.border,
-                    color: theme.colors.text,
-                  },
-                ]}
-                onChangeText={(text) => {
-                  setPassword(text);
-                  if (passwordError) validatePassword(text);
-                }}
-                onBlur={() => validatePassword(password)}
-                value={password}
-                secureTextEntry={true}
-                placeholder="Password"
-                placeholderTextColor={theme.colors.placeholder}
-                autoCapitalize="none"
-              />
-              {passwordError ? (
-                <Text style={styles.errorText}>{passwordError}</Text>
+              {mode !== "changePassword" ? (
+                <>
+                  <Text style={[styles.label, { color: theme.colors.text }]}>
+                    Email
+                  </Text>
+                  <TextInput
+                    style={[
+                      styles.input,
+                      {
+                        backgroundColor: theme.colors.surface,
+                        borderColor: emailError
+                          ? theme.colors.error
+                          : theme.colors.border,
+                        color: theme.colors.text,
+                      },
+                    ]}
+                    onChangeText={(text) => {
+                      setEmail(text);
+                      if (emailError) validateEmail(text);
+                    }}
+                    onBlur={() => validateEmail(email)}
+                    value={email}
+                    placeholder="email@address.com"
+                    placeholderTextColor={theme.colors.placeholder}
+                    autoCapitalize="none"
+                    keyboardType="email-address"
+                  />
+                  {emailError ? (
+                    <Text style={styles.errorText}>{emailError}</Text>
+                  ) : null}
+                  {mode !== "resetPassword" && mode !== "changePassword" ? (
+                    <>
+                      <Text
+                        style={[styles.label, { color: theme.colors.text }]}
+                      >
+                        Password
+                      </Text>
+                      <TextInput
+                        style={[
+                          styles.input,
+                          {
+                            backgroundColor: theme.colors.surface,
+                            borderColor: passwordError
+                              ? theme.colors.error
+                              : theme.colors.border,
+                            color: theme.colors.text,
+                          },
+                        ]}
+                        onChangeText={(text) => {
+                          setPassword(text);
+                          if (passwordError) validatePassword(text);
+                        }}
+                        onBlur={() => validatePassword(password)}
+                        value={password}
+                        secureTextEntry={true}
+                        placeholder="Password"
+                        placeholderTextColor={theme.colors.placeholder}
+                        autoCapitalize="none"
+                      />
+                      {passwordError ? (
+                        <Text style={styles.errorText}>{passwordError}</Text>
+                      ) : null}
+                    </>
+                  ) : null}
+                </>
               ) : null}
             </View>
             <View style={[styles.buttonContainer]}>
-              <Pressable
-                onPress={() => setMode(mode === "signIn" ? "signUp" : "signIn")}
-                style={styles.modeLinkWrap}
-              >
-                <Text
-                  style={[styles.modeLinkText, { color: theme.colors.text }]}
-                >
-                  {mode === "signIn"
-                    ? "Don't have an account? "
-                    : "Already have an account? "}
-                </Text>
-                <Text
-                  style={[styles.modeLinkText, { color: theme.colors.primary }]}
-                >
-                  {mode === "signIn" ? "Sign up" : "Sign in"}
-                </Text>
-              </Pressable>
-              <Pressable
-                style={({ pressed }) => [
-                  styles.button,
-                  { backgroundColor: theme.colors.primary },
-                  loading ? styles.buttonDisabled : null,
-                  pressed && !loading && styles.buttonPressed,
-                ]}
-                disabled={loading}
-                onPress={() =>
-                  mode === "signIn" ? signInWithEmail() : signUpWithEmail()
-                }
-              >
-                <Text style={styles.buttonText}>
-                  {mode === "signIn" ? "Sign in" : "Sign up"}
-                </Text>
-              </Pressable>
+              {mode === "changePassword" ? (
+                <>
+                  <Pressable
+                    onPress={() => {
+                      setMode("signIn");
+                      setAccessToken(null);
+                      setRefreshToken(null);
+                      setNewPassword("");
+                      setConfirmPassword("");
+                    }}
+                    style={styles.modeLinkWrap}
+                  >
+                    <Text
+                      style={[
+                        styles.modeLinkText,
+                        { color: theme.colors.text },
+                      ]}
+                    >
+                      Volver a{" "}
+                    </Text>
+                    <Text
+                      style={[
+                        styles.modeLinkText,
+                        { color: theme.colors.primary },
+                      ]}
+                    >
+                      Iniciar sesión
+                    </Text>
+                  </Pressable>
+                  <Pressable
+                    style={({ pressed }) => [
+                      styles.button,
+                      { backgroundColor: theme.colors.primary },
+                      loading ? styles.buttonDisabled : null,
+                      pressed && !loading && styles.buttonPressed,
+                    ]}
+                    disabled={loading}
+                    onPress={submitChangePassword}
+                  >
+                    <Text style={styles.buttonText}>Cambiar contraseña</Text>
+                  </Pressable>
+                </>
+              ) : mode === "resetPassword" ? (
+                <>
+                  <Text
+                    style={[
+                      styles.modeLinkText,
+                      {
+                        color: theme.colors.text,
+                        textAlign: "center",
+                        marginBottom: 8,
+                      },
+                    ]}
+                  >
+                    Ingresa tu correo y te enviaremos un enlace para restablecer
+                    tu contraseña.
+                  </Text>
+                  <Pressable
+                    onPress={() => setMode("signIn")}
+                    style={styles.modeLinkWrap}
+                  >
+                    <Text
+                      style={[
+                        styles.modeLinkText,
+                        { color: theme.colors.text },
+                      ]}
+                    >
+                      Volver a{" "}
+                    </Text>
+                    <Text
+                      style={[
+                        styles.modeLinkText,
+                        { color: theme.colors.primary },
+                      ]}
+                    >
+                      Iniciar sesión
+                    </Text>
+                  </Pressable>
+                  <Pressable
+                    style={({ pressed }) => [
+                      styles.button,
+                      { backgroundColor: theme.colors.primary },
+                      loading ? styles.buttonDisabled : null,
+                      pressed && !loading && styles.buttonPressed,
+                    ]}
+                    disabled={loading}
+                    onPress={requestPasswordReset}
+                  >
+                    <Text style={styles.buttonText}>
+                      Enviar enlace de recuperación
+                    </Text>
+                  </Pressable>
+                </>
+              ) : (
+                <>
+                  {mode === "signIn" ? (
+                    <Pressable
+                      onPress={() => setMode("resetPassword")}
+                      style={[styles.modeLinkWrap, { marginBottom: 4 }]}
+                    >
+                      <Text
+                        style={[
+                          styles.modeLinkText,
+                          { color: theme.colors.primary },
+                        ]}
+                      >
+                        ¿Olvidaste tu contraseña?
+                      </Text>
+                    </Pressable>
+                  ) : null}
+                  <Pressable
+                    onPress={() =>
+                      setMode(mode === "signIn" ? "signUp" : "signIn")
+                    }
+                    style={styles.modeLinkWrap}
+                  >
+                    <Text
+                      style={[
+                        styles.modeLinkText,
+                        { color: theme.colors.text },
+                      ]}
+                    >
+                      {mode === "signIn"
+                        ? "Don't have an account? "
+                        : "Already have an account? "}
+                    </Text>
+                    <Text
+                      style={[
+                        styles.modeLinkText,
+                        { color: theme.colors.primary },
+                      ]}
+                    >
+                      {mode === "signIn" ? "Sign up" : "Sign in"}
+                    </Text>
+                  </Pressable>
+                  <Pressable
+                    style={({ pressed }) => [
+                      styles.button,
+                      { backgroundColor: theme.colors.primary },
+                      loading ? styles.buttonDisabled : null,
+                      pressed && !loading && styles.buttonPressed,
+                    ]}
+                    disabled={loading}
+                    onPress={() =>
+                      mode === "signIn" ? signInWithEmail() : signUpWithEmail()
+                    }
+                  >
+                    {loading ? (
+                      <ActivityIndicator color="#ffffff" size="small" />
+                    ) : (
+                      <Text style={styles.buttonText}>
+                        {mode === "signIn" ? "Sign in" : "Sign up"}
+                      </Text>
+                    )}
+                  </Pressable>
+                </>
+              )}
             </View>
           </View>
         </View>
