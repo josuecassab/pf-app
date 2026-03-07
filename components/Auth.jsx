@@ -541,7 +541,7 @@ export default function Auth() {
                       <Text
                         style={[styles.label, { color: theme.colors.text }]}
                       >
-                        Password
+                        Contraseña
                       </Text>
                       <TextInput
                         style={[
@@ -561,7 +561,7 @@ export default function Auth() {
                         onBlur={() => validatePassword(password)}
                         value={password}
                         secureTextEntry={true}
-                        placeholder="Password"
+                        placeholder="Contraseña"
                         placeholderTextColor={theme.colors.placeholder}
                         autoCapitalize="none"
                       />
@@ -697,8 +697,8 @@ export default function Auth() {
                       ]}
                     >
                       {mode === "signIn"
-                        ? "Don't have an account? "
-                        : "Already have an account? "}
+                        ? "¿No tienes una cuenta? "
+                        : "¿Ya tienes una cuenta? "}
                     </Text>
                     <Text
                       style={[
@@ -706,7 +706,7 @@ export default function Auth() {
                         { color: theme.colors.primary },
                       ]}
                     >
-                      {mode === "signIn" ? "Sign up" : "Sign in"}
+                      {mode === "signIn" ? "Registrarse" : "Iniciar sesión"}
                     </Text>
                   </Pressable>
                   <Pressable
@@ -725,7 +725,7 @@ export default function Auth() {
                       <ActivityIndicator color="#ffffff" size="small" />
                     ) : (
                       <Text style={styles.buttonText}>
-                        {mode === "signIn" ? "Sign in" : "Sign up"}
+                        {mode === "signIn" ? "Iniciar sesión" : "Registrarse"}
                       </Text>
                     )}
                   </Pressable>
