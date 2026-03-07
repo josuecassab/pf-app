@@ -92,21 +92,21 @@ export default function Auth() {
 
   function validateUsername(username) {
     if (!username || !username.trim()) {
-      setUsernameError("Username is required");
+      setUsernameError("El nombre de usuario es obligatorio");
       return false;
     }
     const trimmed = username.trim();
     if (trimmed.length < 3) {
-      setUsernameError("Username must be at least 3 characters");
+      setUsernameError("El nombre de usuario debe tener al menos 3 caracteres");
       return false;
     }
     if (trimmed.length > 30) {
-      setUsernameError("Username must be 30 characters or less");
+      setUsernameError("El nombre de usuario debe tener 30 caracteres o menos");
       return false;
     }
     if (!/^[a-zA-Z0-9_]+$/.test(trimmed)) {
       setUsernameError(
-        "Username can only contain letters, numbers, and underscores",
+        "El nombre de usuario solo puede contener letras, números y guiones bajos",
       );
       return false;
     }
@@ -117,11 +117,11 @@ export default function Auth() {
   function validateEmail(email) {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!email) {
-      setEmailError("Email is required");
+      setEmailError("El correo es obligatorio");
       return false;
     }
     if (!emailRegex.test(email)) {
-      setEmailError("Please enter a valid email address");
+      setEmailError("Introduce una dirección de correo válida");
       return false;
     }
     setEmailError("");
@@ -130,23 +130,23 @@ export default function Auth() {
 
   function validatePassword(password) {
     if (!password) {
-      setPasswordError("Password is required");
+      setPasswordError("La contraseña es obligatoria");
       return false;
     }
     if (password.length < 8) {
-      setPasswordError("Password must be at least 8 characters");
+      setPasswordError("La contraseña debe tener al menos 8 caracteres");
       return false;
     }
     if (!/[A-Z]/.test(password)) {
-      setPasswordError("Password must contain at least one uppercase letter");
+      setPasswordError("La contraseña debe contener al menos una mayúscula");
       return false;
     }
     if (!/[a-z]/.test(password)) {
-      setPasswordError("Password must contain at least one lowercase letter");
+      setPasswordError("La contraseña debe contener al menos una minúscula");
       return false;
     }
     if (!/[0-9]/.test(password)) {
-      setPasswordError("Password must contain at least one number");
+      setPasswordError("La contraseña debe contener al menos un número");
       return false;
     }
     setPasswordError("");
@@ -265,7 +265,7 @@ export default function Auth() {
       if (!res.ok) {
         Alert.alert(
           "Error al iniciar sesión",
-          data.detail || data.message || "Error desconocido",
+          data.detail || data.message || "Error desconocido. Intenta de nuevo.",
         );
         return;
       }
@@ -276,7 +276,7 @@ export default function Auth() {
     } catch (err) {
       Alert.alert(
         "Error al iniciar sesión",
-        err.message ?? "Error de conexión",
+        err.message ?? "Error de conexión. Intenta de nuevo.",
       );
     } finally {
       setLoading(false);
@@ -335,14 +335,18 @@ export default function Auth() {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ email, password, username }),
+        body: JSON.stringify({
+          email,
+          password,
+          username: username.toLowerCase(),
+        }),
       });
       const data = await res.json();
 
       if (!res.ok) {
         Alert.alert(
           "Error al registrarse",
-          data.detail || data.message || "Error desconocido",
+          data.detail || data.message || "Error desconocido. Intenta de nuevo.",
         );
         return;
       }
@@ -365,7 +369,10 @@ export default function Auth() {
           console.log(data);
         });
     } catch (err) {
-      Alert.alert("Error al registrarse", err.message ?? "Error de conexión");
+      Alert.alert(
+        "Error al registrarse",
+        err.message ?? "Error de conexión. Intenta de nuevo.",
+      );
     } finally {
       setLoading(false);
     }
