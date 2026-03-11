@@ -26,6 +26,11 @@ import { useCategories } from "../hooks/useCategories";
 const API_URL = process.env.EXPO_PUBLIC_API_URL;
 const TXNS_TABLE = "txns";
 
+const BANK_LIST = [
+  { label: "Bancolombia", value: "bancolombia" },
+  { label: "Nubank", value: "nubank" },
+];
+
 export default function Reconcile() {
   const { theme } = useTheme();
   const { schema } = useAuth();
@@ -33,13 +38,14 @@ export default function Reconcile() {
   const [file, setFile] = useState(null);
   const [statements, setStatements] = useState([]);
   const [selectedStatement, setSelectedStatement] = useState(null);
+  const [selectedBank, setSelectedBank] = useState(BANK_LIST[0]);
   const [isLoading, setIsLoading] = useState(false);
   const [showReconcile, setShowReconcile] = useState(false);
 
   const fetchStatements = async () => {
     try {
       const data = await fetch(
-        `${API_URL}/list_statements?schema=${schema}`,
+        `${API_URL}/list_statements?schema=${schema}&banco=${selectedBank?.value}`,
       ).then((res) => res.json());
       const statements = data.map((item) => ({
         label: item.split("/").at(-1).split(".")[0],
@@ -74,11 +80,19 @@ export default function Reconcile() {
     refetch: refetchMatchedTxns,
   } = useInfiniteQuery({
     queryKey: ["matched_txns", `${selectedStatement?.label}_joined`],
-    queryFn: ({ pageParam }) =>
-      fetch(
+    queryFn: async ({ pageParam }) => {
+      const res = await fetch(
         `${API_URL}/reconcile_matched_txns/?table_name=${pageParam.table_name}&page=${pageParam.page}&limit=${pageParam.limit}&schema=${schema}`,
-      ).then((res) => res.json()),
-    enabled: !!selectedStatement?.label,
+      );
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(
+          body?.detail ?? body?.message ?? `Server error ${res.status}`,
+        );
+      }
+      return res.json();
+    },
+    enabled: !!selectedStatement?.label && showReconcile,
     initialPageParam: {
       table_name: selectedStatement?.label + "_joined",
       page: 0,
@@ -98,13 +112,12 @@ export default function Reconcile() {
         limit: lastPageParam.limit,
       };
     },
-    enabled: !!selectedStatement?.label,
     // staleTime: 1000 * 60 * 5,
     refetchOnWindowFocus: false,
     refetchOnReconnect: false,
     // refetchOnMount: false,
   });
-
+  console.log("matchedTxnsError:", matchedTxnsError);
   const {
     data: unmatchedTxns,
     error: unmatchedTxnsError,
@@ -115,11 +128,19 @@ export default function Reconcile() {
     refetch: refetchUnmatchedTxns,
   } = useInfiniteQuery({
     queryKey: ["unmatched_txns", selectedStatement?.label],
-    queryFn: ({ pageParam }) =>
-      fetch(
+    queryFn: async ({ pageParam }) => {
+      const res = await fetch(
         `${API_URL}/reconcile_unmatched_txns/?table_name=${selectedStatement.label}&page=${pageParam.page}&limit=${pageParam.limit}&schema=${schema}`,
-      ).then((res) => res.json()),
-    enabled: !!selectedStatement?.label,
+      );
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(
+          body?.detail ?? body?.message ?? `Server error ${res.status}`,
+        );
+      }
+      return res.json();
+    },
+    enabled: !!selectedStatement?.label && !matchedTxnsError,
     initialPageParam: { page: 0, limit: 100 },
     getNextPageParam: (lastPage, allPages, lastPageParam) => {
       if (
@@ -139,7 +160,7 @@ export default function Reconcile() {
 
   // Flatten all pages into a single array of transactions
   const flattenedMatchedTxns = useMemo(() => {
-    console.log("matchedTxns:", matchedTxns?.pages);
+    // console.log("matchedTxns:", matchedTxns?.pages);
     return matchedTxns?.pages?.flatMap((page) => page) ?? [];
   }, [matchedTxns]);
 
@@ -163,23 +184,22 @@ export default function Reconcile() {
       );
       return await response.json();
     },
-    enabled: !!selectedStatement?.label,
+    enabled: !!selectedStatement?.label && !matchedTxnsError,
   });
-
-  // if (isPending) return <Text>Loading...</Text>;
-
-  if (error) return <Text>An error has occurred: {error.message}</Text>;
 
   const handleUpload = async () => {
     if (!file) {
       return alert("Select a file first");
+    }
+    if (!selectedBank?.value) {
+      return alert("Select a bank first");
     }
     setIsLoading(true);
 
     try {
       // 1️⃣ Get signed URL from backend
       const res = await fetch(
-        `${API_URL}/generate_upload_url?filename=${encodeURIComponent(file.name)}&schema=${schema}`,
+        `${API_URL}/generate_upload_url?filename=${encodeURIComponent(selectedBank?.value + "/" + file.name)}&schema=${schema}`,
       );
       const { url } = await res.json();
       console.log("Uploading file:", file);
@@ -218,6 +238,7 @@ export default function Reconcile() {
               },
               body: JSON.stringify({
                 gcs_uri: "gs://" + gcsURI,
+                banco: selectedBank.value,
               }),
             },
           ).then((res) => res.json());
@@ -487,106 +508,79 @@ export default function Reconcile() {
             ]}
             onPress={pickDocument}
           >
-            <Text style={reconcileStyles.buttonText}>Seleccionar extracto</Text>
+            <Text
+              style={reconcileStyles.buttonText}
+              numberOfLines={1}
+              ellipsizeMode="middle"
+            >
+              {file ? file.name : "Seleccionar extracto"}
+            </Text>
           </Pressable>
 
           {file && (
             <>
-              <View
-                style={[
-                  reconcileStyles.fileInfo,
-                  {
-                    backgroundColor: theme.colors.surface,
-                    borderColor: theme.colors.border,
-                  },
-                ]}
-              >
-                <Text
-                  style={[
-                    reconcileStyles.fileLabel,
-                    { color: theme.colors.textSecondary },
+              <View style={reconcileStyles.bankAndUploadRow}>
+                <View style={reconcileStyles.bankDropdownWrapper}>
+                  <Dropdown
+                    style={[
+                      styles.dropdown,
+                      reconcileStyles.bankDropdown,
+                      { backgroundColor: theme.colors.inputBackground },
+                    ]}
+                    placeholderStyle={[
+                      styles.placeholderStyle,
+                      { color: theme.colors.placeholder },
+                    ]}
+                    selectedTextStyle={[
+                      styles.selectedTextStyle,
+                      { color: theme.colors.text },
+                    ]}
+                    inputSearchStyle={[
+                      styles.inputSearchStyle,
+                      { color: theme.colors.text },
+                    ]}
+                    iconStyle={styles.iconStyle}
+                    containerStyle={{
+                      backgroundColor: theme.colors.inputBackground,
+                      borderColor: theme.colors.border,
+                      borderRadius: 8,
+                    }}
+                    itemContainerStyle={{
+                      borderBottomColor: theme.colors.borderLight,
+                    }}
+                    itemTextStyle={{ color: theme.colors.text }}
+                    activeColor={theme.colors.border}
+                    data={BANK_LIST}
+                    maxHeight={300}
+                    labelField="label"
+                    valueField="value"
+                    placeholder="Seleccionar banco"
+                    value={selectedBank}
+                    onChange={(item) =>
+                      setSelectedBank({ label: item.label, value: item.value })
+                    }
+                  />
+                </View>
+                <Pressable
+                  style={({ pressed }) => [
+                    reconcileStyles.uploadButton,
+                    {
+                      backgroundColor: theme.colors.primary,
+                      alignSelf: "flex-end",
+                    },
+                    pressed && reconcileStyles.uploadButtonPressed,
                   ]}
+                  onPress={handleUpload}
                 >
-                  File Name:
-                </Text>
-                <Text
-                  style={[
-                    reconcileStyles.fileValue,
-                    { color: theme.colors.text },
-                  ]}
-                >
-                  {file.name}
-                </Text>
-
-                <Text
-                  style={[
-                    reconcileStyles.fileLabel,
-                    { color: theme.colors.textSecondary },
-                  ]}
-                >
-                  File Size:
-                </Text>
-                <Text
-                  style={[
-                    reconcileStyles.fileValue,
-                    { color: theme.colors.text },
-                  ]}
-                >
-                  {(file.size / 1024).toFixed(2)} KB
-                </Text>
-
-                <Text
-                  style={[
-                    reconcileStyles.fileLabel,
-                    { color: theme.colors.textSecondary },
-                  ]}
-                >
-                  URI:
-                </Text>
-                <Text
-                  style={[
-                    reconcileStyles.fileValue,
-                    { color: theme.colors.text },
-                  ]}
-                  numberOfLines={1}
-                  ellipsizeMode="middle"
-                >
-                  {file.uri}
-                </Text>
-
-                <Text
-                  style={[
-                    reconcileStyles.fileLabel,
-                    { color: theme.colors.textSecondary },
-                  ]}
-                >
-                  MIME Type:
-                </Text>
-                <Text
-                  style={[
-                    reconcileStyles.fileValue,
-                    { color: theme.colors.text },
-                  ]}
-                >
-                  {file.mimeType}
-                </Text>
+                  <Text style={reconcileStyles.uploadButtonText}>
+                    {isLoading ? (
+                      <ActivityIndicator size="small" color="#fff" />
+                    ) : (
+                      "Cargar archivo"
+                    )}
+                  </Text>
+                </Pressable>
               </View>
-              <Pressable
-                style={({ pressed }) => [
-                  reconcileStyles.uploadButton,
-                  { backgroundColor: theme.colors.primary },
-                  pressed && reconcileStyles.uploadButtonPressed,
-                ]}
-                onPress={handleUpload}
-              >
-                <Text style={reconcileStyles.uploadButtonText}>
-                  {isLoading ? (
-                    <ActivityIndicator size="small" color="#fff" />
-                  ) : (
-                    "Cargar archivo"
-                  )}
-                </Text>
-              </Pressable>
             </>
           )}
           <View style={reconcileStyles.dropdownRow}>
@@ -608,6 +602,16 @@ export default function Reconcile() {
                 { color: theme.colors.text },
               ]}
               iconStyle={styles.iconStyle}
+              containerStyle={{
+                backgroundColor: theme.colors.inputBackground,
+                borderColor: theme.colors.border,
+                borderRadius: 8,
+              }}
+              itemContainerStyle={{
+                borderBottomColor: theme.colors.borderLight,
+              }}
+              itemTextStyle={{ color: theme.colors.text }}
+              activeColor={theme.colors.border}
               data={statements}
               maxHeight={300}
               labelField="label"
@@ -641,13 +645,19 @@ export default function Reconcile() {
           showsHorizontalScrollIndicator={true}
           style={[
             reconcileStyles.scrollView,
-            { borderColor: theme.colors.border },
+            {
+              borderColor: theme.colors.border,
+              backgroundColor: theme.colors.card,
+            },
           ]}
         >
           <FlatList
             style={[
               reconcileStyles.flatList,
-              { borderColor: theme.colors.border },
+              {
+                borderColor: theme.colors.border,
+                backgroundColor: theme.colors.card,
+              },
             ]}
             keyExtractor={(item, index) => index}
             data={data}
@@ -721,7 +731,7 @@ export default function Reconcile() {
 
 const styles = StyleSheet.create({
   dropdown: {
-    borderRadius: 12,
+    borderRadius: 8,
     padding: 12,
     shadowColor: "#000",
     shadowOffset: {
@@ -742,19 +752,7 @@ const styles = StyleSheet.create({
   reconcileButtonText: {
     fontSize: 16,
     lineHeight: 16,
-  },
-  icon: {
-    marginRight: 5,
-  },
-  item: {
-    padding: 17,
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-  textItem: {
-    flex: 1,
-    fontSize: 16,
+    fontWeight: "600",
   },
   placeholderStyle: {
     fontSize: 16,
@@ -770,48 +768,12 @@ const styles = StyleSheet.create({
     height: 40,
     fontSize: 16,
   },
-  container: {
-    flex: 1,
-    backgroundColor: "#f5f5f5",
-  },
-  content: {
-    flex: 1,
-    padding: 20,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  title: {
-    fontSize: 16,
-    fontWeight: "bold",
-    marginBottom: 20,
-  },
-  fileInfo: {
-    marginTop: 30,
-    padding: 15,
-    backgroundColor: "white",
-    borderRadius: 10,
-    width: "100%",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  label: {
-    fontWeight: "bold",
-    marginTop: 10,
-    color: "#333",
-  },
-  value: {
-    marginTop: 2,
-    color: "#666",
-  },
 });
 
 const reconcileStyles = StyleSheet.create({
   container: {
     flex: 1,
-    paddingHorizontal: 20,
+    paddingHorizontal: 16,
     gap: 16,
   },
   headerSection: {
@@ -819,8 +781,10 @@ const reconcileStyles = StyleSheet.create({
     gap: 16,
   },
   title: {
-    fontSize: 36,
-    fontWeight: "600",
+    fontSize: 24,
+    fontWeight: "bold",
+    marginBottom: 8,
+    marginTop: 8,
   },
   section: {
     gap: 8,
@@ -831,10 +795,7 @@ const reconcileStyles = StyleSheet.create({
     borderRadius: 12,
     justifyContent: "center",
     shadowColor: "#000",
-    shadowOffset: {
-      width: 0,
-      height: 1,
-    },
+    shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.2,
     shadowRadius: 1.41,
     elevation: 2,
@@ -843,30 +804,42 @@ const reconcileStyles = StyleSheet.create({
     opacity: 0.8,
   },
   buttonText: {
-    color: "#ffffff",
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: "600",
+    color: "#ffffff",
   },
   fileInfo: {
     padding: 15,
-    borderRadius: 10,
+    borderRadius: 8,
     width: "100%",
     shadowColor: "#000",
-    shadowOffset: {
-      width: 0,
-      height: 1,
-    },
+    shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.1,
     shadowRadius: 1.41,
     elevation: 1,
     borderWidth: 1,
   },
   fileLabel: {
-    fontWeight: "bold",
+    fontWeight: "600",
     marginTop: 10,
   },
   fileValue: {
     marginTop: 2,
+  },
+  bankAndUploadRow: {
+    flexDirection: "row",
+    alignItems: "flex-end",
+    gap: 12,
+    marginTop: 12,
+  },
+  bankDropdownWrapper: {
+    flex: 1,
+    gap: 6,
+  },
+  bankDropdown: {
+    minHeight: 44,
+    borderRadius: 8,
+    paddingHorizontal: 12,
   },
   uploadButton: {
     paddingHorizontal: 16,
@@ -874,10 +847,7 @@ const reconcileStyles = StyleSheet.create({
     borderRadius: 12,
     alignSelf: "flex-start",
     shadowColor: "#000",
-    shadowOffset: {
-      width: 0,
-      height: 1,
-    },
+    shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.2,
     shadowRadius: 1.41,
     elevation: 2,
@@ -887,6 +857,7 @@ const reconcileStyles = StyleSheet.create({
   },
   uploadButtonText: {
     fontWeight: "600",
+    fontSize: 16,
     color: "#ffffff",
   },
   dropdownRow: {
@@ -898,13 +869,13 @@ const reconcileStyles = StyleSheet.create({
   },
   scrollView: {
     borderWidth: 1,
-    borderRadius: 16,
+    borderRadius: 8,
   },
   flatList: {
-    borderRadius: 16,
+    borderRadius: 8,
   },
   unmatchedSection: {
-    height: 160,
+    marginTop: 16,
   },
   sectionTitle: {
     fontWeight: "600",
@@ -914,16 +885,14 @@ const reconcileStyles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
+    marginTop: 16,
   },
   completeButton: {
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderRadius: 12,
     shadowColor: "#000",
-    shadowOffset: {
-      width: 0,
-      height: 1,
-    },
+    shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.2,
     shadowRadius: 1.41,
     elevation: 2,

@@ -104,9 +104,9 @@ export default function Auth() {
       setUsernameError("El nombre de usuario debe tener 30 caracteres o menos");
       return false;
     }
-    if (!/^[a-zA-Z0-9_]+$/.test(trimmed)) {
+    if (!/^[a-z0-9_]+$/.test(trimmed)) {
       setUsernameError(
-        "El nombre de usuario solo puede contener letras, números y guiones bajos",
+        "El nombre de usuario solo puede contener letras minúsculas, números y guiones bajos",
       );
       return false;
     }
