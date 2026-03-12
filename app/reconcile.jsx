@@ -45,7 +45,7 @@ export default function Reconcile() {
   const fetchStatements = async () => {
     try {
       const data = await fetch(
-        `${API_URL}/list_statements?schema=${schema}&banco=${selectedBank?.value}`,
+        `${API_URL}/list_statements?schema=${schema}&bank_name=${selectedBank?.value}`,
       ).then((res) => res.json());
       const statements = data.map((item) => ({
         label: item.split("/").at(-1).split(".")[0],
@@ -168,12 +168,13 @@ export default function Reconcile() {
     return unmatchedTxns?.pages?.flatMap((page) => page) ?? [];
   }, [unmatchedTxns]);
 
-  const columnsWidth = {
-    fecha: 98,
-    descripcion: 144,
-    valor: 112,
-    categoria: 112,
-    sub_categoria: 112,
+  // Table rendering — column widths from StyleSheet (same pattern as TxnTable)
+  const headerColumnStyle = {
+    Fecha: reconcileStyles.colFecha,
+    Descripcion: reconcileStyles.colDescripcion,
+    Valor: reconcileStyles.colValor,
+    Saldo: reconcileStyles.colSaldo,
+    Banco: reconcileStyles.colBanco,
   };
 
   const { isPending, error, data, isFetching } = useQuery({
@@ -398,11 +399,15 @@ export default function Reconcile() {
     return isNegative ? "-" + result : result;
   };
 
-  const renderHeaderCell = (label, width = 160) => (
+  const renderHeaderCell = (label) => (
     <View
       style={[
         reconcileStyles.headerCell,
-        { width, backgroundColor: theme.colors.surface },
+        headerColumnStyle[label],
+        {
+          backgroundColor: theme.colors.surface,
+          borderColor: theme.colors.border,
+        },
       ]}
     >
       <Text style={[reconcileStyles.headerText, { color: theme.colors.text }]}>
@@ -411,23 +416,25 @@ export default function Reconcile() {
     </View>
   );
 
-  const renderHeader = () => {
-    if (!columnsWidth) return null;
-    return (
-      <View style={reconcileStyles.row}>
-        {renderHeaderCell("Fecha", columnsWidth["fecha"])}
-        {renderHeaderCell("Descripcion", columnsWidth["descripcion"])}
-        {renderHeaderCell("Valor", columnsWidth["valor"])}
-        {renderHeaderCell("Saldo", columnsWidth["valor"])}
-      </View>
-    );
-  };
+  const renderHeader = () => (
+    <View style={reconcileStyles.row}>
+      {renderHeaderCell("Fecha")}
+      {renderHeaderCell("Descripcion")}
+      {renderHeaderCell("Valor")}
+      {renderHeaderCell("Saldo")}
+      {renderHeaderCell("Banco")}
+    </View>
+  );
 
-  const renderCell = (value, width) => (
+  const renderFechaCell = (value) => (
     <View
       style={[
         reconcileStyles.cell,
-        { width, borderColor: theme.colors.border },
+        reconcileStyles.colFecha,
+        {
+          borderColor: theme.colors.border,
+          backgroundColor: theme.colors.background,
+        },
       ]}
     >
       <Text style={[reconcileStyles.cellText, { color: theme.colors.text }]}>
@@ -436,13 +443,34 @@ export default function Reconcile() {
     </View>
   );
 
-  const renderNumberCell = (value, width) => {
+  const renderDescripcionCell = (value) => (
+    <View
+      style={[
+        reconcileStyles.cell,
+        reconcileStyles.colDescripcion,
+        {
+          borderColor: theme.colors.border,
+          backgroundColor: theme.colors.background,
+        },
+      ]}
+    >
+      <Text style={[reconcileStyles.cellText, { color: theme.colors.text }]}>
+        {value && value.toLowerCase()}
+      </Text>
+    </View>
+  );
+
+  const renderValorCell = (value) => {
     const formattedValue = formatSpanishNumber(value);
     return (
       <View
         style={[
           reconcileStyles.cell,
-          { width, borderColor: theme.colors.border },
+          reconcileStyles.colValor,
+          {
+            borderColor: theme.colors.border,
+            backgroundColor: theme.colors.background,
+          },
         ]}
       >
         <Text style={[reconcileStyles.cellText, { color: theme.colors.text }]}>
@@ -452,32 +480,56 @@ export default function Reconcile() {
     );
   };
 
-  const renderTextCell = (value, width) => {
+  const renderSaldoCell = (value) => {
+    const formattedValue = formatSpanishNumber(value);
     return (
       <View
         style={[
           reconcileStyles.cell,
-          { width, borderColor: theme.colors.border },
+          reconcileStyles.colSaldo,
+          {
+            borderColor: theme.colors.border,
+            backgroundColor: theme.colors.background,
+          },
         ]}
       >
         <Text style={[reconcileStyles.cellText, { color: theme.colors.text }]}>
-          {value && value.toLowerCase()}
+          {formattedValue}
         </Text>
       </View>
     );
   };
 
-  const renderTxns = (item) => {
-    if (!columnsWidth) return null;
-    return (
-      <View style={reconcileStyles.row}>
-        {renderCell(item.fecha, columnsWidth["fecha"])}
-        {renderTextCell(item?.descripcion, columnsWidth["descripcion"])}
-        {renderNumberCell(item.valor, columnsWidth["valor"])}
-        {renderNumberCell(item.saldo, columnsWidth["valor"])}
-      </View>
-    );
-  };
+  const renderBancoCell = (value) => (
+    <View
+      style={[
+        reconcileStyles.cell,
+        reconcileStyles.colBanco,
+        {
+          borderColor: theme.colors.border,
+          backgroundColor: theme.colors.background,
+        },
+      ]}
+    >
+      <Text
+        style={[reconcileStyles.cellText, { color: theme.colors.text }]}
+        numberOfLines={1}
+        ellipsizeMode="tail"
+      >
+        {value && value.toLowerCase()}
+      </Text>
+    </View>
+  );
+
+  const renderTxns = (item) => (
+    <View style={reconcileStyles.row}>
+      {renderFechaCell(item.fecha)}
+      {renderDescripcionCell(item?.descripcion)}
+      {renderValorCell(item.valor)}
+      {renderSaldoCell(item.saldo)}
+      {renderBancoCell(item?.banco)}
+    </View>
+  );
 
   const renderFooter = () => {
     if (!isFetching) return null;
@@ -903,6 +955,11 @@ const reconcileStyles = StyleSheet.create({
   row: {
     flexDirection: "row",
   },
+  colFecha: { width: 98 },
+  colDescripcion: { width: 144 },
+  colValor: { width: 112 },
+  colSaldo: { width: 112 },
+  colBanco: { width: 80 },
   headerCell: {
     borderBottomWidth: 1,
     borderRightWidth: 1,

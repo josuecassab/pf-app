@@ -378,28 +378,19 @@ export default function Auth() {
     }
   }
 
-  return (
-    <KeyboardAvoidingView
-      behavior={Platform.OS === "ios" ? "padding" : "height"}
-      style={[
-        styles.container,
-        { backgroundColor: theme.colors.background, flex: 1 },
-      ]}
-    >
-      <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-        <View
-          style={{
-            flex: 1,
-            justifyContent: "space-between",
-            // alignItems: "center",
-          }}
-        >
-          <View
-            style={[
-              styles.formContainer,
-              { backgroundColor: theme.colors.background },
-            ]}
-          >
+  const wrapperStyle = {
+    flex: 1,
+    justifyContent: "space-between",
+  };
+
+  const formContent = (
+    <>
+      <View
+        style={[
+          styles.formContainer,
+          { backgroundColor: theme.colors.background },
+        ]}
+      >
             <Text style={[styles.title, { color: theme.colors.text }]}>
               ZeroGasto
             </Text>
@@ -431,6 +422,7 @@ export default function Auth() {
                           ? theme.colors.error
                           : theme.colors.border,
                         color: theme.colors.text,
+                        caretColor: theme.colors.text,
                       },
                     ]}
                     onChangeText={(text) => {
@@ -459,6 +451,7 @@ export default function Auth() {
                           ? theme.colors.error
                           : theme.colors.border,
                         color: theme.colors.text,
+                        caretColor: theme.colors.text,
                       },
                     ]}
                     onChangeText={(text) => {
@@ -495,6 +488,7 @@ export default function Auth() {
                           ? theme.colors.error
                           : theme.colors.border,
                         color: theme.colors.text,
+                        caretColor: theme.colors.text,
                       },
                     ]}
                     onChangeText={(text) => {
@@ -527,6 +521,7 @@ export default function Auth() {
                           ? theme.colors.error
                           : theme.colors.border,
                         color: theme.colors.text,
+                        caretColor: theme.colors.text,
                       },
                     ]}
                     onChangeText={(text) => {
@@ -559,6 +554,7 @@ export default function Auth() {
                               ? theme.colors.error
                               : theme.colors.border,
                             color: theme.colors.text,
+                            caretColor: theme.colors.text,
                           },
                         ]}
                         onChangeText={(text) => {
@@ -740,8 +736,24 @@ export default function Auth() {
               )}
             </View>
           </View>
-        </View>
-      </TouchableWithoutFeedback>
+      </>
+  );
+
+  return (
+    <KeyboardAvoidingView
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
+      style={[
+        styles.container,
+        { backgroundColor: theme.colors.background, flex: 1 },
+      ]}
+    >
+      {Platform.OS === "web" ? (
+        <View style={wrapperStyle}>{formContent}</View>
+      ) : (
+        <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+          <View style={wrapperStyle}>{formContent}</View>
+        </TouchableWithoutFeedback>
+      )}
     </KeyboardAvoidingView>
   );
 }
