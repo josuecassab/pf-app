@@ -1,10 +1,12 @@
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
+import DateTimePicker from "@react-native-community/datetimepicker";
 import { useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
   FlatList,
+  Modal,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -74,6 +76,7 @@ export default function TxnTable({
   const [filterBank, setFilterBank] = useState(null);
   const [filterDate, setFilterDate] = useState(null);
   const [filterValue, setFilterValue] = useState(null);
+  const [fechaModal, setFechaModal] = useState(null);
 
   const allSubcategories = useMemo(
     () =>
@@ -160,6 +163,52 @@ export default function TxnTable({
       }
     } catch (error) {
       console.error("Failed to update transactions:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const parseTxnFecha = (fecha) => {
+    if (!fecha) return new Date();
+    const str = String(fecha).trim();
+    const m = str.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (m) {
+      return new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+    }
+    const d = new Date(str);
+    return Number.isNaN(d.getTime()) ? new Date() : d;
+  };
+
+  const updateTxnDate = async (id, date) => {
+    const fecha = date.toLocaleDateString("en-CA");
+    setLoading(true);
+    try {
+      const res = await fetch(
+        `${API_URL}/update_txn_date/?table=${table}&schema=${schema}`,
+        {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ id, fecha }),
+        },
+      );
+      const result = await res.json();
+      console.log("Update fecha result:", result);
+      if (!res.ok) return;
+      queryClient.setQueryData(queryKey, (oldData) => {
+        if (!oldData?.pages) return oldData;
+        return {
+          ...oldData,
+          pages: oldData.pages.map((page) =>
+            Array.isArray(page)
+              ? page.map((txn) => (txn.id === id ? { ...txn, fecha } : txn))
+              : page,
+          ),
+        };
+      });
+    } catch (error) {
+      console.error("Failed to update transaction date:", error);
     } finally {
       setLoading(false);
     }
@@ -281,8 +330,8 @@ export default function TxnTable({
     </View>
   );
 
-  const renderCell = (value) => (
-    <View
+  const renderFechaCell = (id, value) => (
+    <TouchableHighlight
       style={[
         styles.cell,
         styles.colFecha,
@@ -291,11 +340,15 @@ export default function TxnTable({
           backgroundColor: theme.colors.background,
         },
       ]}
+      onPress={() => setFechaModal({ id, date: parseTxnFecha(value) })}
+      underlayColor={theme.colors.inputBackground}
     >
-      <Text style={[styles.cellText, { color: theme.colors.text }]}>
-        {value}
-      </Text>
-    </View>
+      <View>
+        <Text style={[styles.cellText, { color: theme.colors.text }]}>
+          {value}
+        </Text>
+      </View>
+    </TouchableHighlight>
   );
 
   const renderValorCell = (value) => {
@@ -429,7 +482,7 @@ export default function TxnTable({
 
   const renderTxns = (item) => (
     <View style={styles.row}>
-      {renderCell(item.fecha)}
+      {renderFechaCell(item.id, item.fecha)}
       {renderDescripcionCell(item?.descripcion)}
       {renderValorCell(item.valor)}
       {renderCategoryCell(item.id, item.categoria)}
@@ -483,6 +536,89 @@ export default function TxnTable({
 
   return (
     <>
+      <Modal
+        visible={fechaModal != null}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setFechaModal(null)}
+      >
+        <Pressable
+          style={[
+            styles.dateModalOverlay,
+            { backgroundColor: theme.colors.modalOverlay },
+          ]}
+          onPress={() => setFechaModal(null)}
+        >
+          <Pressable
+            style={[
+              styles.dateModalSheet,
+              {
+                backgroundColor: theme.colors.background,
+                borderColor: theme.colors.border,
+              },
+            ]}
+            onPress={() => {}}
+          >
+            <Text style={[styles.dateModalTitle, { color: theme.colors.text }]}>
+              Fecha
+            </Text>
+            {fechaModal != null && (
+              <View style={styles.dateModalPickerWrap}>
+                <DateTimePicker
+                  value={fechaModal.date}
+                  mode="date"
+                  // display={Platform.OS === "ios" ? "spinner" : "calendar"}
+                  display="default"
+                  onChange={(_, selectedDate) => {
+                    if (selectedDate) {
+                      setFechaModal((prev) =>
+                        prev ? { ...prev, date: selectedDate } : null,
+                      );
+                    }
+                  }}
+                  textColor={theme.colors.text}
+                  themeVariant={theme.isDark ? "dark" : "light"}
+                  accentColor={theme.colors.primary}
+                />
+              </View>
+            )}
+            <View
+              style={[
+                styles.dateModalActions,
+                { borderTopColor: theme.colors.border },
+              ]}
+            >
+              <Pressable
+                onPress={() => setFechaModal(null)}
+                style={({ pressed }) => [
+                  styles.dateModalButton,
+                  { opacity: pressed ? 0.7 : 1 },
+                ]}
+              >
+                <Text style={{ color: theme.colors.text }}>Cancelar</Text>
+              </Pressable>
+              <Pressable
+                onPress={async () => {
+                  if (!fechaModal) return;
+                  const { id, date } = fechaModal;
+                  setFechaModal(null);
+                  await updateTxnDate(id, date);
+                }}
+                style={({ pressed }) => [
+                  styles.dateModalButton,
+                  { opacity: pressed ? 0.7 : 1 },
+                ]}
+              >
+                <Text
+                  style={{ color: theme.colors.primary, fontWeight: "600" }}
+                >
+                  Guardar
+                </Text>
+              </Pressable>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
       <MyCustomModal
         labels={categories}
         value={selectedCategory.value}
@@ -811,5 +947,36 @@ const styles = StyleSheet.create({
   },
   filterChipIcon: {
     marginLeft: 2,
+  },
+  dateModalOverlay: {
+    flex: 1,
+    justifyContent: "center",
+    padding: 24,
+  },
+  dateModalSheet: {
+    borderRadius: 16,
+    borderWidth: 1,
+    padding: 16,
+  },
+  dateModalTitle: {
+    fontSize: 16,
+    fontWeight: "600",
+    marginBottom: 8,
+    textAlign: "center",
+  },
+  dateModalPickerWrap: {
+    width: "100%",
+    alignItems: "center",
+  },
+  dateModalActions: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginTop: 12,
+    paddingTop: 8,
+    borderTopWidth: StyleSheet.hairlineWidth,
+  },
+  dateModalButton: {
+    paddingVertical: 10,
+    paddingHorizontal: 8,
   },
 });

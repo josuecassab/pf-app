@@ -4,7 +4,7 @@ import {
   useQueryClient,
 } from "@tanstack/react-query";
 import * as DocumentPicker from "expo-document-picker";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -31,6 +31,20 @@ const BANK_LIST = [
   { label: "Nubank", value: "nubank" },
 ];
 
+/** gs://bucket/<bank_slug>/file.xlsx → bank option from BANK_LIST, if known */
+function bankFromStatementGcsUri(uri) {
+  if (!uri || typeof uri !== "string") return null;
+  const match = uri.match(/^gs:\/\/[^/]+\/([^/]+)\//);
+  if (!match) return null;
+  const slug = match[1];
+  return BANK_LIST.find((b) => b.value === slug) ?? null;
+}
+
+const DROPDOWN_SELECTED_TEXT_PROPS = {
+  numberOfLines: 1,
+  ellipsizeMode: "tail",
+};
+
 export default function Reconcile() {
   const { theme } = useTheme();
   const { schema } = useAuth();
@@ -42,26 +56,32 @@ export default function Reconcile() {
   const [isLoading, setIsLoading] = useState(false);
   const [showReconcile, setShowReconcile] = useState(false);
 
-  const fetchStatements = async () => {
+  const fetchStatements = useCallback(async () => {
+    if (!schema || !selectedBank?.value) return;
     try {
       const data = await fetch(
-        `${API_URL}/list_statements?schema=${schema}&bank_name=${selectedBank?.value}`,
+        `${API_URL}/list_statements?schema=${schema}&bank_name=${selectedBank.value}`,
       ).then((res) => res.json());
+      console.log("data:", data);
       const statements = data.map((item) => ({
         label: item.split("/").at(-1).split(".")[0],
         value: item,
       }));
-      console.log(statements);
       setStatements(statements);
-      setSelectedStatement(statements[0]);
+      setSelectedStatement((prev) => {
+        if (prev && statements.some((s) => s.value === prev.value)) {
+          return prev;
+        }
+        return statements[0] ?? null;
+      });
     } catch (error) {
       console.error("Error fetching statements:", error);
     }
-  };
+  }, [schema, selectedBank?.value]);
 
   useEffect(() => {
     fetchStatements();
-  }, []);
+  }, [fetchStatements]);
 
   const {
     isPending: categoriesIsPending,
@@ -130,7 +150,7 @@ export default function Reconcile() {
     queryKey: ["unmatched_txns", selectedStatement?.label],
     queryFn: async ({ pageParam }) => {
       const res = await fetch(
-        `${API_URL}/reconcile_unmatched_txns/?table_name=${selectedStatement.label}&page=${pageParam.page}&limit=${pageParam.limit}&schema=${schema}`,
+        `${API_URL}/reconcile_unmatched_txns/?table_name=${selectedStatement.label}&page=${pageParam.page}&limit=${pageParam.limit}&schema=${schema}&bank_name=${selectedBank.value}`,
       );
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
@@ -200,7 +220,7 @@ export default function Reconcile() {
     try {
       // 1️⃣ Get signed URL from backend
       const res = await fetch(
-        `${API_URL}/generate_upload_url?filename=${encodeURIComponent(selectedBank?.value + "/" + file.name)}&schema=${schema}`,
+        `${API_URL}/generate_upload_url?bank_name=${selectedBank?.value}&filename=${encodeURIComponent(file.name)}&schema=${schema}`,
       );
       const { url } = await res.json();
       console.log("Uploading file:", file);
@@ -239,7 +259,7 @@ export default function Reconcile() {
               },
               body: JSON.stringify({
                 gcs_uri: "gs://" + gcsURI,
-                banco: selectedBank.value,
+                bank_name: selectedBank.value,
               }),
             },
           ).then((res) => res.json());
@@ -288,9 +308,13 @@ export default function Reconcile() {
       Alert.alert("Error", "Por favor selecciona un extracto primero");
       return;
     }
+    if (!selectedBank?.value) {
+      Alert.alert("Error", "Por favor selecciona el banco del extracto");
+      return;
+    }
     try {
       const res = await fetch(
-        `${API_URL}/create_statement_joined?table_name=${selectedStatement.label}&schema=${schema}`,
+        `${API_URL}/create_statement_joined?table_name=${selectedStatement.label}&schema=${schema}&bank_name=${selectedBank.value}`,
         {
           method: "POST",
         },
@@ -347,7 +371,7 @@ export default function Reconcile() {
         return;
       }
       const deleteTxnsRes = await fetch(
-        `${API_URL}/delete_txns/?table=${TXNS_TABLE}&from_date=${minMaxDatesResponse.min_date}&to_date=${minMaxDatesResponse.max_date}&schema=${schema}`,
+        `${API_URL}/delete_txns/?table=${TXNS_TABLE}&bank_name=${selectedBank.value}&from_date=${minMaxDatesResponse.min_date}&to_date=${minMaxDatesResponse.max_date}&schema=${schema}`,
         {
           method: "DELETE",
         },
@@ -570,76 +594,51 @@ export default function Reconcile() {
           </Pressable>
 
           {file && (
-            <>
-              <View style={reconcileStyles.bankAndUploadRow}>
-                <View style={reconcileStyles.bankDropdownWrapper}>
-                  <Dropdown
-                    style={[
-                      styles.dropdown,
-                      reconcileStyles.bankDropdown,
-                      { backgroundColor: theme.colors.inputBackground },
-                    ]}
-                    placeholderStyle={[
-                      styles.placeholderStyle,
-                      { color: theme.colors.placeholder },
-                    ]}
-                    selectedTextStyle={[
-                      styles.selectedTextStyle,
-                      { color: theme.colors.text },
-                    ]}
-                    inputSearchStyle={[
-                      styles.inputSearchStyle,
-                      { color: theme.colors.text },
-                    ]}
-                    iconStyle={styles.iconStyle}
-                    containerStyle={{
-                      backgroundColor: theme.colors.inputBackground,
-                      borderColor: theme.colors.border,
-                      borderRadius: 8,
-                    }}
-                    itemContainerStyle={{
-                      borderBottomColor: theme.colors.borderLight,
-                    }}
-                    itemTextStyle={{ color: theme.colors.text }}
-                    activeColor={theme.colors.border}
-                    data={BANK_LIST}
-                    maxHeight={300}
-                    labelField="label"
-                    valueField="value"
-                    placeholder="Seleccionar banco"
-                    value={selectedBank}
-                    onChange={(item) =>
-                      setSelectedBank({ label: item.label, value: item.value })
-                    }
-                  />
-                </View>
-                <Pressable
-                  style={({ pressed }) => [
-                    reconcileStyles.uploadButton,
-                    {
-                      backgroundColor: theme.colors.primary,
-                      alignSelf: "flex-end",
-                    },
-                    pressed && reconcileStyles.uploadButtonPressed,
-                  ]}
-                  onPress={handleUpload}
-                >
-                  <Text style={reconcileStyles.uploadButtonText}>
-                    {isLoading ? (
-                      <ActivityIndicator size="small" color="#fff" />
-                    ) : (
-                      "Cargar archivo"
-                    )}
-                  </Text>
-                </Pressable>
-              </View>
-            </>
+            <View style={reconcileStyles.bankAndUploadRow}>
+              <Text
+                style={[
+                  reconcileStyles.uploadBankHint,
+                  { color: theme.colors.textSecondary },
+                ]}
+              >
+                Se cargará en{" "}
+                <Text style={{ color: theme.colors.text, fontWeight: "600" }}>
+                  {selectedBank?.label ?? "—"}
+                </Text>
+                . Cambia «Banco» abajo si no corresponde.
+              </Text>
+              <Pressable
+                style={({ pressed }) => [
+                  reconcileStyles.uploadButton,
+                  {
+                    backgroundColor: theme.colors.primary,
+                    alignSelf: "flex-end",
+                  },
+                  pressed && reconcileStyles.uploadButtonPressed,
+                ]}
+                onPress={handleUpload}
+              >
+                <Text style={reconcileStyles.uploadButtonText}>
+                  {isLoading ? (
+                    <ActivityIndicator size="small" color="#fff" />
+                  ) : (
+                    "Cargar archivo"
+                  )}
+                </Text>
+              </Pressable>
+            </View>
           )}
-          <View style={reconcileStyles.dropdownRow}>
+          <View style={reconcileStyles.selectBlock}>
+            <Text
+              style={[reconcileStyles.fieldLabel, { color: theme.colors.text }]}
+            >
+              Banco del extracto
+            </Text>
             <Dropdown
               style={[
                 styles.dropdown,
-                { flex: 1, backgroundColor: theme.colors.inputBackground },
+                reconcileStyles.bankDropdown,
+                { backgroundColor: theme.colors.inputBackground },
               ]}
               placeholderStyle={[
                 styles.placeholderStyle,
@@ -664,24 +663,82 @@ export default function Reconcile() {
               }}
               itemTextStyle={{ color: theme.colors.text }}
               activeColor={theme.colors.border}
-              data={statements}
+              selectedTextProps={DROPDOWN_SELECTED_TEXT_PROPS}
+              data={BANK_LIST}
               maxHeight={300}
               labelField="label"
               valueField="value"
-              placeholder="Seleccionar extracto"
-              value={selectedStatement}
+              placeholder="Seleccionar banco"
+              value={selectedBank}
               onChange={(item) => {
-                setSelectedStatement({
-                  label: item.label,
-                  value: item.value,
-                });
+                setSelectedBank({ label: item.label, value: item.value });
                 setShowReconcile(false);
               }}
             />
+          </View>
+          <View style={reconcileStyles.statementRow}>
+            <View style={reconcileStyles.statementDropdownWrap}>
+              <Text
+                style={[
+                  reconcileStyles.fieldLabel,
+                  { color: theme.colors.text },
+                ]}
+              >
+                Extracto
+              </Text>
+              <Dropdown
+                style={[
+                  styles.dropdown,
+                  { backgroundColor: theme.colors.inputBackground },
+                ]}
+                placeholderStyle={[
+                  styles.placeholderStyle,
+                  { color: theme.colors.placeholder },
+                ]}
+                selectedTextStyle={[
+                  styles.selectedTextStyle,
+                  { color: theme.colors.text },
+                ]}
+                inputSearchStyle={[
+                  styles.inputSearchStyle,
+                  { color: theme.colors.text },
+                ]}
+                iconStyle={styles.iconStyle}
+                containerStyle={{
+                  backgroundColor: theme.colors.inputBackground,
+                  borderColor: theme.colors.border,
+                  borderRadius: 8,
+                }}
+                itemContainerStyle={{
+                  borderBottomColor: theme.colors.borderLight,
+                }}
+                itemTextStyle={{ color: theme.colors.text }}
+                activeColor={theme.colors.border}
+                selectedTextProps={DROPDOWN_SELECTED_TEXT_PROPS}
+                data={statements}
+                maxHeight={300}
+                labelField="label"
+                valueField="value"
+                placeholder="Seleccionar extracto"
+                value={selectedStatement}
+                onChange={(item) => {
+                  setSelectedStatement({
+                    label: item.label,
+                    value: item.value,
+                  });
+                  const bank = bankFromStatementGcsUri(item.value);
+                  if (bank) {
+                    setSelectedBank(bank);
+                  }
+                  setShowReconcile(false);
+                }}
+              />
+            </View>
             <Pressable
               onPress={reconcile}
               style={({ pressed }) => [
                 styles.reconcileButton,
+                reconcileStyles.reconcileButtonAligned,
                 { backgroundColor: theme.colors.primary },
                 pressed && reconcileStyles.reconcileButtonPressed,
               ]}
@@ -884,9 +941,31 @@ const reconcileStyles = StyleSheet.create({
     gap: 12,
     marginTop: 12,
   },
-  bankDropdownWrapper: {
+  uploadBankHint: {
+    flex: 1,
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  selectBlock: {
+    marginTop: 12,
+    gap: 6,
+  },
+  fieldLabel: {
+    fontSize: 13,
+    fontWeight: "600",
+  },
+  statementRow: {
+    flexDirection: "row",
+    gap: 8,
+    alignItems: "flex-end",
+    marginTop: 12,
+  },
+  statementDropdownWrap: {
     flex: 1,
     gap: 6,
+  },
+  reconcileButtonAligned: {
+    marginBottom: 2,
   },
   bankDropdown: {
     minHeight: 44,
@@ -911,10 +990,6 @@ const reconcileStyles = StyleSheet.create({
     fontWeight: "600",
     fontSize: 16,
     color: "#ffffff",
-  },
-  dropdownRow: {
-    flexDirection: "row",
-    gap: 8,
   },
   reconcileButtonPressed: {
     opacity: 0.8,
