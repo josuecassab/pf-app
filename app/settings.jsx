@@ -40,7 +40,10 @@ export default function Settings() {
           <Switch
             value={theme.isDark}
             onValueChange={theme.toggleTheme}
-            trackColor={{ false: theme.colors.border, true: theme.colors.primary }}
+            trackColor={{
+              false: theme.colors.border,
+              true: theme.colors.primary,
+            }}
             thumbColor={theme.isDark ? "#ffffff" : "#f4f3f4"}
           />
         </View>

@@ -3,7 +3,7 @@ import Feather from "@expo/vector-icons/Feather";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import SegmentedControl from "@react-native-segmented-control/segmented-control";
 import { useQueryClient } from "@tanstack/react-query";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -18,23 +18,104 @@ import {
   TouchableWithoutFeedback,
   View,
 } from "react-native";
-import CurrencyInput from "react-native-currency-input";
 import { Dropdown } from "react-native-element-dropdown";
 import {
   GestureHandlerRootView,
   ScrollView as GHScrollView,
 } from "react-native-gesture-handler";
-import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
-import SwipeableCategoryItem from "../components/SwipeableCategoryItem";
+import {
+  SafeAreaProvider,
+  SafeAreaView,
+  useSafeAreaInsets,
+} from "react-native-safe-area-context";
 import { useAuth } from "../contexts/AuthContext";
 import { useTheme } from "../contexts/ThemeContext";
+import { useBanks } from "../hooks/useBanks";
 import { useCategories } from "../hooks/useCategories";
+import SwipeableCategoryItem from "./SwipeableCategoryItem";
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL;
-const BANK_LIST = [
-  { label: "Bancolombia", value: "bancolombia" },
-  { label: "Nubank", value: "nubank" },
-];
+const EMPTY_BANK_LIST = [];
+
+function escapeRegExp(string) {
+  return string.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function inferSeparatorsFromIntl(languageTag) {
+  const opts = {
+    useGrouping: true,
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  };
+  const nf = new Intl.NumberFormat(languageTag, opts);
+  if (typeof nf.formatToParts === "function") {
+    const parts = nf.formatToParts(1234567.89);
+    return {
+      decimal: parts.find((p) => p.type === "decimal")?.value ?? ".",
+      group: parts.find((p) => p.type === "group")?.value ?? ",",
+    };
+  }
+  const formatted = nf.format(1234567.89);
+  const decMatch = formatted.match(/(\D)(\d{2})$/u);
+  const decimal = decMatch?.[1] ?? ".";
+  const intWithGroups = decMatch ? formatted.slice(0, -3) : formatted;
+  const groupMatch = intWithGroups.match(/\D/u);
+  const group = groupMatch?.[0] ?? (decimal === "," ? "." : ",");
+  return { decimal, group };
+}
+
+/** Locale used for separators (no expo-localization native module required). */
+function resolveNumberFormatLocaleTag() {
+  try {
+    return Intl.NumberFormat().resolvedOptions().locale;
+  } catch {
+    return undefined;
+  }
+}
+
+function getAmountFormattingConfig() {
+  return inferSeparatorsFromIntl(resolveNumberFormatLocaleTag());
+}
+
+function parseLocalizedAmount(display, decimal, group) {
+  if (display == null || String(display).trim() === "") return NaN;
+  const noGroup = String(display).replace(
+    new RegExp(escapeRegExp(group), "g"),
+    "",
+  );
+  const normalized = noGroup.replace(
+    new RegExp(escapeRegExp(decimal), "g"),
+    ".",
+  );
+  const n = parseFloat(normalized);
+  return Number.isFinite(n) ? n : NaN;
+}
+
+/** Western 3-digit groups using the OS grouping character (matches iOS/Android number prefs). */
+function formatIntDigitsWithGroupSeparators(intDigitString, groupSep) {
+  const digits = intDigitString.replace(/\D/g, "");
+  if (!digits) return "";
+  const n = parseInt(digits, 10);
+  if (!Number.isFinite(n)) return "";
+  const core = String(n);
+  if (core.length <= 3) return core;
+  const parts = [];
+  let rest = core;
+  while (rest.length > 3) {
+    parts.unshift(rest.slice(-3));
+    rest = rest.slice(0, -3);
+  }
+  if (rest) parts.unshift(rest);
+  return parts.join(groupSep);
+}
+
+function formatFullAmount(num, decimal, group) {
+  if (!Number.isFinite(num)) return "";
+  const s = Math.abs(num).toFixed(2);
+  const [intStr, fracStr] = s.split(".");
+  const intFmt = formatIntDigitsWithGroupSeparators(intStr, group);
+  return intFmt + decimal + fracStr;
+}
 
 export default function Input() {
   const queryClient = useQueryClient();
@@ -55,20 +136,43 @@ export default function Input() {
   const [updatingCategory, setUpdatingCategory] = useState(null);
   const [isSending, setIsSending] = useState(false);
   const [filteredCategories, setFilteredCategories] = useState([]);
-  const [selectedBank, setSelectedBank] = useState(BANK_LIST[0]);
+  const [showBankModal, setShowBankModal] = useState(false);
+  const [visibleInputBank, setVisibleInputBank] = useState(false);
+  const [inputBank, setInputBank] = useState("");
+  const [selectedBank, setSelectedBank] = useState(null);
+  const [updatingBank, setUpdatingBank] = useState(null);
   const { session, schema } = useAuth();
 
   const { theme } = useTheme();
+  const insets = useSafeAreaInsets();
+  // NativeTabs (expo-router) does not provide @react-navigation/bottom-tabs context.
+  const tabBarHeight =
+    Platform.OS === "ios" ? 49 + insets.bottom : 56 + insets.bottom;
+
+  const amountSeparators = useMemo(() => getAmountFormattingConfig(), []);
 
   const { isPending, error, data, isFetching } = useCategories();
+  const { data: banksData } = useBanks();
+  const bankList = Array.isArray(banksData) ? banksData : EMPTY_BANK_LIST;
 
-  console.log(session);
+  console.log(value);
 
   useEffect(() => {
     if (data) {
       setCategories(data);
     }
   }, [data]);
+
+  useEffect(() => {
+    if (!bankList.length) {
+      setSelectedBank(null);
+      return;
+    }
+    setSelectedBank((prev) => {
+      if (prev && bankList.some((b) => b.value === prev.value)) return prev;
+      return bankList[0];
+    });
+  }, [bankList]);
 
   const onChange = (event, selectedDate) => {
     const currentDate = selectedDate;
@@ -81,21 +185,67 @@ export default function Input() {
     setShow(true);
   };
 
-  const handleValueChange = (text) => {
-    // Only allow decimal numbers (digits and one decimal point)
-    // const decimalRegex = /^\d*\.?\d*$/;
-    // if (decimalRegex.test(text)) {
-    //   setValue(text);
-    // }
-    setValue(text);
-  };
+  const handleAmountChangeText = useCallback(
+    (text) => {
+      const { decimal, group } = amountSeparators;
+      const cleaned = text.replace(new RegExp(escapeRegExp(group), "g"), "");
+      const parts = cleaned.split(decimal);
+      const intDigits = (parts[0] ?? "").replace(/\D/g, "");
+      const fracPart = (parts[1] ?? "").replace(/\D/g, "").slice(0, 2);
+      const hasDecimal = parts.length > 1;
+
+      let intDisplay = "";
+      if (intDigits === "") {
+        intDisplay = hasDecimal ? "0" : "";
+      } else {
+        intDisplay = formatIntDigitsWithGroupSeparators(intDigits, group);
+      }
+
+      let next = intDisplay;
+      if (hasDecimal) {
+        next += decimal + fracPart;
+      }
+      setValue(next);
+    },
+    [amountSeparators],
+  );
+
+  const handleAmountBlur = useCallback(() => {
+    setValue((prev) => {
+      const n = parseLocalizedAmount(
+        prev,
+        amountSeparators.decimal,
+        amountSeparators.group,
+      );
+      if (Number.isNaN(n)) return prev;
+      return formatFullAmount(
+        n,
+        amountSeparators.decimal,
+        amountSeparators.group,
+      );
+    });
+  }, [amountSeparators]);
 
   const submitTxn = async () => {
     setIsSending(true);
     const txn = {};
     // Format date in local timezone as YYYY-MM-DD (using 'en-CA' locale for ISO format)
     txn.fecha = date.toLocaleDateString("en-CA");
-    txn.valor = txtType === 0 ? parseFloat(value) : -1 * parseFloat(value);
+    const parsedAmount = parseLocalizedAmount(
+      value,
+      amountSeparators.decimal,
+      amountSeparators.group,
+    );
+    if (Number.isNaN(parsedAmount)) {
+      Alert.alert(
+        "Error de validación",
+        "Por favor ingrese un valor numérico válido",
+      );
+      setIsSending(false);
+      return;
+    }
+    txn.valor = txtType === 0 ? parsedAmount : -1 * parsedAmount;
+    console.log(txn.valor);
     if (selectedCategory?.value) {
       txn.id_categoria = selectedCategory.value;
     } else {
@@ -106,20 +256,23 @@ export default function Input() {
     txn.id_subcategoria = selectedSubcategory?.value
       ? selectedSubcategory.value
       : null;
-    txn.banco = selectedBank.value;
+    if (selectedBank?.label) {
+      txn.banco = selectedBank.label;
+    } else {
+      Alert.alert("Error de validación", "Por favor seleccione un banco");
+      setIsSending(false);
+      return;
+    }
 
     console.log(txn);
     try {
-      const res = await fetch(
-        `${API_URL}/insert_txn/?schema=${schema}`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify(txn),
+      const res = await fetch(`${API_URL}/insert_txn/?schema=${schema}`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
         },
-      );
+        body: JSON.stringify(txn),
+      });
 
       const data = await res.json();
       console.log(data);
@@ -140,8 +293,83 @@ export default function Input() {
     }
   };
 
-  const dismissKeyboard = () => {
-    Keyboard.dismiss();
+  const addBank = async () => {
+    const label = inputBank.trim();
+    if (label === "") return;
+    try {
+      const res = await fetch(
+        `${API_URL}/insert_bank/?schema=${schema}&name=${encodeURIComponent(label)}`,
+        { method: "POST" },
+      );
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        Alert.alert(
+          "Error agregando el banco",
+          data.message || JSON.stringify(data),
+        );
+        return;
+      }
+      await queryClient.invalidateQueries({ queryKey: ["banks"] });
+      setInputBank("");
+      setVisibleInputBank(false);
+      if (data?.value != null) {
+        setSelectedBank({
+          label: data.label ?? data.name ?? label,
+          value: data.value,
+        });
+      }
+    } catch (error) {
+      console.error("Error adding bank:", error);
+      Alert.alert("Error agregando el banco", error.message);
+    }
+  };
+
+  const deleteBank = async (bankValue) => {
+    try {
+      const res = await fetch(
+        `${API_URL}/delete_bank/?id=${bankValue}&schema=${schema}`,
+        {
+          method: "DELETE",
+        },
+      );
+      const result = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        Alert.alert(
+          "Error eliminando el banco",
+          result.message || JSON.stringify(result),
+        );
+        return;
+      }
+      await queryClient.invalidateQueries({ queryKey: ["banks"] });
+    } catch (error) {
+      console.error("Error deleting bank:", error);
+      Alert.alert("Error eliminando el banco", error.message);
+    }
+  };
+
+  const updateBank = async (value, newLabel) => {
+    setUpdatingBank(value);
+    try {
+      const res = await fetch(
+        `${API_URL}/update_bank/?value=${value}&name=${encodeURIComponent(newLabel)}&schema=${schema}`,
+        {
+          method: "PUT",
+        },
+      );
+      const result = await res.json();
+      if (!res.ok) {
+        Alert.alert(
+          "Error actualizando el banco",
+          result.message || JSON.stringify(result),
+        );
+        return;
+      }
+      await queryClient.invalidateQueries({ queryKey: ["banks"] });
+    } catch (error) {
+      console.error("Error actualizando el banco:", error);
+    } finally {
+      setUpdatingBank(null);
+    }
   };
 
   const addCategory = async () => {
@@ -348,12 +576,7 @@ export default function Input() {
         style={[{ flex: 1 }, { backgroundColor: theme.colors.background }]}
         edges={["left", "right"]}
       >
-        {/* <ScrollView`
-          keyboardShouldPersistTaps="handled"
-          contentContainerStyle={{ flexGrow: 1 }}
-          showsVerticalScrollIndicator={false}
-        > */}
-        <TouchableWithoutFeedback onPress={dismissKeyboard}>
+        <TouchableWithoutFeedback onPress={() => Keyboard.dismiss()}>
           <View
             style={[
               {
@@ -391,7 +614,7 @@ export default function Input() {
               <Text style={[styles.labelText, { color: theme.colors.text }]}>
                 Valor
               </Text>
-              <CurrencyInput
+              <TextInput
                 style={[
                   styles.currencyInput,
                   {
@@ -404,24 +627,12 @@ export default function Input() {
                   },
                 ]}
                 value={value}
-                onChangeValue={handleValueChange}
-                delimiter="."
-                separator=","
-                precision={2}
-                minValue={0}
-                keyboardType="number-pad"
+                onChangeText={handleAmountChangeText}
+                onBlur={handleAmountBlur}
+                keyboardType="decimal-pad"
                 placeholder="ingresa el valor"
                 placeholderTextColor={theme.colors.placeholder}
               />
-              {/* <TextInput
-              style={styles.currencyInput}
-              placeholder="Ingresa el valor"
-              placeholderTextColor="black"
-              inputMode="decimal"
-              keyboardType="decimal-pad"
-              value={value}
-              onChangeText={handleValueChange}
-            /> */}
             </View>
             <View style={styles.containerStyle}>
               <Text style={[styles.labelText, { color: theme.colors.text }]}>
@@ -811,10 +1022,23 @@ export default function Input() {
                 </KeyboardAvoidingView>
               </Modal>
             </View>
-            <View style={styles.containerStyle}>
-              <Text style={[styles.labelText, { color: theme.colors.text }]}>
-                Banco
-              </Text>
+            <View style={[styles.containerStyle, { gap: 16 }]}>
+              <View style={styles.categoryHeader}>
+                <Text
+                  style={[styles.categoryLabel, { color: theme.colors.text }]}
+                >
+                  Banco
+                </Text>
+                <Pressable
+                  style={({ pressed }) => [
+                    styles.editButton,
+                    pressed && styles.editButtonPressed,
+                  ]}
+                  onPress={() => setShowBankModal(true)}
+                >
+                  <Feather name="edit" size={20} color={theme.colors.text} />
+                </Pressable>
+              </View>
               <Dropdown
                 style={[
                   styles.dropdown,
@@ -852,17 +1076,127 @@ export default function Input() {
                   textAlign: "center",
                 }}
                 activeColor={theme.colors.primary + "20"}
-                data={BANK_LIST}
-                // maxHeight={220}
+                data={bankList}
                 labelField="label"
                 valueField="value"
-                placeholder="Seleccionar categoria"
+                placeholder="Seleccionar banco"
                 searchPlaceholder="Buscar..."
                 value={selectedBank?.value}
                 onChange={(item) => {
                   setSelectedBank(item);
                 }}
               />
+              <Modal
+                transparent={false}
+                animationType="slide"
+                visible={showBankModal}
+              >
+                <KeyboardAvoidingView
+                  behavior={Platform.OS === "ios" ? "padding" : "height"}
+                  style={{ flex: 1 }}
+                >
+                  <SafeAreaProvider>
+                    <SafeAreaView
+                      style={[
+                        { flex: 1 },
+                        { backgroundColor: theme.colors.background },
+                      ]}
+                    >
+                      <View style={styles.modalHeader}>
+                        <Pressable
+                          onPress={() => {
+                            setShowBankModal(false);
+                            setVisibleInputBank(false);
+                            setInputBank("");
+                          }}
+                          style={styles.iconButton}
+                        >
+                          {({ pressed }) => (
+                            <AntDesign
+                              name="close"
+                              size={24}
+                              color={
+                                pressed
+                                  ? theme.colors.textSecondary
+                                  : theme.colors.text
+                              }
+                            />
+                          )}
+                        </Pressable>
+                        <Text
+                          style={[
+                            styles.modalTitle,
+                            { color: theme.colors.text },
+                          ]}
+                        >
+                          Bancos
+                        </Text>
+                        <Pressable
+                          onPress={() => setVisibleInputBank(!visibleInputBank)}
+                          style={styles.iconButton}
+                        >
+                          {({ pressed }) => (
+                            <AntDesign
+                              name={visibleInputBank ? "close" : "plus"}
+                              size={24}
+                              color={
+                                pressed
+                                  ? theme.colors.textSecondary
+                                  : theme.colors.text
+                              }
+                            />
+                          )}
+                        </Pressable>
+                      </View>
+                      {visibleInputBank && (
+                        <View style={styles.inputRow}>
+                          <TextInput
+                            style={[
+                              styles.categoryInput,
+                              {
+                                backgroundColor: theme.colors.surface,
+                                borderColor: theme.colors.border,
+                                color: theme.colors.text,
+                              },
+                            ]}
+                            placeholder="Nuevo banco"
+                            placeholderTextColor={theme.colors.placeholder}
+                            value={inputBank}
+                            onChangeText={setInputBank}
+                          />
+                          <Pressable
+                            style={({ pressed }) => [
+                              styles.addButton,
+                              { backgroundColor: theme.colors.primary },
+                              pressed && styles.addButtonPressed,
+                            ]}
+                            onPress={() => addBank()}
+                          >
+                            <Text style={styles.addButtonText}>Agregar</Text>
+                          </Pressable>
+                        </View>
+                      )}
+                      <GestureHandlerRootView style={{ flex: 1 }}>
+                        <GHScrollView>
+                          {bankList.map((b) => (
+                            <SwipeableCategoryItem
+                              key={b.value}
+                              cat={b}
+                              onDelete={deleteBank}
+                              onEdit={(value, newLabel) =>
+                                updateBank(value, newLabel)
+                              }
+                              isLoading={updatingBank === b.value}
+                              emptyNameMessage="El nombre del banco no puede estar vacío."
+                              renameConfirmMessage="¿Está seguro que desea cambiar el nombre del banco?"
+                            />
+                          ))}
+                        </GHScrollView>
+                      </GestureHandlerRootView>
+                    </SafeAreaView>
+                  </SafeAreaProvider>
+                </KeyboardAvoidingView>
+              </Modal>
             </View>
             <View style={styles.containerStyle}>
               <Pressable
@@ -884,7 +1218,6 @@ export default function Input() {
             </View>
           </View>
         </TouchableWithoutFeedback>
-        {/* </ScrollView> */}
       </SafeAreaView>
     </KeyboardAvoidingView>
   );

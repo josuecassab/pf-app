@@ -31,6 +31,10 @@ module.exports = {
     },
     plugins: [
       ...(base.expo.plugins ?? []),
+      '@react-native-community/datetimepicker',
+      'expo-font',
+      'expo-image',
+      'expo-web-browser',
       './plugins/withIosProjectVersion.js',
     ],
   },

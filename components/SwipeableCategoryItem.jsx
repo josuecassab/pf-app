@@ -28,6 +28,9 @@ export default function SwipeableCategoryItem({
   onDelete,
   onEdit,
   isLoading = false,
+  emptyNameMessage = "El nombre de la categoría no puede estar vacío.",
+  renameConfirmTitle = "Cambiar nombre",
+  renameConfirmMessage = "Está seguro que desea cambiar el nombre de la categoría?",
 }) {
   const { theme } = useTheme();
   const pressed = useSharedValue(false);
@@ -103,32 +106,23 @@ export default function SwipeableCategoryItem({
             ]}
             onPress={() => {
               if (categoryLabel.trim() === "") {
-                Alert.alert(
-                  "Error",
-                  "El nombre de la categoría no puede estar vacío.",
-                );
+                Alert.alert("Error", emptyNameMessage);
                 return;
               }
               console.log(categoryLabel);
-              Alert.alert(
-                "Cambiar nombre",
-                "Está seguro que desea cambiar el nombre de la categoría?",
-                [
-                  {
-                    text: "No",
+              Alert.alert(renameConfirmTitle, renameConfirmMessage, [
+                { text: "No" },
+                {
+                  text: "Si",
+                  onPress: () => {
+                    onEdit(cat.value, categoryLabel, parentId);
+                    setIsEditing(false);
+                    position.value = 0;
+                    pressed.value = false;
+                    setCategoryLabel("");
                   },
-                  {
-                    text: "Si",
-                    onPress: () => {
-                      onEdit(cat.value, categoryLabel, parentId);
-                      setIsEditing(false);
-                      position.value = 0;
-                      pressed.value = false;
-                      setCategoryLabel("");
-                    },
-                  },
-                ],
-              );
+                },
+              ]);
             }}
           >
             <Octicons name="check" size={22} color="#ffffff" />

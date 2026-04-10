@@ -7,7 +7,6 @@
     "icon": "./assets/images/zerogasto.png",
     "scheme": "zerogasto",
     "userInterfaceStyle": "dark",
-    "newArchEnabled": true,
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.josuecassab.zerogasto",
@@ -20,7 +19,6 @@
         "backgroundImage": "./assets/images/android-icon-background.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
-      "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
       "package": "com.anonymous.zerogasto"
     },

@@ -1,6 +1,5 @@
-import { Ionicons } from "@expo/vector-icons";
-import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { NativeTabs } from "expo-router/unstable-native-tabs";
 import { ActivityIndicator, View } from "react-native";
 import "react-native-url-polyfill/auto";
 
@@ -8,61 +7,59 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import Auth from "../components/Auth";
 import { AuthProvider, useAuth } from "../contexts/AuthContext";
 import { ThemeProvider, useTheme } from "../contexts/ThemeContext";
+import { useBanks } from "../hooks/useBanks";
 import { useCategories } from "../hooks/useCategories";
-import HomeScreen from "./index";
-import Reconcile from "./reconcile";
-import Settings from "./settings";
-import Summary from "./summary";
-import Txns from "./txns";
 
-const Tab = createBottomTabNavigator();
 const queryClient = new QueryClient();
 
 function TabNavigator() {
   const { theme } = useTheme();
-  // Prefetch global categories so they're cached for reconcile, txns, input
   useCategories();
+  useBanks();
 
   return (
-    <Tab.Navigator
-      initialRouteName="Agregar"
-      screenOptions={({ route }) => ({
-        headerShown: false,
-        tabBarIcon: ({ focused, color, size }) => {
-          let iconName;
-
-          if (route.name === "Inicio") {
-            iconName = focused ? "home" : "home-outline";
-          } else if (route.name === "Resumen") {
-            iconName = focused ? "grid" : "grid-outline";
-          } else if (route.name === "Transaccion") {
-            iconName = focused ? "list" : "list-outline";
-          } else if (route.name === "Agregar") {
-            iconName = focused ? "add-circle" : "add-circle-outline";
-          } else if (route.name === "Conciliar") {
-            iconName = focused ? "receipt" : "receipt-outline";
-          } else if (route.name === "Configuracion") {
-            iconName = focused ? "settings" : "settings-outline";
-          } else {
-            iconName = "ellipse";
-          }
-
-          return <Ionicons name={iconName} size={size} color={color} />;
-        },
-        tabBarActiveTintColor: theme.colors.tabBarActive,
-        tabBarInactiveTintColor: theme.colors.tabBarInactive,
-        tabBarStyle: {
-          backgroundColor: theme.colors.surface,
-          borderTopColor: theme.colors.border,
-        },
-      })}
+    <NativeTabs
+      initialRouteName="index"
+      backgroundColor={theme.colors.surface}
+      tintColor={theme.colors.tabBarActive}
+      iconColor={{
+        default: theme.colors.tabBarInactive,
+        selected: theme.colors.tabBarActive,
+      }}
     >
-      <Tab.Screen name="Agregar" component={HomeScreen} />
-      <Tab.Screen name="Resumen" component={Summary} />
-      <Tab.Screen name="Transaccion" component={Txns} />
-      <Tab.Screen name="Conciliar" component={Reconcile} />
-      <Tab.Screen name="Configuracion" component={Settings} />
-    </Tab.Navigator>
+      <NativeTabs.Trigger name="summary">
+        <NativeTabs.Trigger.Label>Resumen</NativeTabs.Trigger.Label>
+        <NativeTabs.Trigger.Icon
+          sf={{ default: "square.grid.2x2", selected: "square.grid.2x2.fill" }}
+          md="grid_view"
+        />
+      </NativeTabs.Trigger>
+      <NativeTabs.Trigger name="txns">
+        <NativeTabs.Trigger.Label>Transacción</NativeTabs.Trigger.Label>
+        <NativeTabs.Trigger.Icon sf="list.bullet" md="list" />
+      </NativeTabs.Trigger>
+      <NativeTabs.Trigger name="index">
+        <NativeTabs.Trigger.Label>Agregar</NativeTabs.Trigger.Label>
+        <NativeTabs.Trigger.Icon
+          sf={{ default: "plus.circle", selected: "plus.circle.fill" }}
+          md="add_circle_outline"
+        />
+      </NativeTabs.Trigger>
+      <NativeTabs.Trigger name="reconcile">
+        <NativeTabs.Trigger.Label>Conciliar</NativeTabs.Trigger.Label>
+        <NativeTabs.Trigger.Icon
+          sf={{ default: "doc.text", selected: "doc.text.fill" }}
+          md="receipt_long"
+        />
+      </NativeTabs.Trigger>
+      <NativeTabs.Trigger name="settings">
+        <NativeTabs.Trigger.Label>Configuración</NativeTabs.Trigger.Label>
+        <NativeTabs.Trigger.Icon
+          sf={{ default: "gearshape", selected: "gearshape.fill" }}
+          md="settings"
+        />
+      </NativeTabs.Trigger>
+    </NativeTabs>
   );
 }
 
@@ -96,7 +93,7 @@ function RootNavigator() {
   );
 }
 
-export default function MyTabs() {
+export default function RootLayout() {
   return (
     <AuthProvider>
       <RootNavigator />

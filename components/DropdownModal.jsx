@@ -7,6 +7,7 @@ import {
   Pressable,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from "react-native";
 import CurrencyInput from "react-native-currency-input";
@@ -37,6 +38,10 @@ export default function DropdownModal({
   // For type="currency": filter by value
   currencyValue,
   onCurrencyValueChange,
+  // For type="text": free-text filter (e.g. description)
+  textValue,
+  onTextValueChange,
+  textPlaceholder = "Filtrar…",
   // Custom content when no dropdown data
   children,
 }) {
@@ -191,8 +196,29 @@ export default function DropdownModal({
                     placeholderTextColor={theme.colors.placeholder}
                   />
                 </View>
-              ) : type === "dropdown" ? (
+              ) : type === "text" ? (
+                <View style={styles.currencyContainer}>
+                  <TextInput
+                    style={[
+                      styles.currencyInput,
+                      {
+                        backgroundColor: theme.colors.inputBackground,
+                        color: theme.colors.text,
+                        borderColor: theme.colors.border,
+                        textAlign: "left",
+                      },
+                    ]}
+                    value={textValue ?? ""}
+                    onChangeText={onTextValueChange}
+                    placeholder={textPlaceholder}
+                    placeholderTextColor={theme.colors.placeholder}
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                  />
+                </View>
+              ) : type === "dropdown" && showDropdown ? (
                 <Dropdown
+                  key={String(title)}
                   data={data}
                   value={value}
                   onChange={onChange}
@@ -240,6 +266,10 @@ export default function DropdownModal({
                   activeColor={theme.colors.primary + "20"}
                   {...dropdownProps}
                 />
+              ) : type === "dropdown" ? (
+                <Text style={[styles.emptyBodyText, { color: theme.colors.text }]}>
+                  Sin opciones para esta columna.
+                </Text>
               ) : (
                 <View style={styles.pickerContainer}>
                   <View style={styles.pickerColumn}>
@@ -328,6 +358,11 @@ const styles = StyleSheet.create({
   },
   body: {
     paddingVertical: 8,
+  },
+  emptyBodyText: {
+    fontSize: 16,
+    textAlign: "center",
+    paddingVertical: 16,
   },
   dropdown: {
     height: 48,

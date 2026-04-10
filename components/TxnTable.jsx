@@ -5,6 +5,7 @@ import { useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  Dimensions,
   FlatList,
   Modal,
   Pressable,
@@ -24,6 +25,15 @@ const BANK_LIST = [
   { label: "Bancolombia", value: "bancolombia" },
   { label: "Nubank", value: "nubank" },
 ];
+
+/** Sentinel for header filters: rows with null/empty categoría, subcategoría o banco. */
+const TXN_FILTER_NULL_VALUE = "__txn_filter_null__";
+const TXN_FILTER_NULL_OPTION = {
+  label: "null",
+  value: TXN_FILTER_NULL_VALUE,
+};
+
+const txnFieldIsEmpty = (v) => v == null || String(v).trim() === "";
 
 const formatSpanishNumber = (num) => {
   const isNegative = num < 0;
@@ -57,6 +67,9 @@ export default function TxnTable({
   isPending,
   queryKey,
   refetch,
+  /** When true, table height follows row content (capped by shrinkMaxHeight so FlatList can scroll and load more). */
+  shrinkToContent = false,
+  shrinkMaxHeight,
 }) {
   const { theme } = useTheme();
   const { schema } = useAuth();
@@ -76,7 +89,14 @@ export default function TxnTable({
   const [filterBank, setFilterBank] = useState(null);
   const [filterDate, setFilterDate] = useState(null);
   const [filterValue, setFilterValue] = useState(null);
+  const [filterDescripcion, setFilterDescripcion] = useState("");
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [selectedTxnIds, setSelectedTxnIds] = useState({});
   const [fechaModal, setFechaModal] = useState(null);
+  /** Vertical viewport for FlatList when table is in a flex parent (horizontal ScrollView needs explicit height). */
+  const [scrollViewportH, setScrollViewportH] = useState(0);
+  /** Full scrollable content height when shrinkToContent (FlatList onContentSizeChange). */
+  const [listFullContentH, setListFullContentH] = useState(0);
 
   const allSubcategories = useMemo(
     () =>
@@ -86,6 +106,95 @@ export default function TxnTable({
     [categories],
   );
 
+  /** Options for header filters: only values that appear in loaded transactions. */
+  const tableTxnFilterCategories = useMemo(() => {
+    const cats = categories || [];
+    const seen = new Map();
+    for (const t of txns || []) {
+      const name = t.categoria;
+      if (name == null || String(name).trim() === "") continue;
+      const key = String(name).toLowerCase();
+      if (seen.has(key)) continue;
+      const def =
+        cats.find((c) => c.label === name) ??
+        cats.find(
+          (c) =>
+            c.label?.toLowerCase() === String(name).toLowerCase(),
+        );
+      seen.set(
+        key,
+        def ? { ...def } : { label: String(name), value: String(name) },
+      );
+    }
+    const rows = txns || [];
+    const hasNull = rows.some((t) => txnFieldIsEmpty(t.categoria));
+    const sorted = Array.from(seen.values()).sort((a, b) =>
+      String(a.label).localeCompare(String(b.label), "es"),
+    );
+    return hasNull ? [TXN_FILTER_NULL_OPTION, ...sorted] : sorted;
+  }, [txns, categories]);
+
+  const tableTxnFilterSubcategories = useMemo(() => {
+    const subs = allSubcategories;
+    const seen = new Map();
+    for (const t of txns || []) {
+      const sub = t.sub_categoria;
+      if (sub == null || String(sub).trim() === "") continue;
+      const key = String(sub).toLowerCase();
+      if (seen.has(key)) continue;
+      const match = subs.find(
+        (s) =>
+          String(s.label ?? "").toLowerCase() === key ||
+          String(s.value ?? "").toLowerCase() === key,
+      );
+      seen.set(
+        key,
+        match ?? { label: String(sub), value: String(sub) },
+      );
+    }
+    const rows = txns || [];
+    const hasNull = rows.some((t) => txnFieldIsEmpty(t.sub_categoria));
+    const sorted = Array.from(seen.values()).sort((a, b) =>
+      String(a.label).localeCompare(String(b.label), "es"),
+    );
+    return hasNull ? [TXN_FILTER_NULL_OPTION, ...sorted] : sorted;
+  }, [txns, allSubcategories]);
+
+  const tableTxnFilterBanks = useMemo(() => {
+    const seen = new Map();
+    for (const t of txns || []) {
+      const b = t.banco;
+      if (b == null || String(b).trim() === "") continue;
+      const key = String(b).toLowerCase();
+      if (seen.has(key)) continue;
+      const match = BANK_LIST.find(
+        (x) =>
+          String(x.label ?? "").toLowerCase() === key ||
+          String(x.value ?? "").toLowerCase() === key,
+      );
+      seen.set(key, match ?? { label: String(b), value: String(b) });
+    }
+    const rows = txns || [];
+    const hasNull = rows.some((t) => txnFieldIsEmpty(t.banco));
+    const sorted = Array.from(seen.values()).sort((a, b) =>
+      String(a.label).localeCompare(String(b.label), "es"),
+    );
+    return hasNull ? [TXN_FILTER_NULL_OPTION, ...sorted] : sorted;
+  }, [txns]);
+
+  const resolveCategoryDef = (categoriaName) => {
+    if (categoriaName == null || categoriaName === "" || !categories?.length) {
+      return null;
+    }
+    return (
+      categories.find((c) => c.label === categoriaName) ??
+      categories.find(
+        (c) =>
+          c.label?.toLowerCase() === String(categoriaName).toLowerCase(),
+      )
+    );
+  };
+
   const handleCategoriaPress = (id) => {
     setSelectedCategory({ id: id, label: null, value: null });
     setCategoryModalVisible(true);
@@ -93,25 +202,110 @@ export default function TxnTable({
 
   const handleSubcategoryPress = (id, category) => {
     setSelectedSubcategory({ id: id, label: null, value: null });
-    const subCategories =
-      categories.filter((item) => item.label === category)[0]?.sub_categorias ||
-      [];
+    const subCategories = resolveCategoryDef(category)?.sub_categorias || [];
     setSubCategories(subCategories);
+    setSubCategoryModalVisible(true);
+  };
+
+  const toggleTxnSelected = (sid) => {
+    setSelectedTxnIds((prev) => {
+      const next = { ...prev };
+      if (next[sid]) delete next[sid];
+      else next[sid] = true;
+      return next;
+    });
+  };
+
+  const openBulkCategoryModal = () => {
+    const ids = Object.keys(selectedTxnIds)
+      .filter((id) => selectedTxnIds[id])
+      .map((k) => {
+        const n = Number(k);
+        return !Number.isNaN(n) && String(n) === k ? n : k;
+      });
+    if (ids.length === 0) return;
+    setSelectedCategory({ ids, label: null, value: null });
+    setCategoryModalVisible(true);
+  };
+
+  const openBulkSubcategoryModal = () => {
+    const ids = Object.keys(selectedTxnIds)
+      .filter((id) => selectedTxnIds[id])
+      .map((k) => {
+        const n = Number(k);
+        return !Number.isNaN(n) && String(n) === k ? n : k;
+      });
+    if (ids.length === 0) return;
+
+    const idSet = new Set(ids.map((x) => String(x)));
+    const selectedTxns = txns.filter((t) => idSet.has(String(t.id)));
+
+    const seenCat = new Set();
+    const categoryNames = [];
+    for (const t of selectedTxns) {
+      const name = t.categoria;
+      if (name == null || name === "") continue;
+      const lk = String(name).toLowerCase();
+      if (!seenCat.has(lk)) {
+        seenCat.add(lk);
+        categoryNames.push(name);
+      }
+    }
+
+    if (categoryNames.length === 0) {
+      Alert.alert(
+        "Subcategoría",
+        "Las transacciones seleccionadas no tienen categoría asignada.",
+      );
+      return;
+    }
+
+    const seenSubKeys = new Set();
+    const mergedSubs = [];
+    for (const name of categoryNames) {
+      const def = resolveCategoryDef(name);
+      for (const sub of def?.sub_categorias || []) {
+        const sk = sub.value ?? sub.label;
+        if (sk == null) continue;
+        const k = String(sk);
+        if (!seenSubKeys.has(k)) {
+          seenSubKeys.add(k);
+          mergedSubs.push(sub);
+        }
+      }
+    }
+
+    if (mergedSubs.length === 0) {
+      Alert.alert(
+        "Subcategoría",
+        "No hay subcategorías definidas para las categorías de esta selección.",
+      );
+      return;
+    }
+
+    setSubCategories(mergedSubs);
+    setSelectedSubcategory({ ids, label: null, value: null });
     setSubCategoryModalVisible(true);
   };
 
   if (isPending)
     return (
-      <View style={{ padding: 16, alignItems: "center" }}>
+      <View
+        style={[
+          { padding: 16, alignItems: "center", justifyContent: "center" },
+        ]}
+      >
         <ActivityIndicator size="small" color={theme.colors.primary} />
       </View>
     );
 
   if (error)
     return (
-      <Text style={{ color: theme.colors.error, padding: 16 }}>
-        An error has occurred: {error.message}
-      </Text>
+      <View style={[{ padding: 16, justifyContent: "center" }]}>
+        <Text style={{ color: theme.colors.error }}>
+          An error has occurred: {error.message}
+        </Text>
+      </View>
     );
 
   const handleLoadMore = () => {
@@ -131,6 +325,19 @@ export default function TxnTable({
   const updateCategory = async () => {
     setLoading(true);
     try {
+      const ids =
+        Array.isArray(selectedCategory.ids) && selectedCategory.ids.length > 0
+          ? selectedCategory.ids
+          : selectedCategory.id != null
+            ? [selectedCategory.id]
+            : [];
+      const { label, value: categoryValue } = selectedCategory;
+      if (
+        categoryValue === undefined ||
+        categoryValue === null ||
+        ids.length === 0
+      )
+        return;
       const res = await fetch(
         `${API_URL}/update_txn_category/?table=${table}&schema=${schema}`,
         {
@@ -138,28 +345,40 @@ export default function TxnTable({
           headers: {
             "Content-Type": "application/json",
           },
-          body: JSON.stringify(selectedCategory),
+          body: JSON.stringify({ ids, value: categoryValue }),
         },
       );
       const result = await res.json();
       console.log("Update result:", result);
       if (!res.ok) return;
-      // Update the infinite query cache with the new category for this txn
-      const { id, label } = selectedCategory;
-      if (id != null && label != null) {
-        queryClient.setQueryData(queryKey, (oldData) => {
-          if (!oldData?.pages) return oldData;
-          return {
-            ...oldData,
-            pages: oldData.pages.map((page) =>
-              Array.isArray(page)
-                ? page.map((txn) =>
-                    txn.id === id ? { ...txn, categoria: label } : txn,
-                  )
-                : page,
-            ),
-          };
-        });
+
+      const idSet = new Set(ids.map((x) => String(x)));
+      queryClient.setQueryData(queryKey, (oldData) => {
+        if (!oldData?.pages) return oldData;
+        return {
+          ...oldData,
+          pages: oldData.pages.map((page) =>
+            Array.isArray(page)
+              ? page.map((txn) =>
+                  idSet.has(String(txn.id))
+                    ? {
+                        ...txn,
+                        categoria:
+                          label ?? txn.categoria,
+                      }
+                    : txn,
+                )
+              : page,
+          ),
+        };
+      });
+
+      if (
+        Array.isArray(selectedCategory.ids) &&
+        selectedCategory.ids.length > 0
+      ) {
+        setSelectedTxnIds({});
+        setSelectionMode(false);
       }
     } catch (error) {
       console.error("Failed to update transactions:", error);
@@ -217,6 +436,21 @@ export default function TxnTable({
   const updateSubcategory = async () => {
     setLoading(true);
     try {
+      const ids =
+        Array.isArray(selectedSubcategory.ids) &&
+        selectedSubcategory.ids.length > 0
+          ? selectedSubcategory.ids
+          : selectedSubcategory.id != null
+            ? [selectedSubcategory.id]
+            : [];
+      const { label, value: subcategoryValue } = selectedSubcategory;
+      if (
+        subcategoryValue === undefined ||
+        subcategoryValue === null ||
+        ids.length === 0
+      )
+        return;
+
       const res = await fetch(
         `${API_URL}/update_txn_subcategory/?table=${table}&schema=${schema}`,
         {
@@ -224,28 +458,40 @@ export default function TxnTable({
           headers: {
             "Content-Type": "application/json",
           },
-          body: JSON.stringify(selectedSubcategory),
+          body: JSON.stringify({ ids, value: subcategoryValue }),
         },
       );
       const result = await res.json();
       console.log("Update result:", result);
       if (!res.ok) return;
-      // Update the infinite query cache with the new subcategory for this txn
-      const { id, label } = selectedSubcategory;
-      if (id != null && label != null) {
-        queryClient.setQueryData(queryKey, (oldData) => {
-          if (!oldData?.pages) return oldData;
-          return {
-            ...oldData,
-            pages: oldData.pages.map((page) =>
-              Array.isArray(page)
-                ? page.map((txn) =>
-                    txn.id === id ? { ...txn, sub_categoria: label } : txn,
-                  )
-                : page,
-            ),
-          };
-        });
+
+      const idSet = new Set(ids.map((x) => String(x)));
+      queryClient.setQueryData(queryKey, (oldData) => {
+        if (!oldData?.pages) return oldData;
+        return {
+          ...oldData,
+          pages: oldData.pages.map((page) =>
+            Array.isArray(page)
+              ? page.map((txn) =>
+                  idSet.has(String(txn.id))
+                    ? {
+                        ...txn,
+                        sub_categoria:
+                          label ?? txn.sub_categoria,
+                      }
+                    : txn,
+                )
+              : page,
+          ),
+        };
+      });
+
+      if (
+        Array.isArray(selectedSubcategory.ids) &&
+        selectedSubcategory.ids.length > 0
+      ) {
+        setSelectedTxnIds({});
+        setSelectionMode(false);
       }
     } catch (error) {
       console.error("Failed to update transactions:", error);
@@ -286,6 +532,7 @@ export default function TxnTable({
     Valor: styles.colValor,
     Categoria: styles.colCategoria,
     Subcategoria: styles.colSubCategoria,
+    Banco: styles.colBanco,
     Editar: styles.colEditar,
   };
 
@@ -301,7 +548,7 @@ export default function TxnTable({
         <View
           style={[
             styles.headerCell,
-            styles[`col${label}`],
+            headerColumnStyle[label],
             {
               flex: 1,
               backgroundColor: theme.colors.surface,
@@ -318,15 +565,82 @@ export default function TxnTable({
     </Pressable>
   );
 
+  const showEditColumn = txns.some((item) => item?.conciliado !== undefined);
+
+  const renderSelectAllHeaderCell = () => {
+    const allFilteredSelected =
+      filteredTxns.length > 0 &&
+      filteredTxns.every((t) => selectedTxnIds[String(t.id)]);
+    const someFilteredSelected = filteredTxns.some(
+      (t) => selectedTxnIds[String(t.id)],
+    );
+    const iconName =
+      filteredTxns.length === 0
+        ? "check-box-outline-blank"
+        : allFilteredSelected
+          ? "check-box"
+          : someFilteredSelected
+            ? "indeterminate-check-box"
+            : "check-box-outline-blank";
+
+    const toggleSelectAllFiltered = () => {
+      if (allFilteredSelected) {
+        setSelectedTxnIds((prev) => {
+          const next = { ...prev };
+          for (const t of filteredTxns) {
+            delete next[String(t.id)];
+          }
+          return next;
+        });
+      } else {
+        setSelectedTxnIds((prev) => {
+          const next = { ...prev };
+          for (const t of filteredTxns) {
+            next[String(t.id)] = true;
+          }
+          return next;
+        });
+      }
+    };
+
+    return (
+      <Pressable style={styles.colSelect} onPress={toggleSelectAllFiltered}>
+        {({ pressed }) => (
+          <View
+            style={[
+              styles.headerCell,
+              styles.colSelect,
+              {
+                flex: 1,
+                backgroundColor: theme.colors.surface,
+                borderColor: theme.colors.border,
+                alignItems: "center",
+                justifyContent: "center",
+              },
+              pressed && { opacity: 0.7 },
+            ]}
+          >
+            <MaterialIcons
+              name={iconName}
+              size={22}
+              color={theme.colors.text}
+            />
+          </View>
+        )}
+      </Pressable>
+    );
+  };
+
   const renderHeader = () => (
     <View style={styles.row}>
+      {selectionMode && renderSelectAllHeaderCell()}
       {renderHeaderCell("Fecha")}
       {renderHeaderCell("Descripcion")}
       {renderHeaderCell("Valor")}
       {renderHeaderCell("Categoria")}
       {renderHeaderCell("Subcategoria")}
       {renderHeaderCell("Banco")}
-      {renderHeaderCell("Editar")}
+      {showEditColumn && renderHeaderCell("Editar")}
     </View>
   );
 
@@ -388,47 +702,65 @@ export default function TxnTable({
     </View>
   );
 
-  const renderCategoryCell = (id, category) => (
-    <TouchableHighlight
-      style={[
-        styles.cell,
-        styles.colCategoria,
-        {
-          borderColor: theme.colors.border,
-          backgroundColor: theme.colors.background,
-        },
-      ]}
-      onPress={() => handleCategoriaPress(id)}
-      underlayColor={theme.colors.inputBackground}
-    >
+  const renderCategoryCell = (id, category) => {
+    const inner = (
       <View>
         <Text style={[styles.cellText, { color: theme.colors.text }]}>
           {category?.toLowerCase()}
         </Text>
       </View>
-    </TouchableHighlight>
-  );
+    );
+    const cellStyle = [
+      styles.cell,
+      styles.colCategoria,
+      {
+        borderColor: theme.colors.border,
+        backgroundColor: theme.colors.background,
+      },
+    ];
+    if (selectionMode) {
+      return <View style={cellStyle}>{inner}</View>;
+    }
+    return (
+      <TouchableHighlight
+        style={cellStyle}
+        onPress={() => handleCategoriaPress(id)}
+        underlayColor={theme.colors.inputBackground}
+      >
+        {inner}
+      </TouchableHighlight>
+    );
+  };
 
-  const renderSubCategoryCell = (id, category, subCategory) => (
-    <TouchableHighlight
-      style={[
-        styles.cell,
-        styles.colSubCategoria,
-        {
-          borderColor: theme.colors.border,
-          backgroundColor: theme.colors.background,
-        },
-      ]}
-      onPress={() => handleSubcategoryPress(id, category)}
-      underlayColor={theme.colors.inputBackground}
-    >
+  const renderSubCategoryCell = (id, category, subCategory) => {
+    const inner = (
       <View>
         <Text style={[styles.cellText, { color: theme.colors.text }]}>
           {subCategory?.toLowerCase()}
         </Text>
       </View>
-    </TouchableHighlight>
-  );
+    );
+    const cellStyle = [
+      styles.cell,
+      styles.colSubCategoria,
+      {
+        borderColor: theme.colors.border,
+        backgroundColor: theme.colors.background,
+      },
+    ];
+    if (selectionMode) {
+      return <View style={cellStyle}>{inner}</View>;
+    }
+    return (
+      <TouchableHighlight
+        style={cellStyle}
+        onPress={() => handleSubcategoryPress(id, category)}
+        underlayColor={theme.colors.inputBackground}
+      >
+        {inner}
+      </TouchableHighlight>
+    );
+  };
 
   const renderBancoCell = (value) => (
     <View
@@ -451,44 +783,87 @@ export default function TxnTable({
     </View>
   );
 
-  const renderEditCell = (id) => (
-    <Pressable
-      style={[
-        styles.cell,
-        styles.editCell,
-        styles.colEditar,
-        {
-          borderColor: theme.colors.border,
-          backgroundColor: theme.colors.background,
-        },
-      ]}
-      onPress={() =>
-        Alert.alert(
-          "Eliminar",
-          "Está seguro que desea eliminar la transaccion",
-          [{ text: "No" }, { text: "Si", onPress: () => deleteTxn(id) }],
-        )
-      }
-    >
-      {({ pressed }) => (
+  const renderEditCell = (id, reconciled) => {
+    const sharedStyle = [
+      styles.cell,
+      styles.editCell,
+      styles.colEditar,
+      {
+        borderColor: theme.colors.border,
+        backgroundColor: theme.colors.background,
+      },
+    ];
+
+    if (reconciled) {
+      return (
+        <View style={sharedStyle}>
+          <MaterialIcons
+            name="check-circle"
+            size={24}
+            color={theme.colors.text}
+          />
+        </View>
+      );
+    }
+
+    return (
+      <Pressable
+        style={sharedStyle}
+        onPress={() =>
+          Alert.alert(
+            "Eliminar",
+            "Está seguro que desea eliminar la transaccion",
+            [{ text: "No" }, { text: "Si", onPress: () => deleteTxn(id) }],
+          )
+        }
+      >
+        {({ pressed }) => (
+          <MaterialIcons
+            name={pressed ? "delete" : "delete-outline"}
+            size={24}
+            color={theme.colors.text}
+          />
+        )}
+      </Pressable>
+    );
+  };
+
+  const renderSelectRowCell = (id) => {
+    const sid = String(id);
+    const checked = !!selectedTxnIds[sid];
+    return (
+      <Pressable
+        style={[
+          styles.cell,
+          styles.colSelect,
+          {
+            borderColor: theme.colors.border,
+            backgroundColor: theme.colors.background,
+            alignItems: "center",
+            justifyContent: "center",
+          },
+        ]}
+        onPress={() => toggleTxnSelected(sid)}
+      >
         <MaterialIcons
-          name={pressed ? "delete" : "delete-outline"}
-          size={24}
+          name={checked ? "check-box" : "check-box-outline-blank"}
+          size={22}
           color={theme.colors.text}
         />
-      )}
-    </Pressable>
-  );
+      </Pressable>
+    );
+  };
 
   const renderTxns = (item) => (
     <View style={styles.row}>
+      {selectionMode && renderSelectRowCell(item.id)}
       {renderFechaCell(item.id, item.fecha)}
       {renderDescripcionCell(item?.descripcion)}
       {renderValorCell(item.valor)}
       {renderCategoryCell(item.id, item.categoria)}
       {renderSubCategoryCell(item.id, item.categoria, item.sub_categoria)}
       {renderBancoCell(item.banco)}
-      {renderEditCell(item.id)}
+      {showEditColumn && renderEditCell(item.id, item.conciliado)}
     </View>
   );
 
@@ -510,21 +885,44 @@ export default function TxnTable({
       );
     }
     if (filterCategory) {
-      list = list.filter(
-        (item) =>
-          item.categoria?.toLowerCase() === filterCategory.label?.toLowerCase(),
-      );
+      if (filterCategory.value === TXN_FILTER_NULL_VALUE) {
+        list = list.filter((item) => txnFieldIsEmpty(item.categoria));
+      } else {
+        list = list.filter(
+          (item) =>
+            item.categoria?.toLowerCase() ===
+            filterCategory.label?.toLowerCase(),
+        );
+      }
     }
     if (filterSubcategory) {
-      list = list.filter(
-        (item) =>
-          item.sub_categoria?.toLowerCase() ===
-          filterSubcategory.label?.toLowerCase(),
-      );
+      if (filterSubcategory.value === TXN_FILTER_NULL_VALUE) {
+        list = list.filter((item) => txnFieldIsEmpty(item.sub_categoria));
+      } else {
+        list = list.filter(
+          (item) =>
+            item.sub_categoria?.toLowerCase() ===
+            filterSubcategory.label?.toLowerCase(),
+        );
+      }
     }
     if (filterBank) {
-      list = list.filter(
-        (item) => item.banco?.toLowerCase() === filterBank.label?.toLowerCase(),
+      if (filterBank.value === TXN_FILTER_NULL_VALUE) {
+        list = list.filter((item) => txnFieldIsEmpty(item.banco));
+      } else {
+        list = list.filter(
+          (item) =>
+            item.banco?.toLowerCase() === filterBank.label?.toLowerCase(),
+        );
+      }
+    }
+    const descQ = filterDescripcion?.trim();
+    if (descQ) {
+      const q = descQ.toLowerCase();
+      list = list.filter((item) =>
+        String(item.descripcion ?? "")
+          .toLowerCase()
+          .includes(q),
       );
     }
     if (filterValue != null && filterValue !== "") {
@@ -533,6 +931,275 @@ export default function TxnTable({
     }
     return list;
   })();
+
+  const showFilterChips =
+    filterCategory ||
+    filterDate ||
+    filterSubcategory ||
+    filterBank ||
+    filterValue != null ||
+    (filterDescripcion && filterDescripcion.trim() !== "");
+
+  const selectedCount = Object.keys(selectedTxnIds).filter(
+    (id) => selectedTxnIds[id],
+  ).length;
+
+  const selectionToolbar = (
+    <View style={styles.selectionToolbar}>
+      {selectionMode ? (
+        <>
+          <Pressable
+            onPress={() => {
+              setSelectionMode(false);
+              setSelectedTxnIds({});
+            }}
+            style={({ pressed }) => [
+              styles.selectionToolbarButton,
+              {
+                backgroundColor: theme.colors.surface,
+                borderColor: theme.colors.border,
+                opacity: pressed ? 0.75 : 1,
+              },
+            ]}
+          >
+            <Text
+              style={[
+                styles.selectionToolbarButtonText,
+                { color: theme.colors.text },
+              ]}
+            >
+              Cancelar selección
+            </Text>
+          </Pressable>
+          {selectedCount > 0 && (
+            <>
+              <Pressable
+                onPress={openBulkCategoryModal}
+                style={({ pressed }) => [
+                  styles.selectionToolbarButton,
+                  {
+                    backgroundColor: theme.colors.surface,
+                    borderColor: theme.colors.border,
+                    opacity: pressed ? 0.75 : 1,
+                  },
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.selectionToolbarButtonText,
+                    { color: theme.colors.primary, fontWeight: "600" },
+                  ]}
+                >
+                  Cambiar categoría ({selectedCount})
+                </Text>
+              </Pressable>
+              <Pressable
+                onPress={openBulkSubcategoryModal}
+                style={({ pressed }) => [
+                  styles.selectionToolbarButton,
+                  {
+                    backgroundColor: theme.colors.surface,
+                    borderColor: theme.colors.border,
+                    opacity: pressed ? 0.75 : 1,
+                  },
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.selectionToolbarButtonText,
+                    { color: theme.colors.primary, fontWeight: "600" },
+                  ]}
+                >
+                  Cambiar subcategoría ({selectedCount})
+                </Text>
+              </Pressable>
+            </>
+          )}
+        </>
+      ) : (
+        <Pressable
+          onPress={() => setSelectionMode(true)}
+          style={({ pressed }) => [
+            styles.selectionToolbarButton,
+            {
+              backgroundColor: theme.colors.surface,
+              borderColor: theme.colors.border,
+              opacity: pressed ? 0.75 : 1,
+            },
+          ]}
+        >
+          <Text
+            style={[
+              styles.selectionToolbarButtonText,
+              { color: theme.colors.text },
+            ]}
+          >
+            Seleccionar varias
+          </Text>
+        </Pressable>
+      )}
+    </View>
+  );
+
+  const filterChipsRow = !showFilterChips ? null : (
+    <View style={styles.filterChipsRow}>
+      {filterDate?.year && filterDate?.month && (
+        <Pressable
+          onPress={() => setFilterDate(null)}
+          style={[
+            styles.filterChip,
+            {
+              backgroundColor: theme.colors.surface,
+              borderColor: theme.colors.border,
+            },
+          ]}
+        >
+          <Text style={[styles.filterChipText, { color: theme.colors.text }]}>
+            Fecha: {String(filterDate.month).padStart(2, "0")}/{filterDate.year}
+          </Text>
+          <MaterialIcons
+            name="close"
+            size={18}
+            color={theme.colors.text}
+            style={styles.filterChipIcon}
+          />
+        </Pressable>
+      )}
+      {filterCategory && (
+        <Pressable
+          onPress={() => setFilterCategory(null)}
+          style={[
+            styles.filterChip,
+            {
+              backgroundColor: theme.colors.surface,
+              borderColor: theme.colors.border,
+            },
+          ]}
+        >
+          <Text style={[styles.filterChipText, { color: theme.colors.text }]}>
+            Categoría: {filterCategory.label}
+          </Text>
+          <MaterialIcons
+            name="close"
+            size={18}
+            color={theme.colors.text}
+            style={styles.filterChipIcon}
+          />
+        </Pressable>
+      )}
+      {filterSubcategory && (
+        <Pressable
+          onPress={() => setFilterSubcategory(null)}
+          style={[
+            styles.filterChip,
+            {
+              backgroundColor: theme.colors.surface,
+              borderColor: theme.colors.border,
+            },
+          ]}
+        >
+          <Text style={[styles.filterChipText, { color: theme.colors.text }]}>
+            Subcategoría: {filterSubcategory.label}
+          </Text>
+          <MaterialIcons
+            name="close"
+            size={18}
+            color={theme.colors.text}
+            style={styles.filterChipIcon}
+          />
+        </Pressable>
+      )}
+      {filterBank && (
+        <Pressable
+          onPress={() => setFilterBank(null)}
+          style={[
+            styles.filterChip,
+            {
+              backgroundColor: theme.colors.surface,
+              borderColor: theme.colors.border,
+            },
+          ]}
+        >
+          <Text style={[styles.filterChipText, { color: theme.colors.text }]}>
+            Banco: {filterBank.label}
+          </Text>
+          <MaterialIcons
+            name="close"
+            size={18}
+            color={theme.colors.text}
+            style={styles.filterChipIcon}
+          />
+        </Pressable>
+      )}
+      {filterValue != null && filterValue !== "" && (
+        <Pressable
+          onPress={() => setFilterValue(null)}
+          style={[
+            styles.filterChip,
+            {
+              backgroundColor: theme.colors.surface,
+              borderColor: theme.colors.border,
+            },
+          ]}
+        >
+          <Text style={[styles.filterChipText, { color: theme.colors.text }]}>
+            Valor: {formatSpanishNumber(Number(filterValue))}
+          </Text>
+          <MaterialIcons
+            name="close"
+            size={18}
+            color={theme.colors.text}
+            style={styles.filterChipIcon}
+          />
+        </Pressable>
+      )}
+      {filterDescripcion && filterDescripcion.trim() !== "" && (
+        <Pressable
+          onPress={() => setFilterDescripcion("")}
+          style={[
+            styles.filterChip,
+            {
+              backgroundColor: theme.colors.surface,
+              borderColor: theme.colors.border,
+            },
+          ]}
+        >
+          <Text
+            style={[styles.filterChipText, { color: theme.colors.text }]}
+            numberOfLines={1}
+          >
+            Descripción: {filterDescripcion.trim()}
+          </Text>
+          <MaterialIcons
+            name="close"
+            size={18}
+            color={theme.colors.text}
+            style={styles.filterChipIcon}
+          />
+        </Pressable>
+      )}
+    </View>
+  );
+
+  const fillScrollArea = false;
+  const useMeasuredViewport = shrinkToContent;
+  const defaultShrinkCap = Math.round(Dimensions.get("window").height * 0.55);
+  const resolvedShrinkCap =
+    shrinkMaxHeight != null ? shrinkMaxHeight : defaultShrinkCap;
+  const effectiveShrinkCap = shrinkToContent ? resolvedShrinkCap : null;
+  const listScrollEnabled =
+    fillScrollArea ||
+    (shrinkToContent && listFullContentH > effectiveShrinkCap);
+  const flatListHeightStyle = fillScrollArea
+    ? scrollViewportH > 0
+      ? { height: scrollViewportH }
+      : { minHeight: 200 }
+    : {
+        height:
+          listFullContentH > 0
+            ? Math.min(listFullContentH, effectiveShrinkCap)
+            : 120,
+      };
 
   return (
     <>
@@ -623,11 +1290,11 @@ export default function TxnTable({
         labels={categories}
         value={selectedCategory.value}
         onChange={(item) => {
-          setSelectedCategory({
-            id: selectedCategory.id,
+          setSelectedCategory((prev) => ({
+            ...prev,
             label: item.label,
             value: item.value,
-          });
+          }));
         }}
         onAccept={async () => {
           await updateCategory();
@@ -640,11 +1307,11 @@ export default function TxnTable({
         labels={subCategories}
         value={selectedSubcategory.value}
         onChange={(item) => {
-          setSelectedSubcategory({
-            id: selectedSubcategory.id,
+          setSelectedSubcategory((prev) => ({
+            ...prev,
             label: item.label,
             value: item.value,
-          });
+          }));
         }}
         onAccept={async () => {
           await updateSubcategory();
@@ -662,9 +1329,9 @@ export default function TxnTable({
         cancelLabel="Cerrar"
         data={
           {
-            Categoria: categories,
-            Subcategoria: allSubcategories,
-            Banco: BANK_LIST,
+            Categoria: tableTxnFilterCategories,
+            Subcategoria: tableTxnFilterSubcategories,
+            Banco: tableTxnFilterBanks,
           }[headerDropdownLabel]
         }
         placeholder={
@@ -692,12 +1359,18 @@ export default function TxnTable({
         type={
           headerDropdownLabel === "Valor"
             ? "currency"
-            : headerDropdownLabel !== "Fecha"
-              ? "dropdown"
-              : "picker"
+            : headerDropdownLabel === "Descripcion"
+              ? "text"
+              : headerDropdownLabel !== "Fecha"
+                ? "dropdown"
+                : "picker"
         }
         currencyValue={filterValue}
         onCurrencyValueChange={setFilterValue}
+        textValue={filterDescripcion}
+        onTextValueChange={setFilterDescripcion}
+        textPlaceholder="Filtrar por texto en descripción"
+        doneLabel="Listo"
         onChange={(item) => {
           if (headerDropdownLabel === "Categoria") {
             setFilterCategory({
@@ -725,160 +1398,106 @@ export default function TxnTable({
           setHeaderDropdownVisible(false);
         }}
       />
-      {(filterCategory ||
-        filterDate ||
-        filterSubcategory ||
-        filterBank ||
-        filterValue != null) && (
-        <View style={styles.filterChipsRow}>
-          {filterDate?.year && filterDate?.month && (
-            <Pressable
-              onPress={() => setFilterDate(null)}
+      {useMeasuredViewport ? (
+        <View
+          style={[
+            fillScrollArea
+              ? { flex: 1, minHeight: 0 }
+              : { flexGrow: 0, minHeight: 0 },
+          ]}
+        >
+          {selectionToolbar}
+          {filterChipsRow}
+          <ScrollView
+            horizontal
+            nestedScrollEnabled
+            showsHorizontalScrollIndicator={true}
+            onLayout={
+              fillScrollArea
+                ? (e) => {
+                    const h = Math.round(e.nativeEvent.layout.height);
+                    if (h > 0) {
+                      setScrollViewportH((prev) => (prev === h ? prev : h));
+                    }
+                  }
+                : undefined
+            }
+            style={[
+              styles.scrollView,
+              { borderColor: theme.colors.border },
+              fillScrollArea
+                ? { flex: 1, minHeight: 0 }
+                : { flexGrow: 0, alignSelf: "stretch" },
+            ]}
+          >
+            <FlatList
+              nestedScrollEnabled
+              removeClippedSubviews={false}
+              scrollEnabled={listScrollEnabled}
               style={[
-                styles.filterChip,
-                {
-                  backgroundColor: theme.colors.surface,
-                  borderColor: theme.colors.border,
-                },
+                styles.flatList,
+                { borderColor: theme.colors.border },
+                flatListHeightStyle,
               ]}
-            >
-              <Text
-                style={[styles.filterChipText, { color: theme.colors.text }]}
-              >
-                Fecha: {String(filterDate.month).padStart(2, "0")}/
-                {filterDate.year}
-              </Text>
-              <MaterialIcons
-                name="close"
-                size={18}
-                color={theme.colors.text}
-                style={styles.filterChipIcon}
-              />
-            </Pressable>
-          )}
-          {filterCategory && (
-            <Pressable
-              onPress={() => setFilterCategory(null)}
-              style={[
-                styles.filterChip,
-                {
-                  backgroundColor: theme.colors.surface,
-                  borderColor: theme.colors.border,
-                },
-              ]}
-            >
-              <Text
-                style={[styles.filterChipText, { color: theme.colors.text }]}
-              >
-                Categoría: {filterCategory.label}
-              </Text>
-              <MaterialIcons
-                name="close"
-                size={18}
-                color={theme.colors.text}
-                style={styles.filterChipIcon}
-              />
-            </Pressable>
-          )}
-          {filterSubcategory && (
-            <Pressable
-              onPress={() => setFilterSubcategory(null)}
-              style={[
-                styles.filterChip,
-                {
-                  backgroundColor: theme.colors.surface,
-                  borderColor: theme.colors.border,
-                },
-              ]}
-            >
-              <Text
-                style={[styles.filterChipText, { color: theme.colors.text }]}
-              >
-                Subcategoría: {filterSubcategory.label}
-              </Text>
-              <MaterialIcons
-                name="close"
-                size={18}
-                color={theme.colors.text}
-                style={styles.filterChipIcon}
-              />
-            </Pressable>
-          )}
-          {filterBank && (
-            <Pressable
-              onPress={() => setFilterBank(null)}
-              style={[
-                styles.filterChip,
-                {
-                  backgroundColor: theme.colors.surface,
-                  borderColor: theme.colors.border,
-                },
-              ]}
-            >
-              <Text
-                style={[styles.filterChipText, { color: theme.colors.text }]}
-              >
-                Banco: {filterBank.label}
-              </Text>
-              <MaterialIcons
-                name="close"
-                size={18}
-                color={theme.colors.text}
-                style={styles.filterChipIcon}
-              />
-            </Pressable>
-          )}
-          {filterValue != null && filterValue !== "" && (
-            <Pressable
-              onPress={() => setFilterValue(null)}
-              style={[
-                styles.filterChip,
-                {
-                  backgroundColor: theme.colors.surface,
-                  borderColor: theme.colors.border,
-                },
-              ]}
-            >
-              <Text
-                style={[styles.filterChipText, { color: theme.colors.text }]}
-              >
-                Valor: {formatSpanishNumber(Number(filterValue))}
-              </Text>
-              <MaterialIcons
-                name="close"
-                size={18}
-                color={theme.colors.text}
-                style={styles.filterChipIcon}
-              />
-            </Pressable>
-          )}
-        </View>
-      )}
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={true}
-        style={[styles.scrollView, { borderColor: theme.colors.border }]}
-      >
-        <FlatList
-          style={[styles.flatList, { borderColor: theme.colors.border }]}
-          keyExtractor={(item) => item.id}
-          data={filteredTxns}
-          ListHeaderComponent={renderHeader}
-          renderItem={({ item }) => renderTxns(item)}
-          stickyHeaderIndices={[0]}
-          refreshControl={
-            <RefreshControl
-              refreshing={refreshing}
-              onRefresh={handleLoadRecent}
-              tintColor={theme.colors.primary}
-              colors={[theme.colors.primary]}
+              onContentSizeChange={
+                shrinkToContent
+                  ? (_, h) => {
+                      if (h > 0) {
+                        setListFullContentH((prev) => (prev === h ? prev : h));
+                      }
+                    }
+                  : undefined
+              }
+              keyExtractor={(item) => item.id}
+              data={filteredTxns}
+              ListHeaderComponent={renderHeader}
+              renderItem={({ item }) => renderTxns(item)}
+              stickyHeaderIndices={[0]}
+              refreshControl={
+                <RefreshControl
+                  refreshing={refreshing}
+                  onRefresh={handleLoadRecent}
+                  tintColor={theme.colors.primary}
+                  colors={[theme.colors.primary]}
+                />
+              }
+              onEndReached={handleLoadMore}
+              onEndReachedThreshold={0.5}
+              ListFooterComponent={renderFooter}
             />
-          }
-          onEndReached={handleLoadMore}
-          onEndReachedThreshold={0.5}
-          ListFooterComponent={renderFooter}
-        />
-      </ScrollView>
+          </ScrollView>
+        </View>
+      ) : (
+        <>
+          {selectionToolbar}
+          {filterChipsRow}
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={true}
+            style={[styles.scrollView, { borderColor: theme.colors.border }]}
+          >
+            <FlatList
+              style={[styles.flatList, { borderColor: theme.colors.border }]}
+              keyExtractor={(item) => item.id}
+              data={filteredTxns}
+              ListHeaderComponent={renderHeader}
+              renderItem={({ item }) => renderTxns(item)}
+              stickyHeaderIndices={[0]}
+              refreshControl={
+                <RefreshControl
+                  refreshing={refreshing}
+                  onRefresh={handleLoadRecent}
+                  tintColor={theme.colors.primary}
+                  colors={[theme.colors.primary]}
+                />
+              }
+              onEndReached={handleLoadMore}
+              onEndReachedThreshold={0.5}
+              ListFooterComponent={renderFooter}
+            />
+          </ScrollView>
+        </>
+      )}
     </>
   );
 }
@@ -887,6 +1506,7 @@ const styles = StyleSheet.create({
   row: {
     flexDirection: "row",
   },
+  colSelect: { width: 44 },
   colFecha: { width: 99 },
   colDescripcion: { width: 112 },
   colValor: { width: 112 },
@@ -925,6 +1545,22 @@ const styles = StyleSheet.create({
   },
   flatList: {
     borderRadius: 16,
+  },
+  selectionToolbar: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+    alignItems: "center",
+    marginBottom: 8,
+  },
+  selectionToolbarButton: {
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 20,
+    borderWidth: 1,
+  },
+  selectionToolbarButtonText: {
+    fontSize: 14,
   },
   filterChipsRow: {
     flexDirection: "row",
