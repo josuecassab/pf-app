@@ -6,6 +6,7 @@ import "react-native-url-polyfill/auto";
 import { SafeAreaView } from "react-native-safe-area-context";
 import Auth from "../components/Auth";
 import { AuthProvider, useAuth } from "../contexts/AuthContext";
+import { PurchasesProvider } from "../contexts/PurchasesContext";
 import { ThemeProvider, useTheme } from "../contexts/ThemeContext";
 import { useBanks } from "../hooks/useBanks";
 import { useCategories } from "../hooks/useCategories";
@@ -96,7 +97,9 @@ function RootNavigator() {
 export default function RootLayout() {
   return (
     <AuthProvider>
-      <RootNavigator />
+      <PurchasesProvider>
+        <RootNavigator />
+      </PurchasesProvider>
     </AuthProvider>
   );
 }

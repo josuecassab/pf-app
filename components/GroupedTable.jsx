@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import AntDesign from "@expo/vector-icons/AntDesign";
 import {
   FlatList,
+  Pressable,
   RefreshControl,
   ScrollView,
   StyleSheet,
@@ -28,6 +30,11 @@ export default function GroupedTable({
   activeColumns = [],
   onRefresh,
   refreshing = false,
+  categoryGroups = [],
+  selectedGroupTab = "all",
+  onSelectGroupTab,
+  onAddGroupPress,
+  onDeleteGroup,
 }) {
   const { theme } = useTheme();
   const leftRef = useRef(null);
@@ -411,6 +418,8 @@ export default function GroupedTable({
     );
   }, [monthlyTotals, renderFooterCell]);
 
+  const showGroupTabs = typeof onSelectGroupTab === "function";
+
   return (
     <View
       style={[
@@ -418,6 +427,99 @@ export default function GroupedTable({
         { backgroundColor: theme.colors.background },
       ]}
     >
+      {showGroupTabs && (
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={groupedTableStyles.tabBarScroll}
+          contentContainerStyle={groupedTableStyles.tabBarContent}
+        >
+          <Pressable
+            onPress={() => onSelectGroupTab("all")}
+            style={({ pressed }) => [
+              groupedTableStyles.tabPill,
+              {
+                backgroundColor:
+                  selectedGroupTab === "all"
+                    ? theme.colors.inputBackground
+                    : theme.colors.surface,
+                borderColor: theme.colors.border,
+              },
+              pressed && groupedTableStyles.tabPillPressed,
+            ]}
+          >
+            <Text
+              style={[
+                groupedTableStyles.tabPillText,
+                {
+                  color: theme.colors.text,
+                  fontWeight: selectedGroupTab === "all" ? "700" : "500",
+                },
+              ]}
+              numberOfLines={1}
+            >
+              Todas
+            </Text>
+          </Pressable>
+          {categoryGroups.map((g) => (
+            <Pressable
+              key={g.grupo_categoria}
+              onPress={() => onSelectGroupTab(g.grupo_categoria)}
+              onLongPress={
+                onDeleteGroup
+                  ? () => onDeleteGroup(g.grupo_categoria)
+                  : undefined
+              }
+              style={({ pressed }) => [
+                groupedTableStyles.tabPill,
+                {
+                  backgroundColor:
+                    selectedGroupTab === g.grupo_categoria
+                      ? theme.colors.inputBackground
+                      : theme.colors.surface,
+                  borderColor: theme.colors.border,
+                },
+                pressed && groupedTableStyles.tabPillPressed,
+              ]}
+            >
+              <Text
+                style={[
+                  groupedTableStyles.tabPillText,
+                  {
+                    color: theme.colors.text,
+                    fontWeight:
+                      selectedGroupTab === g.grupo_categoria ? "700" : "500",
+                  },
+                ]}
+                numberOfLines={1}
+              >
+                {g.grupo_categoria}
+              </Text>
+            </Pressable>
+          ))}
+          {typeof onAddGroupPress === "function" && (
+            <Pressable
+              onPress={onAddGroupPress}
+              accessibilityRole="button"
+              accessibilityLabel="Crear grupo de categorías"
+              style={({ pressed }) => [
+                groupedTableStyles.tabAdd,
+                {
+                  backgroundColor: theme.colors.surface,
+                  borderColor: theme.colors.border,
+                },
+                pressed && groupedTableStyles.tabPillPressed,
+              ]}
+            >
+              <AntDesign
+                name="plus"
+                size={20}
+                color={theme.colors.primary}
+              />
+            </Pressable>
+          )}
+        </ScrollView>
+      )}
       <View
         style={[
           groupedTableStyles.tableContainer,
@@ -508,6 +610,41 @@ export default function GroupedTable({
 const groupedTableStyles = StyleSheet.create({
   container: {
     flex: 1,
+  },
+  tabBarScroll: {
+    flexGrow: 0,
+    marginBottom: 10,
+    maxHeight: 44,
+  },
+  tabBarContent: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingHorizontal: 2,
+    paddingVertical: 2,
+  },
+  tabPill: {
+    borderWidth: 1,
+    borderRadius: 20,
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  tabPillPressed: {
+    opacity: 0.75,
+  },
+  tabPillText: {
+    fontSize: 14,
+    maxWidth: 160,
+  },
+  tabAdd: {
+    borderWidth: 1,
+    borderRadius: 20,
+    width: 40,
+    height: 40,
+    justifyContent: "center",
+    alignItems: "center",
   },
   tableContainer: {
     flex: 1,

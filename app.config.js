@@ -1,5 +1,5 @@
-const { execSync } = require('child_process');
-const base = require('./app.json');
+const { execSync } = require("child_process");
+const base = require("./app.json");
 
 /**
  * Gets the number of commits in the current branch (used for build numbers).
@@ -7,8 +7,8 @@ const base = require('./app.json');
  */
 function getCommitCount() {
   try {
-    const count = execSync('git rev-list --count HEAD', {
-      encoding: 'utf8',
+    const count = execSync("git rev-list --count HEAD", {
+      encoding: "utf8",
     }).trim();
     return Math.max(1, parseInt(count, 10));
   } catch {
@@ -31,11 +31,11 @@ module.exports = {
     },
     plugins: [
       ...(base.expo.plugins ?? []),
-      '@react-native-community/datetimepicker',
-      'expo-font',
-      'expo-image',
-      'expo-web-browser',
-      './plugins/withIosProjectVersion.js',
+      "@react-native-community/datetimepicker",
+      "expo-font",
+      "expo-image",
+      "expo-web-browser",
+      "./plugins/withIosProjectVersion.js",
     ],
   },
 };

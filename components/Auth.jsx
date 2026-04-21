@@ -391,34 +391,164 @@ export default function Auth() {
           { backgroundColor: theme.colors.background },
         ]}
       >
-            <Text style={[styles.title, { color: theme.colors.text }]}>
-              ZeroGasto
-            </Text>
+        <Text style={[styles.title, { color: theme.colors.text }]}>
+          ZeroGasto
+        </Text>
 
-            <View style={styles.inputContainer}>
-              {mode === "changePassword" ? (
+        <View style={styles.inputContainer}>
+          {mode === "changePassword" ? (
+            <>
+              <Text
+                style={[
+                  styles.modeLinkText,
+                  {
+                    color: theme.colors.text,
+                    textAlign: "center",
+                    marginBottom: 8,
+                  },
+                ]}
+              >
+                Introduce tu nueva contraseña.
+              </Text>
+              <Text style={[styles.label, { color: theme.colors.text }]}>
+                Nueva contraseña
+              </Text>
+              <TextInput
+                style={[
+                  styles.input,
+                  {
+                    backgroundColor: theme.colors.surface,
+                    borderColor: newPasswordError
+                      ? theme.colors.error
+                      : theme.colors.border,
+                    color: theme.colors.text,
+                    caretColor: theme.colors.text,
+                  },
+                ]}
+                onChangeText={(text) => {
+                  setNewPassword(text);
+                  if (newPasswordError) validateNewPassword(text);
+                }}
+                onBlur={() => validateNewPassword(newPassword)}
+                value={newPassword}
+                secureTextEntry
+                placeholder="Nueva contraseña"
+                placeholderTextColor={theme.colors.placeholder}
+                autoCapitalize="none"
+              />
+              {newPasswordError ? (
+                <Text style={styles.errorText}>{newPasswordError}</Text>
+              ) : null}
+              <Text style={[styles.label, { color: theme.colors.text }]}>
+                Confirmar contraseña
+              </Text>
+              <TextInput
+                style={[
+                  styles.input,
+                  {
+                    backgroundColor: theme.colors.surface,
+                    borderColor: confirmPasswordError
+                      ? theme.colors.error
+                      : theme.colors.border,
+                    color: theme.colors.text,
+                    caretColor: theme.colors.text,
+                  },
+                ]}
+                onChangeText={(text) => {
+                  setConfirmPassword(text);
+                  if (confirmPasswordError)
+                    setConfirmPasswordError(
+                      text !== newPassword
+                        ? "Las contraseñas no coinciden"
+                        : "",
+                    );
+                }}
+                onBlur={() => validateConfirmPassword(confirmPassword)}
+                value={confirmPassword}
+                secureTextEntry
+                placeholder="Confirmar contraseña"
+                placeholderTextColor={theme.colors.placeholder}
+                autoCapitalize="none"
+              />
+              {confirmPasswordError ? (
+                <Text style={styles.errorText}>{confirmPasswordError}</Text>
+              ) : null}
+            </>
+          ) : mode === "signUp" ? (
+            <>
+              <Text style={[styles.label, { color: theme.colors.text }]}>
+                Username
+              </Text>
+              <TextInput
+                style={[
+                  styles.input,
+                  {
+                    backgroundColor: theme.colors.surface,
+                    borderColor: usernameError
+                      ? theme.colors.error
+                      : theme.colors.border,
+                    color: theme.colors.text,
+                    caretColor: theme.colors.text,
+                  },
+                ]}
+                onChangeText={(text) => {
+                  setUsername(text);
+                  if (usernameError) validateUsername(text);
+                }}
+                onBlur={() => validateUsername(username)}
+                value={username}
+                placeholder="username"
+                placeholderTextColor={theme.colors.placeholder}
+                autoCapitalize="none"
+                autoCorrect={false}
+              />
+              {usernameError ? (
+                <Text style={styles.errorText}>{usernameError}</Text>
+              ) : null}
+            </>
+          ) : null}
+          {mode !== "changePassword" ? (
+            <>
+              <Text style={[styles.label, { color: theme.colors.text }]}>
+                Email
+              </Text>
+              <TextInput
+                style={[
+                  styles.input,
+                  {
+                    backgroundColor: theme.colors.surface,
+                    borderColor: emailError
+                      ? theme.colors.error
+                      : theme.colors.border,
+                    color: theme.colors.text,
+                    caretColor: theme.colors.text,
+                  },
+                ]}
+                onChangeText={(text) => {
+                  setEmail(text);
+                  if (emailError) validateEmail(text);
+                }}
+                onBlur={() => validateEmail(email)}
+                value={email}
+                placeholder="email@address.com"
+                placeholderTextColor={theme.colors.placeholder}
+                autoCapitalize="none"
+                keyboardType="email-address"
+              />
+              {emailError ? (
+                <Text style={styles.errorText}>{emailError}</Text>
+              ) : null}
+              {mode !== "resetPassword" && mode !== "changePassword" ? (
                 <>
-                  <Text
-                    style={[
-                      styles.modeLinkText,
-                      {
-                        color: theme.colors.text,
-                        textAlign: "center",
-                        marginBottom: 8,
-                      },
-                    ]}
-                  >
-                    Introduce tu nueva contraseña.
-                  </Text>
                   <Text style={[styles.label, { color: theme.colors.text }]}>
-                    Nueva contraseña
+                    Contraseña
                   </Text>
                   <TextInput
                     style={[
                       styles.input,
                       {
                         backgroundColor: theme.colors.surface,
-                        borderColor: newPasswordError
+                        borderColor: passwordError
                           ? theme.colors.error
                           : theme.colors.border,
                         color: theme.colors.text,
@@ -426,317 +556,165 @@ export default function Auth() {
                       },
                     ]}
                     onChangeText={(text) => {
-                      setNewPassword(text);
-                      if (newPasswordError) validateNewPassword(text);
+                      setPassword(text);
+                      if (passwordError) validatePassword(text);
                     }}
-                    onBlur={() => validateNewPassword(newPassword)}
-                    value={newPassword}
-                    secureTextEntry
-                    placeholder="Nueva contraseña"
+                    onBlur={() => validatePassword(password)}
+                    value={password}
+                    secureTextEntry={true}
+                    placeholder="Contraseña"
                     placeholderTextColor={theme.colors.placeholder}
                     autoCapitalize="none"
                   />
-                  {newPasswordError ? (
-                    <Text style={styles.errorText}>{newPasswordError}</Text>
-                  ) : null}
-                  <Text style={[styles.label, { color: theme.colors.text }]}>
-                    Confirmar contraseña
-                  </Text>
-                  <TextInput
-                    style={[
-                      styles.input,
-                      {
-                        backgroundColor: theme.colors.surface,
-                        borderColor: confirmPasswordError
-                          ? theme.colors.error
-                          : theme.colors.border,
-                        color: theme.colors.text,
-                        caretColor: theme.colors.text,
-                      },
-                    ]}
-                    onChangeText={(text) => {
-                      setConfirmPassword(text);
-                      if (confirmPasswordError)
-                        setConfirmPasswordError(
-                          text !== newPassword
-                            ? "Las contraseñas no coinciden"
-                            : "",
-                        );
-                    }}
-                    onBlur={() => validateConfirmPassword(confirmPassword)}
-                    value={confirmPassword}
-                    secureTextEntry
-                    placeholder="Confirmar contraseña"
-                    placeholderTextColor={theme.colors.placeholder}
-                    autoCapitalize="none"
-                  />
-                  {confirmPasswordError ? (
-                    <Text style={styles.errorText}>{confirmPasswordError}</Text>
-                  ) : null}
-                </>
-              ) : mode === "signUp" ? (
-                <>
-                  <Text style={[styles.label, { color: theme.colors.text }]}>
-                    Username
-                  </Text>
-                  <TextInput
-                    style={[
-                      styles.input,
-                      {
-                        backgroundColor: theme.colors.surface,
-                        borderColor: usernameError
-                          ? theme.colors.error
-                          : theme.colors.border,
-                        color: theme.colors.text,
-                        caretColor: theme.colors.text,
-                      },
-                    ]}
-                    onChangeText={(text) => {
-                      setUsername(text);
-                      if (usernameError) validateUsername(text);
-                    }}
-                    onBlur={() => validateUsername(username)}
-                    value={username}
-                    placeholder="username"
-                    placeholderTextColor={theme.colors.placeholder}
-                    autoCapitalize="none"
-                    autoCorrect={false}
-                  />
-                  {usernameError ? (
-                    <Text style={styles.errorText}>{usernameError}</Text>
+                  {passwordError ? (
+                    <Text style={styles.errorText}>{passwordError}</Text>
                   ) : null}
                 </>
               ) : null}
-              {mode !== "changePassword" ? (
-                <>
-                  <Text style={[styles.label, { color: theme.colors.text }]}>
-                    Email
-                  </Text>
-                  <TextInput
-                    style={[
-                      styles.input,
-                      {
-                        backgroundColor: theme.colors.surface,
-                        borderColor: emailError
-                          ? theme.colors.error
-                          : theme.colors.border,
-                        color: theme.colors.text,
-                        caretColor: theme.colors.text,
-                      },
-                    ]}
-                    onChangeText={(text) => {
-                      setEmail(text);
-                      if (emailError) validateEmail(text);
-                    }}
-                    onBlur={() => validateEmail(email)}
-                    value={email}
-                    placeholder="email@address.com"
-                    placeholderTextColor={theme.colors.placeholder}
-                    autoCapitalize="none"
-                    keyboardType="email-address"
-                  />
-                  {emailError ? (
-                    <Text style={styles.errorText}>{emailError}</Text>
-                  ) : null}
-                  {mode !== "resetPassword" && mode !== "changePassword" ? (
-                    <>
-                      <Text
-                        style={[styles.label, { color: theme.colors.text }]}
-                      >
-                        Contraseña
-                      </Text>
-                      <TextInput
-                        style={[
-                          styles.input,
-                          {
-                            backgroundColor: theme.colors.surface,
-                            borderColor: passwordError
-                              ? theme.colors.error
-                              : theme.colors.border,
-                            color: theme.colors.text,
-                            caretColor: theme.colors.text,
-                          },
-                        ]}
-                        onChangeText={(text) => {
-                          setPassword(text);
-                          if (passwordError) validatePassword(text);
-                        }}
-                        onBlur={() => validatePassword(password)}
-                        value={password}
-                        secureTextEntry={true}
-                        placeholder="Contraseña"
-                        placeholderTextColor={theme.colors.placeholder}
-                        autoCapitalize="none"
-                      />
-                      {passwordError ? (
-                        <Text style={styles.errorText}>{passwordError}</Text>
-                      ) : null}
-                    </>
-                  ) : null}
-                </>
-              ) : null}
-            </View>
-            <View style={[styles.buttonContainer]}>
-              {mode === "changePassword" ? (
-                <>
-                  <Pressable
-                    onPress={() => {
-                      setMode("signIn");
-                      setAccessToken(null);
-                      setRefreshToken(null);
-                      setNewPassword("");
-                      setConfirmPassword("");
-                    }}
-                    style={styles.modeLinkWrap}
-                  >
-                    <Text
-                      style={[
-                        styles.modeLinkText,
-                        { color: theme.colors.text },
-                      ]}
-                    >
-                      Volver a{" "}
-                    </Text>
-                    <Text
-                      style={[
-                        styles.modeLinkText,
-                        { color: theme.colors.primary },
-                      ]}
-                    >
-                      Iniciar sesión
-                    </Text>
-                  </Pressable>
-                  <Pressable
-                    style={({ pressed }) => [
-                      styles.button,
-                      { backgroundColor: theme.colors.primary },
-                      loading ? styles.buttonDisabled : null,
-                      pressed && !loading && styles.buttonPressed,
-                    ]}
-                    disabled={loading}
-                    onPress={submitChangePassword}
-                  >
-                    <Text style={styles.buttonText}>Cambiar contraseña</Text>
-                  </Pressable>
-                </>
-              ) : mode === "resetPassword" ? (
-                <>
+            </>
+          ) : null}
+        </View>
+        <View style={[styles.buttonContainer]}>
+          {mode === "changePassword" ? (
+            <>
+              <Pressable
+                onPress={() => {
+                  setMode("signIn");
+                  setAccessToken(null);
+                  setRefreshToken(null);
+                  setNewPassword("");
+                  setConfirmPassword("");
+                }}
+                style={styles.modeLinkWrap}
+              >
+                <Text
+                  style={[styles.modeLinkText, { color: theme.colors.text }]}
+                >
+                  Volver a{" "}
+                </Text>
+                <Text
+                  style={[styles.modeLinkText, { color: theme.colors.primary }]}
+                >
+                  Iniciar sesión
+                </Text>
+              </Pressable>
+              <Pressable
+                style={({ pressed }) => [
+                  styles.button,
+                  { backgroundColor: theme.colors.primary },
+                  loading ? styles.buttonDisabled : null,
+                  pressed && !loading && styles.buttonPressed,
+                ]}
+                disabled={loading}
+                onPress={submitChangePassword}
+              >
+                <Text style={styles.buttonText}>Cambiar contraseña</Text>
+              </Pressable>
+            </>
+          ) : mode === "resetPassword" ? (
+            <>
+              <Text
+                style={[
+                  styles.modeLinkText,
+                  {
+                    color: theme.colors.text,
+                    textAlign: "center",
+                    marginBottom: 8,
+                  },
+                ]}
+              >
+                Ingresa tu correo y te enviaremos un enlace para restablecer tu
+                contraseña.
+              </Text>
+              <Pressable
+                onPress={() => setMode("signIn")}
+                style={styles.modeLinkWrap}
+              >
+                <Text
+                  style={[styles.modeLinkText, { color: theme.colors.text }]}
+                >
+                  Volver a{" "}
+                </Text>
+                <Text
+                  style={[styles.modeLinkText, { color: theme.colors.primary }]}
+                >
+                  Iniciar sesión
+                </Text>
+              </Pressable>
+              <Pressable
+                style={({ pressed }) => [
+                  styles.button,
+                  { backgroundColor: theme.colors.primary },
+                  loading ? styles.buttonDisabled : null,
+                  pressed && !loading && styles.buttonPressed,
+                ]}
+                disabled={loading}
+                onPress={requestPasswordReset}
+              >
+                <Text style={styles.buttonText}>
+                  Enviar enlace de recuperación
+                </Text>
+              </Pressable>
+            </>
+          ) : (
+            <>
+              {mode === "signIn" ? (
+                <Pressable
+                  onPress={() => setMode("resetPassword")}
+                  style={[styles.modeLinkWrap, { marginBottom: 4 }]}
+                >
                   <Text
                     style={[
                       styles.modeLinkText,
-                      {
-                        color: theme.colors.text,
-                        textAlign: "center",
-                        marginBottom: 8,
-                      },
+                      { color: theme.colors.primary },
                     ]}
                   >
-                    Ingresa tu correo y te enviaremos un enlace para restablecer
-                    tu contraseña.
+                    ¿Olvidaste tu contraseña?
                   </Text>
-                  <Pressable
-                    onPress={() => setMode("signIn")}
-                    style={styles.modeLinkWrap}
-                  >
-                    <Text
-                      style={[
-                        styles.modeLinkText,
-                        { color: theme.colors.text },
-                      ]}
-                    >
-                      Volver a{" "}
-                    </Text>
-                    <Text
-                      style={[
-                        styles.modeLinkText,
-                        { color: theme.colors.primary },
-                      ]}
-                    >
-                      Iniciar sesión
-                    </Text>
-                  </Pressable>
-                  <Pressable
-                    style={({ pressed }) => [
-                      styles.button,
-                      { backgroundColor: theme.colors.primary },
-                      loading ? styles.buttonDisabled : null,
-                      pressed && !loading && styles.buttonPressed,
-                    ]}
-                    disabled={loading}
-                    onPress={requestPasswordReset}
-                  >
-                    <Text style={styles.buttonText}>
-                      Enviar enlace de recuperación
-                    </Text>
-                  </Pressable>
-                </>
-              ) : (
-                <>
-                  {mode === "signIn" ? (
-                    <Pressable
-                      onPress={() => setMode("resetPassword")}
-                      style={[styles.modeLinkWrap, { marginBottom: 4 }]}
-                    >
-                      <Text
-                        style={[
-                          styles.modeLinkText,
-                          { color: theme.colors.primary },
-                        ]}
-                      >
-                        ¿Olvidaste tu contraseña?
-                      </Text>
-                    </Pressable>
-                  ) : null}
-                  <Pressable
-                    onPress={() =>
-                      setMode(mode === "signIn" ? "signUp" : "signIn")
-                    }
-                    style={styles.modeLinkWrap}
-                  >
-                    <Text
-                      style={[
-                        styles.modeLinkText,
-                        { color: theme.colors.text },
-                      ]}
-                    >
-                      {mode === "signIn"
-                        ? "¿No tienes una cuenta? "
-                        : "¿Ya tienes una cuenta? "}
-                    </Text>
-                    <Text
-                      style={[
-                        styles.modeLinkText,
-                        { color: theme.colors.primary },
-                      ]}
-                    >
-                      {mode === "signIn" ? "Registrarse" : "Iniciar sesión"}
-                    </Text>
-                  </Pressable>
-                  <Pressable
-                    style={({ pressed }) => [
-                      styles.button,
-                      { backgroundColor: theme.colors.primary },
-                      loading ? styles.buttonDisabled : null,
-                      pressed && !loading && styles.buttonPressed,
-                    ]}
-                    disabled={loading}
-                    onPress={() =>
-                      mode === "signIn" ? signInWithEmail() : signUpWithEmail()
-                    }
-                  >
-                    {loading ? (
-                      <ActivityIndicator color="#ffffff" size="small" />
-                    ) : (
-                      <Text style={styles.buttonText}>
-                        {mode === "signIn" ? "Iniciar sesión" : "Registrarse"}
-                      </Text>
-                    )}
-                  </Pressable>
-                </>
-              )}
-            </View>
-          </View>
-      </>
+                </Pressable>
+              ) : null}
+              <Pressable
+                onPress={() => setMode(mode === "signIn" ? "signUp" : "signIn")}
+                style={styles.modeLinkWrap}
+              >
+                <Text
+                  style={[styles.modeLinkText, { color: theme.colors.text }]}
+                >
+                  {mode === "signIn"
+                    ? "¿No tienes una cuenta? "
+                    : "¿Ya tienes una cuenta? "}
+                </Text>
+                <Text
+                  style={[styles.modeLinkText, { color: theme.colors.primary }]}
+                >
+                  {mode === "signIn" ? "Registrarse" : "Iniciar sesión"}
+                </Text>
+              </Pressable>
+              <Pressable
+                style={({ pressed }) => [
+                  styles.button,
+                  { backgroundColor: theme.colors.primary },
+                  loading ? styles.buttonDisabled : null,
+                  pressed && !loading && styles.buttonPressed,
+                ]}
+                disabled={loading}
+                onPress={() =>
+                  mode === "signIn" ? signInWithEmail() : signUpWithEmail()
+                }
+              >
+                {loading ? (
+                  <ActivityIndicator color="#ffffff" size="small" />
+                ) : (
+                  <Text style={styles.buttonText}>
+                    {mode === "signIn" ? "Iniciar sesión" : "Registrarse"}
+                  </Text>
+                )}
+              </Pressable>
+            </>
+          )}
+        </View>
+      </View>
+    </>
   );
 
   return (

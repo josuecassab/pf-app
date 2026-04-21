@@ -1,6 +1,11 @@
-import { useNavigation, useRoute } from "@react-navigation/native";
+import {
+  useFocusEffect,
+  useNavigation,
+  useRoute,
+} from "@react-navigation/native";
 import { useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useMemo, useState } from "react";
+import { router } from "expo-router";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -28,14 +33,62 @@ export default function ReconcileResults() {
   const route = useRoute();
   const statementLabel = route.params?.statementLabel;
   const bankLabel = route.params?.bankLabel;
+  /** When set, compare API reported duplicate row groups — show navigation to detail screen. */
+  const [duplicateRowsNav, setDuplicateRowsNav] = useState(null);
 
   const { data: categoriesData } = useCategories();
+
+  const refreshDuplicateRowsInfo = useCallback(async () => {
+    if (!statementLabel || !schema) {
+      setDuplicateRowsNav(null);
+      return;
+    }
+    const compareParams = new URLSearchParams({
+      schema,
+      table_name: `${statementLabel}_joined`,
+    });
+    const compareRes = await fetch(
+      `${API_URL}/compare_statement_tables/?${compareParams.toString()}`,
+      { method: "GET" },
+    );
+    const compareBody = await compareRes.json().catch(() => ({}));
+    if (!compareRes.ok || !Array.isArray(compareBody?.duplicates)) {
+      setDuplicateRowsNav(null);
+      return;
+    }
+    if (compareBody.duplicates.length === 0) {
+      setDuplicateRowsNav(null);
+      return;
+    }
+    const tableName =
+      compareBody.table_name ?? `${statementLabel}_joined`;
+    const dupIds = compareBody.duplicates.map((d) => d.id);
+    setDuplicateRowsNav({ table: tableName, ids: dupIds });
+  }, [statementLabel, schema]);
 
   useEffect(() => {
     if (!statementLabel || !bankLabel) {
       navigation.goBack();
     }
   }, [statementLabel, bankLabel, navigation]);
+
+  useFocusEffect(
+    useCallback(() => {
+      refreshDuplicateRowsInfo();
+    }, [refreshDuplicateRowsInfo]),
+  );
+
+  const goToDuplicateRows = useCallback(() => {
+    if (!duplicateRowsNav || !schema) return;
+    router.push({
+      pathname: "/reconcile/reconcile-duplicate-rows",
+      params: {
+        schema,
+        table: duplicateRowsNav.table,
+        ids: JSON.stringify(duplicateRowsNav.ids),
+      },
+    });
+  }, [duplicateRowsNav, schema]);
 
   const {
     data: matchedTxns,
@@ -168,6 +221,7 @@ export default function ReconcileResults() {
       });
       refetchMatchedTxns();
       refetchUnmatchedTxns();
+      await refreshDuplicateRowsInfo();
       Alert.alert("Éxito", "Conciliación actualizada.");
     } catch (error) {
       console.error("Error reconciling:", error);
@@ -205,19 +259,17 @@ export default function ReconcileResults() {
         return;
       }
       if (compareBody.duplicates.length > 0) {
-        const preview = compareBody.duplicates
-          .slice(0, 5)
-          .map((d) => `ID ${d.id}: ${d.count} filas`)
-          .join("\n");
-        const extra =
-          compareBody.duplicates.length > 5
-            ? `\n… y ${compareBody.duplicates.length - 5} más`
-            : "";
-        const tableHint = compareBody.table_name ?? `${statementLabel}_joined`;
-        Alert.alert(
-          "Alerta",
-          `Hay filas duplicadas en ${tableHint}. Corrija antes de completar la conciliación.\n\n${preview}${extra}`,
-        );
+        const tableName =
+          compareBody.table_name ?? `${statementLabel}_joined`;
+        const dupIds = compareBody.duplicates.map((d) => d.id);
+        router.push({
+          pathname: "/reconcile/reconcile-duplicate-rows",
+          params: {
+            schema,
+            table: tableName,
+            ids: JSON.stringify(dupIds),
+          },
+        });
         return;
       }
 
@@ -334,6 +386,22 @@ export default function ReconcileResults() {
           >
             <Text style={reconcileStyles.uploadButtonText}>Completar</Text>
           </Pressable>
+          {duplicateRowsNav != null && (
+            <Pressable
+              style={({ pressed }) => [
+                reconcileStyles.completeButton,
+                {
+                  backgroundColor: theme.colors.error ?? theme.colors.primary,
+                },
+                pressed && reconcileStyles.completeButtonPressed,
+              ]}
+              onPress={goToDuplicateRows}
+            >
+              <Text style={reconcileStyles.uploadButtonText}>
+                Ver filas duplicadas
+              </Text>
+            </Pressable>
+          )}
         </View>
 
         <View style={reconcileStyles.unmatchedSection}>

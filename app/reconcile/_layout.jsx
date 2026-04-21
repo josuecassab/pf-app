@@ -15,6 +15,10 @@ export default function ReconcileLayout() {
     >
       <Stack.Screen name="index" options={{ headerShown: false }} />
       <Stack.Screen name="reconcile-results" options={{ title: "Conciliación" }} />
+      <Stack.Screen
+        name="reconcile-duplicate-rows"
+        options={{ title: "Duplicados" }}
+      />
     </Stack>
   );
 }

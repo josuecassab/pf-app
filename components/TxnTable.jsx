@@ -106,6 +106,16 @@ export default function TxnTable({
     [categories],
   );
 
+  const categoryModalLabels = useMemo(
+    () => [TXN_FILTER_NULL_OPTION, ...(categories || [])],
+    [categories],
+  );
+
+  const subcategoryModalLabels = useMemo(
+    () => [TXN_FILTER_NULL_OPTION, ...subCategories],
+    [subCategories],
+  );
+
   /** Options for header filters: only values that appear in loaded transactions. */
   const tableTxnFilterCategories = useMemo(() => {
     const cats = categories || [];
@@ -332,12 +342,14 @@ export default function TxnTable({
             ? [selectedCategory.id]
             : [];
       const { label, value: categoryValue } = selectedCategory;
+      if (ids.length === 0) return;
+      const clearingCategory = categoryValue === TXN_FILTER_NULL_VALUE;
       if (
-        categoryValue === undefined ||
-        categoryValue === null ||
-        ids.length === 0
+        !clearingCategory &&
+        (categoryValue === undefined || categoryValue === null)
       )
         return;
+      const apiValue = clearingCategory ? null : categoryValue;
       const res = await fetch(
         `${API_URL}/update_txn_category/?table=${table}&schema=${schema}`,
         {
@@ -345,7 +357,7 @@ export default function TxnTable({
           headers: {
             "Content-Type": "application/json",
           },
-          body: JSON.stringify({ ids, value: categoryValue }),
+          body: JSON.stringify({ ids, value: apiValue }),
         },
       );
       const result = await res.json();
@@ -363,8 +375,9 @@ export default function TxnTable({
                   idSet.has(String(txn.id))
                     ? {
                         ...txn,
-                        categoria:
-                          label ?? txn.categoria,
+                        categoria: clearingCategory
+                          ? null
+                          : (label ?? txn.categoria),
                       }
                     : txn,
                 )
@@ -444,12 +457,14 @@ export default function TxnTable({
             ? [selectedSubcategory.id]
             : [];
       const { label, value: subcategoryValue } = selectedSubcategory;
+      if (ids.length === 0) return;
+      const clearingSubcategory = subcategoryValue === TXN_FILTER_NULL_VALUE;
       if (
-        subcategoryValue === undefined ||
-        subcategoryValue === null ||
-        ids.length === 0
+        !clearingSubcategory &&
+        (subcategoryValue === undefined || subcategoryValue === null)
       )
         return;
+      const apiValue = clearingSubcategory ? null : subcategoryValue;
 
       const res = await fetch(
         `${API_URL}/update_txn_subcategory/?table=${table}&schema=${schema}`,
@@ -458,7 +473,7 @@ export default function TxnTable({
           headers: {
             "Content-Type": "application/json",
           },
-          body: JSON.stringify({ ids, value: subcategoryValue }),
+          body: JSON.stringify({ ids, value: apiValue }),
         },
       );
       const result = await res.json();
@@ -476,8 +491,9 @@ export default function TxnTable({
                   idSet.has(String(txn.id))
                     ? {
                         ...txn,
-                        sub_categoria:
-                          label ?? txn.sub_categoria,
+                        sub_categoria: clearingSubcategory
+                          ? null
+                          : (label ?? txn.sub_categoria),
                       }
                     : txn,
                 )
@@ -1287,7 +1303,7 @@ export default function TxnTable({
         </Pressable>
       </Modal>
       <MyCustomModal
-        labels={categories}
+        labels={categoryModalLabels}
         value={selectedCategory.value}
         onChange={(item) => {
           setSelectedCategory((prev) => ({
@@ -1304,7 +1320,7 @@ export default function TxnTable({
         SetModalFunc={() => setCategoryModalVisible(!categoryModalVisible)}
       />
       <MyCustomModal
-        labels={subCategories}
+        labels={subcategoryModalLabels}
         value={selectedSubcategory.value}
         onChange={(item) => {
           setSelectedSubcategory((prev) => ({

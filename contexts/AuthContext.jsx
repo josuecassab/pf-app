@@ -1,5 +1,11 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { createContext, useCallback, useContext, useEffect, useState } from "react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useState,
+} from "react";
 
 const AuthContext = createContext(null);
 
@@ -12,7 +18,10 @@ export function AuthProvider({ children }) {
   const setSession = useCallback(async (newSession) => {
     setSessionState(newSession);
     if (newSession) {
-      await AsyncStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(newSession));
+      await AsyncStorage.setItem(
+        SESSION_STORAGE_KEY,
+        JSON.stringify(newSession),
+      );
     } else {
       await AsyncStorage.removeItem(SESSION_STORAGE_KEY);
     }
