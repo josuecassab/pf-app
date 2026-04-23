@@ -35,6 +35,14 @@ module.exports = {
       "expo-font",
       "expo-image",
       "expo-web-browser",
+      [
+        "@react-native-google-signin/google-signin",
+        {
+          iosUrlScheme:
+            process.env.EXPO_PUBLIC_GOOGLE_IOS_URL_SCHEME ??
+            "com.googleusercontent.apps.385235205574-o8ohrae77sfeuoe9cl9p51tjobhgu4dn",
+        },
+      ],
       "./plugins/withIosProjectVersion.js",
     ],
   },

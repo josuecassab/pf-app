@@ -1,0 +1,6 @@
+[auth.external.google]
+enabled = true
+client_id = "385235205574-o8ohrae77sfeuoe9cl9p51tjobhgu4dn.apps.googleusercontent.com"
+# Native iOS Google Sign-In often puts a nonce in the ID token; without passing a
+# matching nonce from the app, GoTrue rejects unless this is true (see Supabase Google + RN docs).
+skip_nonce_check = true

@@ -1,8 +1,16 @@
+import {
+  GoogleSignin,
+  isCancelledResponse,
+  isErrorWithCode,
+  isSuccessResponse,
+  statusCodes,
+} from "@react-native-google-signin/google-signin";
 import * as Linking from "expo-linking";
 import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  Image,
   Keyboard,
   KeyboardAvoidingView,
   Platform,
@@ -15,21 +23,62 @@ import {
 } from "react-native";
 import { useAuth } from "../contexts/AuthContext";
 import { useTheme } from "../contexts/ThemeContext";
+import { supabase } from "../lib/supabase";
+
+function usernameFromGoogleSupabaseUser(user) {
+  if (!user) return "user";
+  const fromMeta = user.user_metadata?.username;
+  if (typeof fromMeta === "string" && fromMeta.trim()) {
+    const s = fromMeta
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9_]/g, "")
+      .slice(0, 30);
+    if (s.length >= 3) return s;
+  }
+  const email = user.email ?? "";
+  const local =
+    email
+      .split("@")[0]
+      ?.toLowerCase()
+      .replace(/[^a-z0-9_]/g, "") ?? "";
+  let base = local || "user";
+  if (base.length < 3) base = `${base}xxx`;
+  return base.slice(0, 30);
+}
 
 const redirectTo = Linking.createURL("");
 console.log(redirectTo);
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL;
 
+/** Idempotent: backend should no-op if schema already exists. */
+function ensureUserTxnSchema(username) {
+  const schemaName =
+    typeof username === "string" && username.trim() ? username.trim() : "";
+  if (!schemaName || !API_URL) return;
+  const url = `${API_URL}/create_txns_table/`;
+  fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ schema: schemaName }),
+  })
+    .then((res) => res.json())
+    .then((body) => {
+      console.log(body);
+    })
+    .catch((err) => {
+      console.warn("ensureUserTxnSchema", err);
+    });
+}
+
 export default function Auth() {
   const { theme } = useTheme();
-  const { setSession } = useAuth();
+  const { setSession, schema } = useAuth();
   const [mode, setMode] = useState("signIn"); // "signIn" | "signUp" | "resetPassword" | "changePassword"
-  const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
-  const [usernameError, setUsernameError] = useState("");
   const [emailError, setEmailError] = useState("");
   const [passwordError, setPasswordError] = useState("");
   const [accessToken, setAccessToken] = useState(null);
@@ -38,6 +87,8 @@ export default function Auth() {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [newPasswordError, setNewPasswordError] = useState("");
   const [confirmPasswordError, setConfirmPasswordError] = useState("");
+  /** iOS: email/password hidden until user opts in; Google is the default path. */
+  const [emailAuthExpanded, setEmailAuthExpanded] = useState(false);
 
   const url = Linking.useLinkingURL();
   console.log(url);
@@ -90,29 +141,20 @@ export default function Auth() {
     }
   }, [url, setSession]);
 
-  function validateUsername(username) {
-    if (!username || !username.trim()) {
-      setUsernameError("El nombre de usuario es obligatorio");
-      return false;
-    }
-    const trimmed = username.trim();
-    if (trimmed.length < 3) {
-      setUsernameError("El nombre de usuario debe tener al menos 3 caracteres");
-      return false;
-    }
-    if (trimmed.length > 30) {
-      setUsernameError("El nombre de usuario debe tener 30 caracteres o menos");
-      return false;
-    }
-    if (!/^[a-z0-9_]+$/.test(trimmed)) {
-      setUsernameError(
-        "El nombre de usuario solo puede contener letras minúsculas, números y guiones bajos",
-      );
-      return false;
-    }
-    setUsernameError("");
-    return true;
-  }
+  useEffect(() => {
+    setEmailAuthExpanded(false);
+  }, [mode]);
+
+  useEffect(() => {
+    if (Platform.OS !== "ios") return;
+    const iosClientId = process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID;
+    if (!iosClientId) return;
+    const webClientId = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID;
+    GoogleSignin.configure({
+      iosClientId,
+      ...(webClientId ? { webClientId } : {}),
+    });
+  }, []);
 
   function validateEmail(email) {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -273,10 +315,83 @@ export default function Auth() {
         access_token: data.access_token ?? data.token,
         user: data.user ?? data.user,
       });
+      ensureUserTxnSchema(data.user?.username);
     } catch (err) {
       Alert.alert(
         "Error al iniciar sesión",
         err.message ?? "Error de conexión. Intenta de nuevo.",
+      );
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function signInWithGoogle() {
+    if (Platform.OS !== "ios") return;
+    const iosClientId = process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID;
+    if (!iosClientId) {
+      Alert.alert(
+        "Google",
+        "Falta EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID en la configuración.",
+      );
+      return;
+    }
+    setLoading(true);
+    try {
+      await GoogleSignin.hasPlayServices();
+      const response = await GoogleSignin.signIn();
+      if (isCancelledResponse(response)) return;
+      if (!isSuccessResponse(response)) return;
+      const idToken = response.data?.idToken;
+      if (!idToken) {
+        Alert.alert(
+          "Error",
+          "No se pudo obtener el identificador de Google. Vuelve a intentarlo.",
+        );
+        return;
+      }
+      let googleAccessToken;
+      try {
+        const tokens = await GoogleSignin.getTokens();
+        googleAccessToken = tokens?.accessToken;
+      } catch (_) {
+        // optional for Supabase; sign-in can still succeed with id token only
+      }
+      const { data, error } = await supabase.auth.signInWithIdToken({
+        provider: "google",
+        token: idToken,
+        ...(googleAccessToken ? { access_token: googleAccessToken } : {}),
+      });
+      if (error) {
+        Alert.alert(
+          "Error con Google",
+          error.message ?? "No se pudo completar el inicio de sesión.",
+        );
+        return;
+      }
+      const nextSession = data.session;
+      if (!nextSession?.access_token || !nextSession.user) {
+        Alert.alert("Error", "Respuesta de sesión inválida.");
+        return;
+      }
+      const u = nextSession.user;
+      const username = usernameFromGoogleSupabaseUser(u);
+      await setSession({
+        access_token: nextSession.access_token,
+        refresh_token: nextSession.refresh_token,
+        user: { ...u, username },
+      });
+      ensureUserTxnSchema(username);
+    } catch (err) {
+      if (
+        isErrorWithCode(err) &&
+        String(err.code) === String(statusCodes.SIGN_IN_CANCELLED)
+      ) {
+        return;
+      }
+      Alert.alert(
+        "Error con Google",
+        err?.message ?? "No se pudo iniciar sesión.",
       );
     } finally {
       setLoading(false);
@@ -324,10 +439,9 @@ export default function Auth() {
   }
 
   async function signUpWithEmail() {
-    const isUsernameValid = validateUsername(username);
     const isEmailValid = validateEmail(email);
     const isPasswordValid = validatePassword(password);
-    if (!isUsernameValid || !isEmailValid || !isPasswordValid) return;
+    if (!isEmailValid || !isPasswordValid) return;
     setLoading(true);
     try {
       const res = await fetch(`${API_URL}/auth/sign_up`, {
@@ -338,7 +452,6 @@ export default function Auth() {
         body: JSON.stringify({
           email,
           password,
-          username: username.toLowerCase(),
         }),
       });
       const data = await res.json();
@@ -361,13 +474,8 @@ export default function Auth() {
           "Revisa tu correo para verificar tu cuenta.",
         );
       }
-      fetch(`${API_URL}/create_txns_table/?schema=${username}`, {
-        method: "GET",
-      })
-        .then((res) => res.json())
-        .then((data) => {
-          console.log(data);
-        });
+      console.log(data);
+      ensureUserTxnSchema(data.user?.username);
     } catch (err) {
       Alert.alert(
         "Error al registrarse",
@@ -383,6 +491,17 @@ export default function Auth() {
     justifyContent: "space-between",
   };
 
+  const showGooglePrimary =
+    Platform.OS === "ios" &&
+    mode !== "changePassword" &&
+    mode !== "resetPassword" &&
+    (mode === "signIn" || mode === "signUp");
+  const showEmailFields =
+    mode === "resetPassword" ||
+    mode === "changePassword" ||
+    !showGooglePrimary ||
+    emailAuthExpanded;
+
   const formContent = (
     <>
       <View
@@ -394,6 +513,55 @@ export default function Auth() {
         <Text style={[styles.title, { color: theme.colors.text }]}>
           ZeroGasto
         </Text>
+
+        {showGooglePrimary ? (
+          <View style={styles.oauthPrimaryBlock}>
+            <Pressable
+              style={({ pressed }) => [
+                styles.googleBrandedButton,
+                loading ? styles.buttonDisabled : null,
+                pressed && !loading && styles.buttonPressed,
+              ]}
+              disabled={loading}
+              onPress={signInWithGoogle}
+            >
+              {loading ? (
+                <ActivityIndicator color="#1f1f1f" size="small" />
+              ) : (
+                <View style={styles.googleBrandedButtonInner}>
+                  <Image
+                    accessibilityIgnoresInvertColors
+                    source={require("../assets/images/google-g-logo.png")}
+                    style={styles.googleBrandedLogo}
+                  />
+                  <Text style={styles.googleBrandedLabel}>
+                    Continuar con Google
+                  </Text>
+                </View>
+              )}
+            </Pressable>
+            <Text
+              style={[styles.dividerText, { color: theme.colors.placeholder }]}
+            >
+              o
+            </Text>
+            <Pressable
+              onPress={() => setEmailAuthExpanded((v) => !v)}
+              style={styles.emailOptionToggle}
+            >
+              <Text
+                style={[
+                  styles.modeLinkText,
+                  { color: theme.colors.primary, fontWeight: "600" },
+                ]}
+              >
+                {emailAuthExpanded
+                  ? "Ocultar correo y contraseña"
+                  : "Usar correo y contraseña"}
+              </Text>
+            </Pressable>
+          </View>
+        ) : null}
 
         <View style={styles.inputContainer}>
           {mode === "changePassword" ? (
@@ -474,40 +642,8 @@ export default function Auth() {
                 <Text style={styles.errorText}>{confirmPasswordError}</Text>
               ) : null}
             </>
-          ) : mode === "signUp" ? (
-            <>
-              <Text style={[styles.label, { color: theme.colors.text }]}>
-                Username
-              </Text>
-              <TextInput
-                style={[
-                  styles.input,
-                  {
-                    backgroundColor: theme.colors.surface,
-                    borderColor: usernameError
-                      ? theme.colors.error
-                      : theme.colors.border,
-                    color: theme.colors.text,
-                    caretColor: theme.colors.text,
-                  },
-                ]}
-                onChangeText={(text) => {
-                  setUsername(text);
-                  if (usernameError) validateUsername(text);
-                }}
-                onBlur={() => validateUsername(username)}
-                value={username}
-                placeholder="username"
-                placeholderTextColor={theme.colors.placeholder}
-                autoCapitalize="none"
-                autoCorrect={false}
-              />
-              {usernameError ? (
-                <Text style={styles.errorText}>{usernameError}</Text>
-              ) : null}
-            </>
           ) : null}
-          {mode !== "changePassword" ? (
+          {mode !== "changePassword" && showEmailFields ? (
             <>
               <Text style={[styles.label, { color: theme.colors.text }]}>
                 Email
@@ -658,7 +794,8 @@ export default function Auth() {
             </>
           ) : (
             <>
-              {mode === "signIn" ? (
+              {mode === "signIn" &&
+              (emailAuthExpanded || !showGooglePrimary) ? (
                 <Pressable
                   onPress={() => setMode("resetPassword")}
                   style={[styles.modeLinkWrap, { marginBottom: 4 }]}
@@ -690,26 +827,45 @@ export default function Auth() {
                   {mode === "signIn" ? "Registrarse" : "Iniciar sesión"}
                 </Text>
               </Pressable>
-              <Pressable
-                style={({ pressed }) => [
-                  styles.button,
-                  { backgroundColor: theme.colors.primary },
-                  loading ? styles.buttonDisabled : null,
-                  pressed && !loading && styles.buttonPressed,
-                ]}
-                disabled={loading}
-                onPress={() =>
-                  mode === "signIn" ? signInWithEmail() : signUpWithEmail()
-                }
-              >
-                {loading ? (
-                  <ActivityIndicator color="#ffffff" size="small" />
-                ) : (
-                  <Text style={styles.buttonText}>
-                    {mode === "signIn" ? "Iniciar sesión" : "Registrarse"}
-                  </Text>
-                )}
-              </Pressable>
+              {showEmailFields ? (
+                <Pressable
+                  style={({ pressed }) => [
+                    showGooglePrimary ? styles.googleButton : styles.button,
+                    showGooglePrimary
+                      ? {
+                          borderColor: theme.colors.border,
+                          backgroundColor: theme.colors.surface,
+                        }
+                      : { backgroundColor: theme.colors.primary },
+                    loading ? styles.buttonDisabled : null,
+                    pressed && !loading && styles.buttonPressed,
+                  ]}
+                  disabled={loading}
+                  onPress={() =>
+                    mode === "signIn" ? signInWithEmail() : signUpWithEmail()
+                  }
+                >
+                  {loading ? (
+                    <ActivityIndicator
+                      color={showGooglePrimary ? theme.colors.text : "#ffffff"}
+                      size="small"
+                    />
+                  ) : (
+                    <Text
+                      style={
+                        showGooglePrimary
+                          ? [
+                              styles.googleButtonText,
+                              { color: theme.colors.text },
+                            ]
+                          : styles.buttonText
+                      }
+                    >
+                      {mode === "signIn" ? "Iniciar sesión" : "Registrarse"}
+                    </Text>
+                  )}
+                </Pressable>
+              ) : null}
             </>
           )}
         </View>
@@ -808,5 +964,59 @@ const styles = StyleSheet.create({
     textAlign: "center",
     fontWeight: "600",
     fontSize: 16,
+  },
+  googleButton: {
+    borderRadius: 8,
+    borderWidth: 1,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    alignSelf: "stretch",
+  },
+  googleButtonText: {
+    textAlign: "center",
+    fontWeight: "600",
+    fontSize: 16,
+  },
+  oauthPrimaryBlock: {
+    alignSelf: "stretch",
+    gap: 12,
+    marginBottom: 4,
+  },
+  dividerText: {
+    textAlign: "center",
+    fontSize: 14,
+    fontWeight: "500",
+  },
+  emailOptionToggle: {
+    alignSelf: "center",
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+  },
+  googleBrandedButton: {
+    alignSelf: "stretch",
+    backgroundColor: "#ffffff",
+    borderWidth: 1,
+    borderColor: "#747775",
+    borderRadius: 9999,
+    paddingVertical: 13,
+    paddingHorizontal: 16,
+    minHeight: 48,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  googleBrandedButtonInner: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  googleBrandedLogo: {
+    width: 20,
+    height: 20,
+    marginRight: 12,
+  },
+  googleBrandedLabel: {
+    fontSize: 16,
+    fontWeight: "500",
+    color: "#1f1f1f",
   },
 });
