@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -12,7 +12,6 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import EllipsisMenu from "../components/EllipsisMenu";
 import GroupedTable from "../components/GroupedTable";
 import { useAuth } from "../contexts/AuthContext";
 import { useTheme } from "../contexts/ThemeContext";
@@ -41,8 +40,6 @@ export default function Summary() {
   const { schema } = useAuth();
   const API_URL = process.env.EXPO_PUBLIC_API_URL;
   const [text, setText] = useState("");
-  const [activeColumns, setActiveColumns] = useState(months);
-  const [activeRows, setActiveRows] = useState([]);
   const [showYears, setShowYears] = useState(false);
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   const [selectedGroupTab, setSelectedGroupTab] = useState("all");
@@ -67,36 +64,13 @@ export default function Summary() {
     enabled: !!schema,
   });
 
-  // When data loads or changes (e.g. year), set activeRows to all categories
-  useEffect(() => {
-    if (!data) return;
-    setActiveRows(data.map((item) => item.categoria));
-  }, [data]);
-
-  const handleRows = useCallback((category) => {
-    setActiveRows((prev) => {
-      const set = new Set(prev);
-      if (set.has(category)) {
-        set.delete(category);
-      } else {
-        set.add(category);
-      }
-      return Array.from(set);
-    });
-  }, []);
-
-  // filteredData: data filtered by activeRows, then by search text
   const filteredData = useMemo(() => {
     if (!data) return [];
-    const byActive =
-      activeRows.length === 0
-        ? data
-        : data.filter((item) => activeRows.includes(item.categoria));
-    if (!text.trim()) return byActive;
-    return byActive.filter((item) =>
+    if (!text.trim()) return data;
+    return data.filter((item) =>
       item.categoria.toLowerCase().includes(text.toLowerCase()),
     );
-  }, [data, activeRows, text]);
+  }, [data, text]);
 
   const tableData = useMemo(() => {
     if (selectedGroupTab === "all") return filteredData;
@@ -191,18 +165,6 @@ export default function Summary() {
     setText(searchText);
   }, []);
 
-  const handleColumns = useCallback((item) => {
-    setActiveColumns((prev) => {
-      const prevMonths = new Set(prev);
-      if (prevMonths.has(item)) {
-        prevMonths.delete(item);
-      } else {
-        prevMonths.add(item);
-      }
-      return months.filter((col) => prevMonths.has(col));
-    });
-  }, []);
-
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.background }}>
       <View
@@ -212,14 +174,6 @@ export default function Summary() {
           Ingresos y gastos
         </Text>
         <View style={styles.controlsRow}>
-          <EllipsisMenu
-            handleColumns={handleColumns}
-            activeColumns={activeColumns}
-            activeRows={activeRows}
-            handleRows={handleRows}
-            columnOptions={months}
-            rowOptions={data?.map((d) => d.categoria) ?? []}
-          />
           <TextInput
             style={[
               styles.searchInput,
@@ -301,7 +255,7 @@ export default function Summary() {
         {!isPending && !error && (
           <GroupedTable
             data={tableData}
-            activeColumns={activeColumns}
+            activeColumns={months}
             onRefresh={refetch}
             refreshing={isRefetching}
             categoryGroups={categoryGroups}
