@@ -572,653 +572,642 @@ export default function Input() {
       style={{ flex: 1 }}
       keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 20}
     >
-      <SafeAreaView
-        style={[{ flex: 1 }, { backgroundColor: theme.colors.background }]}
-        edges={["left", "right"]}
-      >
-        <TouchableWithoutFeedback onPress={() => Keyboard.dismiss()}>
-          <View
-            style={[
-              {
-                backgroundColor: theme.colors.background,
-                flex: 1,
-                justifyContent: "space-between",
-              },
-            ]}
-          >
-            {/* <Text style={[styles.titleText, { color: theme.colors.text }]}>
+      <TouchableWithoutFeedback onPress={() => Keyboard.dismiss()}>
+        <View
+          style={[
+            {
+              backgroundColor: theme.colors.background,
+              flex: 1,
+              justifyContent: "space-around",
+            },
+          ]}
+        >
+          {/* <Text style={[styles.titleText, { color: theme.colors.text }]}>
               Agregar
             </Text> */}
-            <View style={styles.containerStyle}>
-              <Text style={[styles.labelText, { color: theme.colors.text }]}>
-                Fecha
-              </Text>
-              <View style={{ transform: [{ scale: 1.1 }] }}>
-                <DateTimePicker
-                  testID="dateTimePicker"
-                  value={date}
-                  mode="date"
-                  onChange={onChange}
-                  textColor={theme.colors.text}
-                  themeVariant={theme.isDark ? "dark" : "light"}
-                  display="default"
-                  accentColor={theme.colors.primary}
-                  style={{
-                    borderRadius: 30,
-                    height: 40,
-                  }}
-                />
-              </View>
-            </View>
-            <View style={styles.containerStyle}>
-              <Text style={[styles.labelText, { color: theme.colors.text }]}>
-                Valor
-              </Text>
-              <TextInput
-                style={[
-                  styles.currencyInput,
-                  {
-                    backgroundColor: theme.colors.inputBackground,
-                    color: theme.colors.text,
-                    fontSize: 16,
-                    textAlign: "center",
-                    borderRadius: 30,
-                    paddingHorizontal: 10,
-                  },
-                ]}
-                value={value}
-                onChangeText={handleAmountChangeText}
-                onBlur={handleAmountBlur}
-                keyboardType="decimal-pad"
-                placeholder="ingresa el valor"
-                placeholderTextColor={theme.colors.placeholder}
-              />
-            </View>
-            <View style={styles.containerStyle}>
-              <Text style={[styles.labelText, { color: theme.colors.text }]}>
-                Tipo
-              </Text>
-              <SegmentedControl
-                style={{ width: 160, height: 40 }}
-                values={["Ingreso", "Egreso"]}
-                selectedIndex={txtType}
-                appearance={theme.isDark ? "dark" : "light"}
-                onChange={(event) => {
-                  console.log(event);
-                  setTxnType(event.nativeEvent.selectedSegmentIndex);
+          <View style={styles.containerStyle}>
+            <Text style={[styles.labelText, { color: theme.colors.text }]}>
+              Fecha
+            </Text>
+            <View style={{ transform: [{ scale: 1.1 }] }}>
+              <DateTimePicker
+                testID="dateTimePicker"
+                value={date}
+                mode="date"
+                onChange={onChange}
+                textColor={theme.colors.text}
+                themeVariant={theme.isDark ? "dark" : "light"}
+                display="default"
+                accentColor={theme.colors.primary}
+                style={{
+                  borderRadius: 30,
+                  height: 40,
                 }}
-                tintColor={theme.colors.primary}
-                activeFontStyle={{ color: "#ffffff" }}
               />
             </View>
+          </View>
+          <View style={styles.containerStyle}>
+            <Text style={[styles.labelText, { color: theme.colors.text }]}>
+              Valor
+            </Text>
+            <TextInput
+              style={[
+                styles.currencyInput,
+                {
+                  backgroundColor: theme.colors.inputBackground,
+                  color: theme.colors.text,
+                  fontSize: 16,
+                  textAlign: "center",
+                  borderRadius: 30,
+                  paddingHorizontal: 10,
+                },
+              ]}
+              value={value}
+              onChangeText={handleAmountChangeText}
+              onBlur={handleAmountBlur}
+              keyboardType="decimal-pad"
+              placeholder="ingresa el valor"
+              placeholderTextColor={theme.colors.placeholder}
+            />
+          </View>
+          <View style={styles.containerStyle}>
+            <Text style={[styles.labelText, { color: theme.colors.text }]}>
+              Tipo
+            </Text>
+            <SegmentedControl
+              style={{ width: 160, height: 40 }}
+              values={["Ingreso", "Egreso"]}
+              selectedIndex={txtType}
+              appearance={theme.isDark ? "dark" : "light"}
+              onChange={(event) => {
+                console.log(event);
+                setTxnType(event.nativeEvent.selectedSegmentIndex);
+              }}
+              tintColor={theme.colors.primary}
+              activeFontStyle={{ color: "#ffffff" }}
+            />
+          </View>
 
-            <View style={[styles.containerStyle, { gap: 16 }]}>
-              <View style={styles.categoryHeader}>
-                <Text
-                  style={[styles.categoryLabel, { color: theme.colors.text }]}
-                >
-                  Categoria
-                </Text>
-                <Pressable
-                  style={({ pressed }) => [
-                    styles.editButton,
-                    pressed && styles.editButtonPressed,
-                  ]}
-                  onPress={() => setShowCategoryModal(true)}
-                >
-                  <Feather name="edit" size={20} color={theme.colors.text} />
-                </Pressable>
-              </View>
-              <Dropdown
-                style={[
-                  styles.dropdown,
-                  {
-                    backgroundColor: theme.colors.inputBackground,
-                    borderBottomColor: theme.colors.border,
-                    width: "60%",
-                  },
-                ]}
-                placeholderStyle={[
-                  styles.placeholderStyle,
-                  { color: theme.colors.placeholder },
-                ]}
-                selectedTextStyle={[
-                  styles.selectedTextStyle,
-                  { color: theme.colors.text },
-                ]}
-                inputSearchStyle={[
-                  styles.inputSearchStyle,
-                  { color: theme.colors.text },
-                ]}
-                iconStyle={styles.iconStyle}
-                containerStyle={{
-                  backgroundColor: theme.colors.inputBackground,
-                  borderRadius: 30,
-                  borderColor: theme.colors.border,
-                }}
-                itemContainerStyle={{
-                  backgroundColor: theme.colors.inputBackground,
-                  borderRadius: 30,
-                }}
-                itemTextStyle={{
-                  color: theme.colors.text,
-                  fontSize: 14,
-                }}
-                activeColor={theme.colors.primary + "20"}
-                data={categories}
-                search
-                maxHeight={220}
-                labelField="label"
-                valueField="value"
-                placeholder="Seleccionar categoria"
-                searchPlaceholder="Buscar..."
-                value={selectedCategory?.value}
-                onChange={(item) => {
-                  setSelectedCategory({
-                    label: item.label,
-                    value: item.value,
-                    sub_categorias: item.sub_categorias,
-                  });
-                  console.log(selectedCategory);
-                }}
-              />
-              <Dropdown
-                style={[
-                  styles.dropdown,
-                  {
-                    backgroundColor: theme.colors.inputBackground,
-                    borderBottomColor: theme.colors.border,
-                    width: "60%",
-                  },
-                ]}
-                placeholderStyle={[
-                  styles.placeholderStyle,
-                  { color: theme.colors.placeholder },
-                ]}
-                selectedTextStyle={[
-                  styles.selectedTextStyle,
-                  { color: theme.colors.text },
-                ]}
-                inputSearchStyle={[
-                  styles.inputSearchStyle,
-                  { color: theme.colors.text },
-                ]}
-                containerStyle={{
-                  backgroundColor: theme.colors.inputBackground,
-                  borderRadius: 30,
-                  borderColor: theme.colors.border,
-                }}
-                itemTextStyle={{
-                  color: theme.colors.text,
-                  fontSize: 14,
-                }}
-                iconStyle={styles.iconStyle}
-                data={selectedCategory?.sub_categorias || []}
-                search
-                maxHeight={220}
-                labelField="label"
-                valueField="value"
-                placeholder="Seleccionar subcategoria"
-                searchPlaceholder="Buscar..."
-                value={selectedSubcategory?.value}
-                onChange={(item) => {
-                  setSelectedSubcategory({
-                    label: item.label,
-                    value: item.value,
-                  });
-                }}
-                dropdownPosition="bottom"
-              />
-              <Modal
-                transparent={false}
-                animationType="slide"
-                visible={showCategoryModal}
+          <View style={[styles.containerStyle, { gap: 16 }]}>
+            <View style={styles.categoryHeader}>
+              <Text
+                style={[styles.categoryLabel, { color: theme.colors.text }]}
               >
-                <KeyboardAvoidingView
-                  behavior={Platform.OS === "ios" ? "padding" : "height"}
-                  style={{ flex: 1 }}
-                >
-                  <SafeAreaProvider>
-                    <SafeAreaView
-                      style={[
-                        { flex: 1 },
-                        { backgroundColor: theme.colors.background },
-                      ]}
-                    >
-                      <View style={styles.modalHeader}>
-                        <Pressable
-                          onPress={() => {
-                            setShowCategoryModal(false);
-                            setAddingSubcategoryForId(null);
-                            setInputSubcategory("");
-                          }}
-                          style={styles.iconButton}
-                        >
-                          {({ pressed }) => (
-                            <AntDesign
-                              name="close"
-                              size={24}
-                              color={
-                                pressed
-                                  ? theme.colors.textSecondary
-                                  : theme.colors.text
-                              }
-                            />
-                          )}
-                        </Pressable>
-                        <Text
-                          style={[
-                            styles.modalTitle,
-                            { color: theme.colors.text },
-                          ]}
-                        >
-                          Categorias
-                        </Text>
-                        <Pressable
-                          onPress={() => setVisibleInputCat(!visibleInputCat)}
-                          style={styles.iconButton}
-                        >
-                          {({ pressed }) => (
-                            <AntDesign
-                              name={visibleInputCat ? "close" : "plus"}
-                              size={24}
-                              color={
-                                pressed
-                                  ? theme.colors.textSecondary
-                                  : theme.colors.text
-                              }
-                            />
-                          )}
-                        </Pressable>
-                      </View>
-                      <View style={styles.searchContainer}>
-                        <Feather
-                          name="search"
-                          size={18}
-                          color={theme.colors.placeholder}
-                          style={styles.searchIcon}
-                        />
+                Categoria
+              </Text>
+              <Pressable
+                style={({ pressed }) => [
+                  styles.editButton,
+                  pressed && styles.editButtonPressed,
+                ]}
+                onPress={() => setShowCategoryModal(true)}
+              >
+                <Feather name="edit" size={20} color={theme.colors.text} />
+              </Pressable>
+            </View>
+            <Dropdown
+              style={[
+                styles.dropdown,
+                {
+                  backgroundColor: theme.colors.inputBackground,
+                  borderBottomColor: theme.colors.border,
+                  width: "60%",
+                },
+              ]}
+              placeholderStyle={[
+                styles.placeholderStyle,
+                { color: theme.colors.placeholder },
+              ]}
+              selectedTextStyle={[
+                styles.selectedTextStyle,
+                { color: theme.colors.text },
+              ]}
+              inputSearchStyle={[
+                styles.inputSearchStyle,
+                { color: theme.colors.text },
+              ]}
+              iconStyle={styles.iconStyle}
+              containerStyle={{
+                backgroundColor: theme.colors.inputBackground,
+                borderRadius: 30,
+                borderColor: theme.colors.border,
+              }}
+              itemContainerStyle={{
+                backgroundColor: theme.colors.inputBackground,
+                borderRadius: 30,
+              }}
+              itemTextStyle={{
+                color: theme.colors.text,
+                fontSize: 14,
+              }}
+              activeColor={theme.colors.primary + "20"}
+              data={categories}
+              search
+              maxHeight={220}
+              labelField="label"
+              valueField="value"
+              placeholder="Seleccionar categoria"
+              searchPlaceholder="Buscar..."
+              value={selectedCategory?.value}
+              onChange={(item) => {
+                setSelectedCategory({
+                  label: item.label,
+                  value: item.value,
+                  sub_categorias: item.sub_categorias,
+                });
+                console.log(selectedCategory);
+              }}
+            />
+            <Dropdown
+              style={[
+                styles.dropdown,
+                {
+                  backgroundColor: theme.colors.inputBackground,
+                  borderBottomColor: theme.colors.border,
+                  width: "60%",
+                },
+              ]}
+              placeholderStyle={[
+                styles.placeholderStyle,
+                { color: theme.colors.placeholder },
+              ]}
+              selectedTextStyle={[
+                styles.selectedTextStyle,
+                { color: theme.colors.text },
+              ]}
+              inputSearchStyle={[
+                styles.inputSearchStyle,
+                { color: theme.colors.text },
+              ]}
+              containerStyle={{
+                backgroundColor: theme.colors.inputBackground,
+                borderRadius: 30,
+                borderColor: theme.colors.border,
+              }}
+              itemTextStyle={{
+                color: theme.colors.text,
+                fontSize: 14,
+              }}
+              iconStyle={styles.iconStyle}
+              data={selectedCategory?.sub_categorias || []}
+              search
+              maxHeight={220}
+              labelField="label"
+              valueField="value"
+              placeholder="Seleccionar subcategoria"
+              searchPlaceholder="Buscar..."
+              value={selectedSubcategory?.value}
+              onChange={(item) => {
+                setSelectedSubcategory({
+                  label: item.label,
+                  value: item.value,
+                });
+              }}
+              dropdownPosition="bottom"
+            />
+            <Modal
+              transparent={false}
+              animationType="slide"
+              visible={showCategoryModal}
+            >
+              <KeyboardAvoidingView
+                behavior={Platform.OS === "ios" ? "padding" : "height"}
+                style={{ flex: 1 }}
+              >
+                <SafeAreaProvider>
+                  <SafeAreaView
+                    style={[
+                      { flex: 1 },
+                      { backgroundColor: theme.colors.background },
+                    ]}
+                  >
+                    <View style={styles.modalHeader}>
+                      <Pressable
+                        onPress={() => {
+                          setShowCategoryModal(false);
+                          setAddingSubcategoryForId(null);
+                          setInputSubcategory("");
+                        }}
+                        style={styles.iconButton}
+                      >
+                        {({ pressed }) => (
+                          <AntDesign
+                            name="close"
+                            size={24}
+                            color={
+                              pressed
+                                ? theme.colors.textSecondary
+                                : theme.colors.text
+                            }
+                          />
+                        )}
+                      </Pressable>
+                      <Text
+                        style={[
+                          styles.modalTitle,
+                          { color: theme.colors.text },
+                        ]}
+                      >
+                        Categorias
+                      </Text>
+                      <Pressable
+                        onPress={() => setVisibleInputCat(!visibleInputCat)}
+                        style={styles.iconButton}
+                      >
+                        {({ pressed }) => (
+                          <AntDesign
+                            name={visibleInputCat ? "close" : "plus"}
+                            size={24}
+                            color={
+                              pressed
+                                ? theme.colors.textSecondary
+                                : theme.colors.text
+                            }
+                          />
+                        )}
+                      </Pressable>
+                    </View>
+                    <View style={styles.searchContainer}>
+                      <Feather
+                        name="search"
+                        size={18}
+                        color={theme.colors.placeholder}
+                        style={styles.searchIcon}
+                      />
+                      <TextInput
+                        style={[
+                          styles.searchInput,
+                          {
+                            backgroundColor: theme.colors.inputBackground,
+                            borderColor: theme.colors.border,
+                            color: theme.colors.text,
+                          },
+                        ]}
+                        placeholder="Buscar categoría..."
+                        placeholderTextColor={theme.colors.placeholder}
+                        defaultValue=""
+                        onChangeText={(text) => {
+                          searchCategory(text);
+                        }}
+                        autoCorrect={false}
+                        clearButtonMode="while-editing"
+                      />
+                    </View>
+                    {visibleInputCat && (
+                      <View style={styles.inputRow}>
                         <TextInput
                           style={[
-                            styles.searchInput,
+                            styles.categoryInput,
                             {
-                              backgroundColor: theme.colors.inputBackground,
+                              backgroundColor: theme.colors.surface,
                               borderColor: theme.colors.border,
                               color: theme.colors.text,
                             },
                           ]}
-                          placeholder="Buscar categoría..."
+                          placeholder="Nueva Categoria"
                           placeholderTextColor={theme.colors.placeholder}
-                          defaultValue=""
+                          value={inputCategory}
                           onChangeText={(text) => {
-                            searchCategory(text);
+                            setInputCategory(text);
                           }}
-                          autoCorrect={false}
-                          clearButtonMode="while-editing"
                         />
+                        <Pressable
+                          style={({ pressed }) => [
+                            styles.addButton,
+                            { backgroundColor: theme.colors.primary },
+                            pressed && styles.addButtonPressed,
+                          ]}
+                          onPress={() => addCategory()}
+                        >
+                          <Text style={styles.addButtonText}>Agregar</Text>
+                        </Pressable>
                       </View>
-                      {visibleInputCat && (
-                        <View style={styles.inputRow}>
-                          <TextInput
-                            style={[
-                              styles.categoryInput,
-                              {
-                                backgroundColor: theme.colors.surface,
-                                borderColor: theme.colors.border,
-                                color: theme.colors.text,
-                              },
-                            ]}
-                            placeholder="Nueva Categoria"
-                            placeholderTextColor={theme.colors.placeholder}
-                            value={inputCategory}
-                            onChangeText={(text) => {
-                              setInputCategory(text);
-                            }}
-                          />
-                          <Pressable
-                            style={({ pressed }) => [
-                              styles.addButton,
-                              { backgroundColor: theme.colors.primary },
-                              pressed && styles.addButtonPressed,
-                            ]}
-                            onPress={() => addCategory()}
-                          >
-                            <Text style={styles.addButtonText}>Agregar</Text>
-                          </Pressable>
-                        </View>
-                      )}
-                      <GestureHandlerRootView style={{ flex: 1 }}>
-                        <GHScrollView>
-                          {categories.map((cat) => (
-                            <View key={cat.value}>
-                              <SwipeableCategoryItem
-                                cat={cat}
-                                parent={true}
-                                onPress={() => expandCategories(cat)}
-                                onDelete={deleteCategory}
-                                onEdit={updateCategory}
-                                isLoading={updatingCategory === cat.value}
-                              />
-                              {expandedCategories.has(cat.value) && (
-                                <>
-                                  {cat.sub_categorias.map((sub) => (
-                                    <View
-                                      key={sub.value}
-                                      style={styles.subCategoryContainer}
-                                    >
-                                      <SwipeableCategoryItem
-                                        parentId={cat.value}
-                                        cat={sub}
-                                        onDelete={deleteSubcategory}
-                                        onEdit={updateSubcategory}
-                                      />
-                                    </View>
-                                  ))}
-                                  {addingSubcategoryForId === cat.value ? (
-                                    <View
-                                      key={`${cat.value}-input`}
-                                      style={styles.subCategoryInputRow}
-                                    >
-                                      <TextInput
-                                        style={[
-                                          styles.subCategoryInput,
-                                          {
-                                            backgroundColor:
-                                              theme.colors.surface,
-                                            borderColor: theme.colors.border,
-                                            color: theme.colors.text,
-                                          },
-                                        ]}
-                                        placeholder="Nueva subcategoría"
-                                        placeholderTextColor={
-                                          theme.colors.placeholder
-                                        }
-                                        value={inputSubcategory}
-                                        onChangeText={setInputSubcategory}
-                                        autoFocus
-                                      />
-                                      <Pressable
-                                        onPress={() => {
-                                          setAddingSubcategoryForId(null);
-                                          setInputSubcategory("");
-                                        }}
-                                        style={[
-                                          styles.subCategoryAddButton,
-                                          {
-                                            backgroundColor:
-                                              theme.colors.inputBackground,
-                                          },
-                                        ]}
-                                      >
-                                        <Text
-                                          style={{
-                                            color: theme.colors.text,
-                                            fontSize: 14,
-                                          }}
-                                        >
-                                          Cancelar
-                                        </Text>
-                                      </Pressable>
-                                      <Pressable
-                                        onPress={() =>
-                                          addSubcategory(cat.value)
-                                        }
-                                        style={({ pressed }) => [
-                                          styles.subCategoryAddButton,
-                                          {
-                                            backgroundColor:
-                                              theme.colors.primary,
-                                          },
-                                          pressed &&
-                                            styles.subCategoryAddButtonPressed,
-                                        ]}
-                                      >
-                                        <Text
-                                          style={{
-                                            color: "#ffffff",
-                                            fontWeight: "600",
-                                            fontSize: 14,
-                                          }}
-                                        >
-                                          Agregar
-                                        </Text>
-                                      </Pressable>
-                                    </View>
-                                  ) : (
-                                    <Pressable
-                                      onPress={() =>
-                                        setAddingSubcategoryForId(cat.value)
-                                      }
+                    )}
+                    <GestureHandlerRootView style={{ flex: 1 }}>
+                      <GHScrollView>
+                        {categories.map((cat) => (
+                          <View key={cat.value}>
+                            <SwipeableCategoryItem
+                              cat={cat}
+                              parent={true}
+                              onPress={() => expandCategories(cat)}
+                              onDelete={deleteCategory}
+                              onEdit={updateCategory}
+                              isLoading={updatingCategory === cat.value}
+                            />
+                            {expandedCategories.has(cat.value) && (
+                              <>
+                                {cat.sub_categorias.map((sub) => (
+                                  <View
+                                    key={sub.value}
+                                    style={styles.subCategoryContainer}
+                                  >
+                                    <SwipeableCategoryItem
+                                      parentId={cat.value}
+                                      cat={sub}
+                                      onDelete={deleteSubcategory}
+                                      onEdit={updateSubcategory}
+                                    />
+                                  </View>
+                                ))}
+                                {addingSubcategoryForId === cat.value ? (
+                                  <View
+                                    key={`${cat.value}-input`}
+                                    style={styles.subCategoryInputRow}
+                                  >
+                                    <TextInput
                                       style={[
-                                        styles.addSubcategoryButton,
+                                        styles.subCategoryInput,
                                         {
+                                          backgroundColor: theme.colors.surface,
                                           borderColor: theme.colors.border,
+                                          color: theme.colors.text,
+                                        },
+                                      ]}
+                                      placeholder="Nueva subcategoría"
+                                      placeholderTextColor={
+                                        theme.colors.placeholder
+                                      }
+                                      value={inputSubcategory}
+                                      onChangeText={setInputSubcategory}
+                                      autoFocus
+                                    />
+                                    <Pressable
+                                      onPress={() => {
+                                        setAddingSubcategoryForId(null);
+                                        setInputSubcategory("");
+                                      }}
+                                      style={[
+                                        styles.subCategoryAddButton,
+                                        {
+                                          backgroundColor:
+                                            theme.colors.inputBackground,
                                         },
                                       ]}
                                     >
-                                      <Feather
-                                        name="plus"
-                                        size={16}
-                                        color={theme.colors.primary}
-                                      />
                                       <Text
-                                        style={[
-                                          styles.addSubcategoryButtonText,
-                                          { color: theme.colors.primary },
-                                        ]}
+                                        style={{
+                                          color: theme.colors.text,
+                                          fontSize: 14,
+                                        }}
                                       >
-                                        Agregar subcategoría
+                                        Cancelar
                                       </Text>
                                     </Pressable>
-                                  )}
-                                </>
-                              )}
-                            </View>
-                          ))}
-                        </GHScrollView>
-                      </GestureHandlerRootView>
-                    </SafeAreaView>
-                  </SafeAreaProvider>
-                </KeyboardAvoidingView>
-              </Modal>
-            </View>
-            <View style={[styles.containerStyle, { gap: 16 }]}>
-              <View style={styles.categoryHeader}>
-                <Text
-                  style={[styles.categoryLabel, { color: theme.colors.text }]}
-                >
-                  Banco
-                </Text>
-                <Pressable
-                  style={({ pressed }) => [
-                    styles.editButton,
-                    pressed && styles.editButtonPressed,
-                  ]}
-                  onPress={() => setShowBankModal(true)}
-                >
-                  <Feather name="edit" size={20} color={theme.colors.text} />
-                </Pressable>
-              </View>
-              <Dropdown
-                style={[
-                  styles.dropdown,
-                  {
-                    backgroundColor: theme.colors.inputBackground,
-                    borderBottomColor: theme.colors.border,
-                    width: "60%",
-                  },
-                ]}
-                placeholderStyle={[
-                  styles.placeholderStyle,
-                  { color: theme.colors.placeholder },
-                ]}
-                selectedTextStyle={[
-                  styles.selectedTextStyle,
-                  { color: theme.colors.text, textAlign: "center" },
-                ]}
-                inputSearchStyle={[
-                  styles.inputSearchStyle,
-                  { color: theme.colors.text },
-                ]}
-                iconStyle={styles.iconStyle}
-                containerStyle={{
-                  backgroundColor: theme.colors.inputBackground,
-                  borderColor: theme.colors.border,
-                  borderRadius: 30,
-                }}
-                itemContainerStyle={{
-                  backgroundColor: theme.colors.inputBackground,
-                  borderRadius: 30,
-                }}
-                itemTextStyle={{
-                  color: theme.colors.text,
-                  fontSize: 14,
-                  textAlign: "center",
-                }}
-                activeColor={theme.colors.primary + "20"}
-                data={bankList}
-                labelField="label"
-                valueField="value"
-                placeholder="Seleccionar banco"
-                searchPlaceholder="Buscar..."
-                value={selectedBank?.value}
-                onChange={(item) => {
-                  setSelectedBank(item);
-                }}
-              />
-              <Modal
-                transparent={false}
-                animationType="slide"
-                visible={showBankModal}
+                                    <Pressable
+                                      onPress={() => addSubcategory(cat.value)}
+                                      style={({ pressed }) => [
+                                        styles.subCategoryAddButton,
+                                        {
+                                          backgroundColor: theme.colors.primary,
+                                        },
+                                        pressed &&
+                                          styles.subCategoryAddButtonPressed,
+                                      ]}
+                                    >
+                                      <Text
+                                        style={{
+                                          color: "#ffffff",
+                                          fontWeight: "600",
+                                          fontSize: 14,
+                                        }}
+                                      >
+                                        Agregar
+                                      </Text>
+                                    </Pressable>
+                                  </View>
+                                ) : (
+                                  <Pressable
+                                    onPress={() =>
+                                      setAddingSubcategoryForId(cat.value)
+                                    }
+                                    style={[
+                                      styles.addSubcategoryButton,
+                                      {
+                                        borderColor: theme.colors.border,
+                                      },
+                                    ]}
+                                  >
+                                    <Feather
+                                      name="plus"
+                                      size={16}
+                                      color={theme.colors.primary}
+                                    />
+                                    <Text
+                                      style={[
+                                        styles.addSubcategoryButtonText,
+                                        { color: theme.colors.primary },
+                                      ]}
+                                    >
+                                      Agregar subcategoría
+                                    </Text>
+                                  </Pressable>
+                                )}
+                              </>
+                            )}
+                          </View>
+                        ))}
+                      </GHScrollView>
+                    </GestureHandlerRootView>
+                  </SafeAreaView>
+                </SafeAreaProvider>
+              </KeyboardAvoidingView>
+            </Modal>
+          </View>
+          <View style={[styles.containerStyle, { gap: 16 }]}>
+            <View style={styles.categoryHeader}>
+              <Text
+                style={[styles.categoryLabel, { color: theme.colors.text }]}
               >
-                <KeyboardAvoidingView
-                  behavior={Platform.OS === "ios" ? "padding" : "height"}
-                  style={{ flex: 1 }}
-                >
-                  <SafeAreaProvider>
-                    <SafeAreaView
-                      style={[
-                        { flex: 1 },
-                        { backgroundColor: theme.colors.background },
-                      ]}
-                    >
-                      <View style={styles.modalHeader}>
-                        <Pressable
-                          onPress={() => {
-                            setShowBankModal(false);
-                            setVisibleInputBank(false);
-                            setInputBank("");
-                          }}
-                          style={styles.iconButton}
-                        >
-                          {({ pressed }) => (
-                            <AntDesign
-                              name="close"
-                              size={24}
-                              color={
-                                pressed
-                                  ? theme.colors.textSecondary
-                                  : theme.colors.text
-                              }
-                            />
-                          )}
-                        </Pressable>
-                        <Text
-                          style={[
-                            styles.modalTitle,
-                            { color: theme.colors.text },
-                          ]}
-                        >
-                          Bancos
-                        </Text>
-                        <Pressable
-                          onPress={() => setVisibleInputBank(!visibleInputBank)}
-                          style={styles.iconButton}
-                        >
-                          {({ pressed }) => (
-                            <AntDesign
-                              name={visibleInputBank ? "close" : "plus"}
-                              size={24}
-                              color={
-                                pressed
-                                  ? theme.colors.textSecondary
-                                  : theme.colors.text
-                              }
-                            />
-                          )}
-                        </Pressable>
-                      </View>
-                      {visibleInputBank && (
-                        <View style={styles.inputRow}>
-                          <TextInput
-                            style={[
-                              styles.categoryInput,
-                              {
-                                backgroundColor: theme.colors.surface,
-                                borderColor: theme.colors.border,
-                                color: theme.colors.text,
-                              },
-                            ]}
-                            placeholder="Nuevo banco"
-                            placeholderTextColor={theme.colors.placeholder}
-                            value={inputBank}
-                            onChangeText={setInputBank}
-                          />
-                          <Pressable
-                            style={({ pressed }) => [
-                              styles.addButton,
-                              { backgroundColor: theme.colors.primary },
-                              pressed && styles.addButtonPressed,
-                            ]}
-                            onPress={() => addBank()}
-                          >
-                            <Text style={styles.addButtonText}>Agregar</Text>
-                          </Pressable>
-                        </View>
-                      )}
-                      <GestureHandlerRootView style={{ flex: 1 }}>
-                        <GHScrollView>
-                          {bankList.map((b) => (
-                            <SwipeableCategoryItem
-                              key={b.value}
-                              cat={b}
-                              onDelete={deleteBank}
-                              onEdit={(value, newLabel) =>
-                                updateBank(value, newLabel)
-                              }
-                              isLoading={updatingBank === b.value}
-                              emptyNameMessage="El nombre del banco no puede estar vacío."
-                              renameConfirmMessage="¿Está seguro que desea cambiar el nombre del banco?"
-                            />
-                          ))}
-                        </GHScrollView>
-                      </GestureHandlerRootView>
-                    </SafeAreaView>
-                  </SafeAreaProvider>
-                </KeyboardAvoidingView>
-              </Modal>
-            </View>
-            <View style={styles.containerStyle}>
+                Banco
+              </Text>
               <Pressable
                 style={({ pressed }) => [
-                  styles.submitButton,
-                  { backgroundColor: theme.colors.primary },
-                  pressed && styles.submitButtonPressed,
+                  styles.editButton,
+                  pressed && styles.editButtonPressed,
                 ]}
-                onPress={submitTxn}
+                onPress={() => setShowBankModal(true)}
               >
-                {isSending ? (
-                  <ActivityIndicator size="small" color="#ffffff" />
-                ) : (
-                  <Text style={styles.submitButtonText}>
-                    Enviar transacción
-                  </Text>
-                )}
+                <Feather name="edit" size={20} color={theme.colors.text} />
               </Pressable>
             </View>
+            <Dropdown
+              style={[
+                styles.dropdown,
+                {
+                  backgroundColor: theme.colors.inputBackground,
+                  borderBottomColor: theme.colors.border,
+                  width: "60%",
+                },
+              ]}
+              placeholderStyle={[
+                styles.placeholderStyle,
+                { color: theme.colors.placeholder },
+              ]}
+              selectedTextStyle={[
+                styles.selectedTextStyle,
+                { color: theme.colors.text, textAlign: "center" },
+              ]}
+              inputSearchStyle={[
+                styles.inputSearchStyle,
+                { color: theme.colors.text },
+              ]}
+              iconStyle={styles.iconStyle}
+              containerStyle={{
+                backgroundColor: theme.colors.inputBackground,
+                borderColor: theme.colors.border,
+                borderRadius: 30,
+              }}
+              itemContainerStyle={{
+                backgroundColor: theme.colors.inputBackground,
+                borderRadius: 30,
+              }}
+              itemTextStyle={{
+                color: theme.colors.text,
+                fontSize: 14,
+                textAlign: "center",
+              }}
+              activeColor={theme.colors.primary + "20"}
+              data={bankList}
+              labelField="label"
+              valueField="value"
+              placeholder="Seleccionar banco"
+              searchPlaceholder="Buscar..."
+              value={selectedBank?.value}
+              onChange={(item) => {
+                setSelectedBank(item);
+              }}
+            />
+            <Modal
+              transparent={false}
+              animationType="slide"
+              visible={showBankModal}
+            >
+              <KeyboardAvoidingView
+                behavior={Platform.OS === "ios" ? "padding" : "height"}
+                style={{ flex: 1 }}
+              >
+                <SafeAreaProvider>
+                  <SafeAreaView
+                    style={[
+                      { flex: 1 },
+                      { backgroundColor: theme.colors.background },
+                    ]}
+                  >
+                    <View style={styles.modalHeader}>
+                      <Pressable
+                        onPress={() => {
+                          setShowBankModal(false);
+                          setVisibleInputBank(false);
+                          setInputBank("");
+                        }}
+                        style={styles.iconButton}
+                      >
+                        {({ pressed }) => (
+                          <AntDesign
+                            name="close"
+                            size={24}
+                            color={
+                              pressed
+                                ? theme.colors.textSecondary
+                                : theme.colors.text
+                            }
+                          />
+                        )}
+                      </Pressable>
+                      <Text
+                        style={[
+                          styles.modalTitle,
+                          { color: theme.colors.text },
+                        ]}
+                      >
+                        Bancos
+                      </Text>
+                      <Pressable
+                        onPress={() => setVisibleInputBank(!visibleInputBank)}
+                        style={styles.iconButton}
+                      >
+                        {({ pressed }) => (
+                          <AntDesign
+                            name={visibleInputBank ? "close" : "plus"}
+                            size={24}
+                            color={
+                              pressed
+                                ? theme.colors.textSecondary
+                                : theme.colors.text
+                            }
+                          />
+                        )}
+                      </Pressable>
+                    </View>
+                    {visibleInputBank && (
+                      <View style={styles.inputRow}>
+                        <TextInput
+                          style={[
+                            styles.categoryInput,
+                            {
+                              backgroundColor: theme.colors.surface,
+                              borderColor: theme.colors.border,
+                              color: theme.colors.text,
+                            },
+                          ]}
+                          placeholder="Nuevo banco"
+                          placeholderTextColor={theme.colors.placeholder}
+                          value={inputBank}
+                          onChangeText={setInputBank}
+                        />
+                        <Pressable
+                          style={({ pressed }) => [
+                            styles.addButton,
+                            { backgroundColor: theme.colors.primary },
+                            pressed && styles.addButtonPressed,
+                          ]}
+                          onPress={() => addBank()}
+                        >
+                          <Text style={styles.addButtonText}>Agregar</Text>
+                        </Pressable>
+                      </View>
+                    )}
+                    <GestureHandlerRootView style={{ flex: 1 }}>
+                      <GHScrollView>
+                        {bankList.map((b) => (
+                          <SwipeableCategoryItem
+                            key={b.value}
+                            cat={b}
+                            onDelete={deleteBank}
+                            onEdit={(value, newLabel) =>
+                              updateBank(value, newLabel)
+                            }
+                            isLoading={updatingBank === b.value}
+                            emptyNameMessage="El nombre del banco no puede estar vacío."
+                            renameConfirmMessage="¿Está seguro que desea cambiar el nombre del banco?"
+                          />
+                        ))}
+                      </GHScrollView>
+                    </GestureHandlerRootView>
+                  </SafeAreaView>
+                </SafeAreaProvider>
+              </KeyboardAvoidingView>
+            </Modal>
           </View>
-        </TouchableWithoutFeedback>
-      </SafeAreaView>
+          <View style={styles.containerStyle}>
+            <Pressable
+              style={({ pressed }) => [
+                styles.submitButton,
+                { backgroundColor: theme.colors.primary },
+                pressed && styles.submitButtonPressed,
+              ]}
+              onPress={submitTxn}
+            >
+              {isSending ? (
+                <ActivityIndicator size="small" color="#ffffff" />
+              ) : (
+                <Text style={styles.submitButtonText}>Enviar transacción</Text>
+              )}
+            </Pressable>
+          </View>
+        </View>
+      </TouchableWithoutFeedback>
     </KeyboardAvoidingView>
   );
 }

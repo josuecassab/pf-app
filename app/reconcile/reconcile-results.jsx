@@ -411,7 +411,6 @@ export default function ReconcileResults() {
             Transacciones no concilidadas
           </Text>
           <TxnTable
-            shrinkToContent
             table={statementLabel}
             txns={flattenedUnmatchedTxns}
             error={unmatchedTxnsError}
@@ -432,7 +431,6 @@ export default function ReconcileResults() {
           </Text>
           <TxnTable
             categories={categoriesData}
-            shrinkToContent
             table={`${statementLabel}_joined`}
             txns={flattenedMatchedTxns}
             error={matchedTxnsError}

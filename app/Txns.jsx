@@ -1,5 +1,5 @@
 import { useInfiniteQuery } from "@tanstack/react-query";
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import { StyleSheet, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import TxnTable from "../components/TxnTable";
@@ -13,15 +13,6 @@ const TABLE = "txns";
 export default function Txns() {
   const { theme } = useTheme();
   const { schema } = useAuth();
-  const [date, setDate] = useState(new Date());
-  const [show, setShow] = useState(false);
-  const [selectedYear, setSelectedYear] = useState(
-    String(new Date().getFullYear()),
-  );
-  const [selectedMonth, setSelectedMonth] = useState(
-    String(new Date().getMonth() + 1),
-  );
-
   const {
     data,
     error,
@@ -57,62 +48,18 @@ export default function Txns() {
     // refetchOnMount: false,
   });
 
-  const {
-    isPending: categoriesIsPending,
-    error: categoriesError,
-    data: categoriesData,
-    isFetching: categoriesIsFetching,
-  } = useCategories();
+  const { data: categoriesData } = useCategories();
 
   // Flatten all pages into a single array of transactions
   const txns = useMemo(() => {
     return data?.pages?.flatMap((page) => page) ?? [];
   }, [data]);
 
-  const showPicker = useCallback(
-    (value) => {
-      setShow(value);
-      if (value) {
-        setTempYear(selectedYear); // Reset temp year when opening picker
-        setTempMonth(selectedMonth); // Reset temp month when opening picker
-      }
-    },
-    [selectedYear, selectedMonth],
-  );
-
-  const onValueChange = useCallback(() => {
-    showPicker(false);
-    const newDate = new Date(parseInt(tempYear), parseInt(tempMonth) - 1);
-    setDate(newDate);
-    // Update year and month to trigger refetch with new filters
-    setSelectedYear(tempYear);
-    setSelectedMonth(tempMonth);
-  }, [tempYear, tempMonth, showPicker]);
   return (
     <SafeAreaView
       style={[styles.container, { backgroundColor: theme.colors.background }]}
     >
-      <View>
-        <View style={styles.headerRow}>
-          {/* <Pressable
-            onPress={() => showPicker(true)}
-            style={({ pressed }) => [
-              styles.dateButton,
-              {
-                backgroundColor: theme.colors.surface,
-                borderColor: theme.colors.border,
-              },
-              pressed && styles.dateButtonPressed,
-            ]}
-          >
-            <Text style={[styles.dateButtonText, { color: theme.colors.text }]}>
-              {date.toLocaleDateString("es-ES", {
-                month: "long",
-                year: "numeric",
-              })}
-            </Text>
-          </Pressable> */}
-        </View>
+      <View style={{ flex: 1 }}>
         <TxnTable
           categories={categoriesData}
           style={styles.tableContainer}
@@ -134,7 +81,7 @@ export default function Txns() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    paddingHorizontal: 16,
+    paddingHorizontal: 8,
     gap: 8,
   },
   headerRow: {
@@ -183,7 +130,6 @@ const styles = StyleSheet.create({
 
   tableContainer: {
     flex: 1,
-    paddingHorizontal: 16,
     gap: 8,
   },
 });

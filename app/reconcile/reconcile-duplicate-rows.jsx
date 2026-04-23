@@ -126,7 +126,6 @@ export default function ReconcileDuplicateRows() {
         </Text>
         <TxnTable
           categories={categoriesData}
-          shrinkToContent
           table={String(table)}
           txns={txns}
           error={error}

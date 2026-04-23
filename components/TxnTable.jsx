@@ -5,7 +5,6 @@ import { useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
-  Dimensions,
   FlatList,
   Modal,
   Pressable,
@@ -67,9 +66,7 @@ export default function TxnTable({
   isPending,
   queryKey,
   refetch,
-  /** When true, table height follows row content (capped by shrinkMaxHeight so FlatList can scroll and load more). */
-  shrinkToContent = false,
-  shrinkMaxHeight,
+  style,
 }) {
   const { theme } = useTheme();
   const { schema } = useAuth();
@@ -93,11 +90,6 @@ export default function TxnTable({
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedTxnIds, setSelectedTxnIds] = useState({});
   const [fechaModal, setFechaModal] = useState(null);
-  /** Vertical viewport for FlatList when table is in a flex parent (horizontal ScrollView needs explicit height). */
-  const [scrollViewportH, setScrollViewportH] = useState(0);
-  /** Full scrollable content height when shrinkToContent (FlatList onContentSizeChange). */
-  const [listFullContentH, setListFullContentH] = useState(0);
-
   const allSubcategories = useMemo(
     () =>
       (categories || [])
@@ -127,10 +119,7 @@ export default function TxnTable({
       if (seen.has(key)) continue;
       const def =
         cats.find((c) => c.label === name) ??
-        cats.find(
-          (c) =>
-            c.label?.toLowerCase() === String(name).toLowerCase(),
-        );
+        cats.find((c) => c.label?.toLowerCase() === String(name).toLowerCase());
       seen.set(
         key,
         def ? { ...def } : { label: String(name), value: String(name) },
@@ -157,10 +146,7 @@ export default function TxnTable({
           String(s.label ?? "").toLowerCase() === key ||
           String(s.value ?? "").toLowerCase() === key,
       );
-      seen.set(
-        key,
-        match ?? { label: String(sub), value: String(sub) },
-      );
+      seen.set(key, match ?? { label: String(sub), value: String(sub) });
     }
     const rows = txns || [];
     const hasNull = rows.some((t) => txnFieldIsEmpty(t.sub_categoria));
@@ -199,8 +185,7 @@ export default function TxnTable({
     return (
       categories.find((c) => c.label === categoriaName) ??
       categories.find(
-        (c) =>
-          c.label?.toLowerCase() === String(categoriaName).toLowerCase(),
+        (c) => c.label?.toLowerCase() === String(categoriaName).toLowerCase(),
       )
     );
   };
@@ -302,6 +287,8 @@ export default function TxnTable({
     return (
       <View
         style={[
+          styles.root,
+          style,
           { padding: 16, alignItems: "center", justifyContent: "center" },
         ]}
       >
@@ -311,7 +298,7 @@ export default function TxnTable({
 
   if (error)
     return (
-      <View style={[{ padding: 16, justifyContent: "center" }]}>
+      <View style={[styles.root, style, { padding: 16, justifyContent: "center" }]}>
         <Text style={{ color: theme.colors.error }}>
           An error has occurred: {error.message}
         </Text>
@@ -1197,28 +1184,8 @@ export default function TxnTable({
     </View>
   );
 
-  const fillScrollArea = false;
-  const useMeasuredViewport = shrinkToContent;
-  const defaultShrinkCap = Math.round(Dimensions.get("window").height * 0.55);
-  const resolvedShrinkCap =
-    shrinkMaxHeight != null ? shrinkMaxHeight : defaultShrinkCap;
-  const effectiveShrinkCap = shrinkToContent ? resolvedShrinkCap : null;
-  const listScrollEnabled =
-    fillScrollArea ||
-    (shrinkToContent && listFullContentH > effectiveShrinkCap);
-  const flatListHeightStyle = fillScrollArea
-    ? scrollViewportH > 0
-      ? { height: scrollViewportH }
-      : { minHeight: 200 }
-    : {
-        height:
-          listFullContentH > 0
-            ? Math.min(listFullContentH, effectiveShrinkCap)
-            : 120,
-      };
-
   return (
-    <>
+    <View style={[styles.root, style]}>
       <Modal
         visible={fechaModal != null}
         transparent
@@ -1414,111 +1381,52 @@ export default function TxnTable({
           setHeaderDropdownVisible(false);
         }}
       />
-      {useMeasuredViewport ? (
-        <View
+      <View style={styles.tableMain}>
+        {selectionToolbar}
+        {filterChipsRow}
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={true}
           style={[
-            fillScrollArea
-              ? { flex: 1, minHeight: 0 }
-              : { flexGrow: 0, minHeight: 0 },
+            styles.scrollView,
+            { flex: 1, borderColor: theme.colors.border },
           ]}
         >
-          {selectionToolbar}
-          {filterChipsRow}
-          <ScrollView
-            horizontal
-            nestedScrollEnabled
-            showsHorizontalScrollIndicator={true}
-            onLayout={
-              fillScrollArea
-                ? (e) => {
-                    const h = Math.round(e.nativeEvent.layout.height);
-                    if (h > 0) {
-                      setScrollViewportH((prev) => (prev === h ? prev : h));
-                    }
-                  }
-                : undefined
-            }
+          <FlatList
             style={[
-              styles.scrollView,
-              { borderColor: theme.colors.border },
-              fillScrollArea
-                ? { flex: 1, minHeight: 0 }
-                : { flexGrow: 0, alignSelf: "stretch" },
+              styles.flatList,
+              { flex: 1, borderColor: theme.colors.border },
             ]}
-          >
-            <FlatList
-              nestedScrollEnabled
-              removeClippedSubviews={false}
-              scrollEnabled={listScrollEnabled}
-              style={[
-                styles.flatList,
-                { borderColor: theme.colors.border },
-                flatListHeightStyle,
-              ]}
-              onContentSizeChange={
-                shrinkToContent
-                  ? (_, h) => {
-                      if (h > 0) {
-                        setListFullContentH((prev) => (prev === h ? prev : h));
-                      }
-                    }
-                  : undefined
-              }
-              keyExtractor={(item) => item.id}
-              data={filteredTxns}
-              ListHeaderComponent={renderHeader}
-              renderItem={({ item }) => renderTxns(item)}
-              stickyHeaderIndices={[0]}
-              refreshControl={
-                <RefreshControl
-                  refreshing={refreshing}
-                  onRefresh={handleLoadRecent}
-                  tintColor={theme.colors.primary}
-                  colors={[theme.colors.primary]}
-                />
-              }
-              onEndReached={handleLoadMore}
-              onEndReachedThreshold={0.5}
-              ListFooterComponent={renderFooter}
-            />
-          </ScrollView>
-        </View>
-      ) : (
-        <>
-          {selectionToolbar}
-          {filterChipsRow}
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={true}
-            style={[styles.scrollView, { borderColor: theme.colors.border }]}
-          >
-            <FlatList
-              style={[styles.flatList, { borderColor: theme.colors.border }]}
-              keyExtractor={(item) => item.id}
-              data={filteredTxns}
-              ListHeaderComponent={renderHeader}
-              renderItem={({ item }) => renderTxns(item)}
-              stickyHeaderIndices={[0]}
-              refreshControl={
-                <RefreshControl
-                  refreshing={refreshing}
-                  onRefresh={handleLoadRecent}
-                  tintColor={theme.colors.primary}
-                  colors={[theme.colors.primary]}
-                />
-              }
-              onEndReached={handleLoadMore}
-              onEndReachedThreshold={0.5}
-              ListFooterComponent={renderFooter}
-            />
-          </ScrollView>
-        </>
-      )}
-    </>
+            keyExtractor={(item) => item.id}
+            data={filteredTxns}
+            ListHeaderComponent={renderHeader}
+            renderItem={({ item }) => renderTxns(item)}
+            stickyHeaderIndices={[0]}
+            refreshControl={
+              <RefreshControl
+                refreshing={refreshing}
+                onRefresh={handleLoadRecent}
+                tintColor={theme.colors.primary}
+                colors={[theme.colors.primary]}
+              />
+            }
+            onEndReached={handleLoadMore}
+            onEndReachedThreshold={0.5}
+            ListFooterComponent={renderFooter}
+          />
+        </ScrollView>
+      </View>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
+  root: {
+    flex: 1,
+  },
+  tableMain: {
+    flex: 1,
+  },
   row: {
     flexDirection: "row",
   },
