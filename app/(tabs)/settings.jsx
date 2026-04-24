@@ -10,11 +10,11 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useAuth } from "../contexts/AuthContext";
+import { useAuth } from "../../contexts/AuthContext";
 import { PAYWALL_RESULT } from "react-native-purchases-ui";
-import { usePurchasesContext } from "../contexts/PurchasesContext";
-import { useTheme } from "../contexts/ThemeContext";
-import { REVENUECAT_PRODUCT_IDS } from "../lib/revenuecatConstants";
+import { usePurchasesContext } from "../../contexts/PurchasesContext";
+import { useTheme } from "../../contexts/ThemeContext";
+import { REVENUECAT_PRODUCT_IDS } from "../../lib/revenuecatConstants";
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL;
 

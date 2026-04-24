@@ -16,9 +16,9 @@ import {
 } from "react-native";
 import { Dropdown } from "react-native-element-dropdown";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useAuth } from "../../contexts/AuthContext";
-import { useTheme } from "../../contexts/ThemeContext";
-import { useBanks } from "../../hooks/useBanks";
+import { useAuth } from "../../../contexts/AuthContext";
+import { useTheme } from "../../../contexts/ThemeContext";
+import { useBanks } from "../../../hooks/useBanks";
 import { reconcileStyles } from "../reconcileStyles";
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL;

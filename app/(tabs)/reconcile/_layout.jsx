@@ -1,5 +1,5 @@
 import { Stack } from "expo-router";
-import { useTheme } from "../../contexts/ThemeContext";
+import { useTheme } from "../../../contexts/ThemeContext";
 
 export default function ReconcileLayout() {
   const { theme } = useTheme();

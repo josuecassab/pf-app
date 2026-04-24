@@ -12,10 +12,10 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import GroupedTable from "../components/GroupedTable";
-import { useAuth } from "../contexts/AuthContext";
-import { useTheme } from "../contexts/ThemeContext";
-import { useCategoryGroups } from "../hooks/useCategoryGroups";
+import GroupedTable from "../../components/GroupedTable";
+import { useAuth } from "../../contexts/AuthContext";
+import { useTheme } from "../../contexts/ThemeContext";
+import { useCategoryGroups } from "../../hooks/useCategoryGroups";
 
 const months = [
   "enero",

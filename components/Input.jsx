@@ -1,15 +1,13 @@
-import AntDesign from "@expo/vector-icons/AntDesign";
 import Feather from "@expo/vector-icons/Feather";
+import { router, useFocusEffect } from "expo-router";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import SegmentedControl from "@react-native-segmented-control/segmented-control";
-import { useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
   Keyboard,
   KeyboardAvoidingView,
-  Modal,
   Platform,
   Pressable,
   StyleSheet,
@@ -19,20 +17,12 @@ import {
   View,
 } from "react-native";
 import { Dropdown } from "react-native-element-dropdown";
-import {
-  GestureHandlerRootView,
-  ScrollView as GHScrollView,
-} from "react-native-gesture-handler";
-import {
-  SafeAreaProvider,
-  SafeAreaView,
-  useSafeAreaInsets,
-} from "react-native-safe-area-context";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "../contexts/AuthContext";
 import { useTheme } from "../contexts/ThemeContext";
 import { useBanks } from "../hooks/useBanks";
 import { useCategories } from "../hooks/useCategories";
-import SwipeableCategoryItem from "./SwipeableCategoryItem";
+import { takePendingBankSelection } from "../lib/pendingBankSelection";
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL;
 const EMPTY_BANK_LIST = [];
@@ -118,7 +108,6 @@ function formatFullAmount(num, decimal, group) {
 }
 
 export default function Input() {
-  const queryClient = useQueryClient();
   const [selectedCategory, setSelectedCategory] = useState(null);
   const [selectedSubcategory, setSelectedSubcategory] = useState(null);
   const [date, setDate] = useState(new Date());
@@ -126,22 +115,9 @@ export default function Input() {
   const [txtType, setTxnType] = useState(1);
   const [txtData, setTxnData] = useState({});
   const [value, setValue] = useState("");
-  const [categories, setCategories] = useState([]);
-  const [visibleInputCat, setVisibleInputCat] = useState(false);
-  const [inputCategory, setInputCategory] = useState("");
-  const [inputSubcategory, setInputSubcategory] = useState("");
-  const [showCategoryModal, setShowCategoryModal] = useState(false);
-  const [expandedCategories, setExpandedCategories] = useState(new Set());
-  const [addingSubcategoryForId, setAddingSubcategoryForId] = useState(null);
-  const [updatingCategory, setUpdatingCategory] = useState(null);
   const [isSending, setIsSending] = useState(false);
-  const [filteredCategories, setFilteredCategories] = useState([]);
-  const [showBankModal, setShowBankModal] = useState(false);
-  const [visibleInputBank, setVisibleInputBank] = useState(false);
-  const [inputBank, setInputBank] = useState("");
   const [selectedBank, setSelectedBank] = useState(null);
-  const [updatingBank, setUpdatingBank] = useState(null);
-  const { session, schema } = useAuth();
+  const { schema } = useAuth();
 
   const { theme } = useTheme();
   const insets = useSafeAreaInsets();
@@ -152,16 +128,18 @@ export default function Input() {
   const amountSeparators = useMemo(() => getAmountFormattingConfig(), []);
 
   const { isPending, error, data, isFetching } = useCategories();
+  const categoryOptions = Array.isArray(data) ? data : [];
   const { data: banksData } = useBanks();
   const bankList = Array.isArray(banksData) ? banksData : EMPTY_BANK_LIST;
 
   console.log(value);
 
-  useEffect(() => {
-    if (data) {
-      setCategories(data);
-    }
-  }, [data]);
+  useFocusEffect(
+    useCallback(() => {
+      const bank = takePendingBankSelection();
+      if (bank) setSelectedBank(bank);
+    }, []),
+  );
 
   useEffect(() => {
     if (!bankList.length) {
@@ -293,279 +271,6 @@ export default function Input() {
     }
   };
 
-  const addBank = async () => {
-    const label = inputBank.trim();
-    if (label === "") return;
-    try {
-      const res = await fetch(
-        `${API_URL}/insert_bank/?schema=${schema}&name=${encodeURIComponent(label)}`,
-        { method: "POST" },
-      );
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        Alert.alert(
-          "Error agregando el banco",
-          data.message || JSON.stringify(data),
-        );
-        return;
-      }
-      await queryClient.invalidateQueries({ queryKey: ["banks"] });
-      setInputBank("");
-      setVisibleInputBank(false);
-      if (data?.value != null) {
-        setSelectedBank({
-          label: data.label ?? data.name ?? label,
-          value: data.value,
-        });
-      }
-    } catch (error) {
-      console.error("Error adding bank:", error);
-      Alert.alert("Error agregando el banco", error.message);
-    }
-  };
-
-  const deleteBank = async (bankValue) => {
-    try {
-      const res = await fetch(
-        `${API_URL}/delete_bank/?id=${bankValue}&schema=${schema}`,
-        {
-          method: "DELETE",
-        },
-      );
-      const result = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        Alert.alert(
-          "Error eliminando el banco",
-          result.message || JSON.stringify(result),
-        );
-        return;
-      }
-      await queryClient.invalidateQueries({ queryKey: ["banks"] });
-    } catch (error) {
-      console.error("Error deleting bank:", error);
-      Alert.alert("Error eliminando el banco", error.message);
-    }
-  };
-
-  const updateBank = async (value, newLabel) => {
-    setUpdatingBank(value);
-    try {
-      const res = await fetch(
-        `${API_URL}/update_bank/?value=${value}&name=${encodeURIComponent(newLabel)}&schema=${schema}`,
-        {
-          method: "PUT",
-        },
-      );
-      const result = await res.json();
-      if (!res.ok) {
-        Alert.alert(
-          "Error actualizando el banco",
-          result.message || JSON.stringify(result),
-        );
-        return;
-      }
-      await queryClient.invalidateQueries({ queryKey: ["banks"] });
-    } catch (error) {
-      console.error("Error actualizando el banco:", error);
-    } finally {
-      setUpdatingBank(null);
-    }
-  };
-
-  const addCategory = async () => {
-    if (inputCategory.trim() === "") return;
-    try {
-      console.log("Adding category:", inputCategory);
-      const res = await fetch(
-        `${API_URL}/categories/insert_category/?schema=${schema}`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({ label: inputCategory }),
-        },
-      );
-
-      const data = await res.json();
-      if (!res.ok) {
-        console.log("Error response data:", res);
-        Alert.alert(
-          "Error agregando la categoría",
-          data.message || JSON.stringify(data),
-        );
-        return;
-      }
-      await queryClient.invalidateQueries({ queryKey: ["categories"] });
-      setInputCategory("");
-      setVisibleInputCat(false);
-    } catch (error) {
-      console.error("Error adding category:", error);
-      Alert.alert("Error agregando la categoría", error.message);
-    }
-  };
-
-  const addSubcategory = async (category) => {
-    if (inputSubcategory.trim() === "") return;
-    try {
-      const res = await fetch(
-        `${API_URL}/categories/insert_subcategory/?schema=${schema}`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            sub_categoria: inputSubcategory,
-            id_categoria: category,
-          }),
-        },
-      );
-
-      const data = await res.json();
-      if (!res.ok) {
-        console.log("Error response data:", res);
-        Alert.alert(
-          "Error agregando la subcategoría",
-          data.message || JSON.stringify(data),
-        );
-        return;
-      }
-
-      await queryClient.invalidateQueries({ queryKey: ["categories"] });
-      setInputSubcategory("");
-      setAddingSubcategoryForId(null);
-    } catch (error) {
-      console.error("Error adding subcategory:", error);
-      Alert.alert("Error agregando la subcategoría", error.message);
-    }
-  };
-
-  const deleteCategory = async (categoryValue) => {
-    try {
-      const res = await fetch(
-        `${API_URL}/categories/delete_category/?id=${categoryValue}&schema=${schema}`,
-        {
-          method: "DELETE",
-        },
-      );
-
-      if (!res.ok) {
-        const data = await res.json();
-        Alert.alert(
-          "Error eliminando la categoría",
-          data.message || JSON.stringify(data),
-        );
-        return;
-      }
-
-      await queryClient.invalidateQueries({ queryKey: ["categories"] });
-    } catch (error) {
-      console.error("Error deleting category:", error);
-      Alert.alert("Error eliminando la categoría", error.message);
-    }
-  };
-
-  const deleteSubcategory = async (categoryValue) => {
-    try {
-      const res = await fetch(
-        `${API_URL}/categories/delete_subcategory/?id=${categoryValue}&schema=${schema}`,
-        {
-          method: "DELETE",
-        },
-      );
-
-      const result = await res.json();
-      if (!res.ok) {
-        Alert.alert(
-          "Error eliminando la subcategoría",
-          result.message || JSON.stringify(result),
-        );
-        return;
-      }
-
-      await queryClient.invalidateQueries({ queryKey: ["categories"] });
-    } catch (error) {
-      console.error("Error deleting subcategory:", error);
-      Alert.alert("Error eliminando la subcategoría", error.message);
-    }
-  };
-
-  const updateCategory = async (value, newLabel, parentId) => {
-    console.log(value, newLabel);
-    setUpdatingCategory(value);
-    try {
-      const res = await fetch(
-        `${API_URL}/categories/update_category/?value=${value}&label=${newLabel}&schema=${schema}`,
-        {
-          method: "PUT",
-        },
-      );
-      const result = await res.json();
-      if (!res.ok) {
-        Alert.alert(
-          "Error actualizando categoría",
-          result.message || JSON.stringify(result),
-        );
-        return;
-      }
-      await queryClient.invalidateQueries({ queryKey: ["categories"] });
-    } catch (error) {
-      console.error("Error actualizando categoría:", error);
-    } finally {
-      setUpdatingCategory(null);
-    }
-  };
-
-  const updateSubcategory = async (value, newLabel, parentId) => {
-    console.log(value, newLabel);
-    setUpdatingCategory(value);
-    try {
-      const res = await fetch(
-        `${API_URL}/categories/update_subcategory/?value=${value}&label=${newLabel}&schema=${schema}`,
-        {
-          method: "PUT",
-        },
-      );
-      const result = await res.json();
-      if (!res.ok) {
-        Alert.alert(
-          "Error actualizando Subcategoría",
-          result.message || JSON.stringify(result),
-        );
-        return;
-      }
-      await queryClient.invalidateQueries({ queryKey: ["categories"] });
-    } catch (error) {
-      console.error("Error actualizando Subcategoría:", error);
-    } finally {
-      setUpdatingCategory(null);
-    }
-  };
-
-  const expandCategories = (cat) => {
-    setExpandedCategories((prev) => {
-      const newSet = new Set(prev);
-      if (newSet.has(cat.value)) {
-        newSet.delete(cat.value);
-      } else {
-        newSet.add(cat.value);
-      }
-      return newSet;
-    });
-  };
-
-  const searchCategory = useCallback(
-    (text) => {
-      console.log("Filtering data with text:", text);
-      const filteredCategories = data.filter((cat) =>
-        cat.label.toLowerCase().includes(text.toLowerCase()),
-      );
-      setCategories(filteredCategories);
-    },
-    [data],
-  );
-
   return (
     <KeyboardAvoidingView
       behavior={Platform.OS === "ios" ? "padding" : "height"}
@@ -660,7 +365,7 @@ export default function Input() {
                   styles.editButton,
                   pressed && styles.editButtonPressed,
                 ]}
-                onPress={() => setShowCategoryModal(true)}
+                onPress={() => router.push("/manage-categories")}
               >
                 <Feather name="edit" size={20} color={theme.colors.text} />
               </Pressable>
@@ -701,7 +406,7 @@ export default function Input() {
                 fontSize: 14,
               }}
               activeColor={theme.colors.primary + "20"}
-              data={categories}
+              data={categoryOptions}
               search
               maxHeight={220}
               labelField="label"
@@ -765,254 +470,6 @@ export default function Input() {
               }}
               dropdownPosition="bottom"
             />
-            <Modal
-              transparent={false}
-              animationType="slide"
-              visible={showCategoryModal}
-            >
-              <KeyboardAvoidingView
-                behavior={Platform.OS === "ios" ? "padding" : "height"}
-                style={{ flex: 1 }}
-              >
-                <SafeAreaProvider>
-                  <SafeAreaView
-                    style={[
-                      { flex: 1 },
-                      { backgroundColor: theme.colors.background },
-                    ]}
-                  >
-                    <View style={styles.modalHeader}>
-                      <Pressable
-                        onPress={() => {
-                          setShowCategoryModal(false);
-                          setAddingSubcategoryForId(null);
-                          setInputSubcategory("");
-                        }}
-                        style={styles.iconButton}
-                      >
-                        {({ pressed }) => (
-                          <AntDesign
-                            name="close"
-                            size={24}
-                            color={
-                              pressed
-                                ? theme.colors.textSecondary
-                                : theme.colors.text
-                            }
-                          />
-                        )}
-                      </Pressable>
-                      <Text
-                        style={[
-                          styles.modalTitle,
-                          { color: theme.colors.text },
-                        ]}
-                      >
-                        Categorias
-                      </Text>
-                      <Pressable
-                        onPress={() => setVisibleInputCat(!visibleInputCat)}
-                        style={styles.iconButton}
-                      >
-                        {({ pressed }) => (
-                          <AntDesign
-                            name={visibleInputCat ? "close" : "plus"}
-                            size={24}
-                            color={
-                              pressed
-                                ? theme.colors.textSecondary
-                                : theme.colors.text
-                            }
-                          />
-                        )}
-                      </Pressable>
-                    </View>
-                    <View style={styles.searchContainer}>
-                      <Feather
-                        name="search"
-                        size={18}
-                        color={theme.colors.placeholder}
-                        style={styles.searchIcon}
-                      />
-                      <TextInput
-                        style={[
-                          styles.searchInput,
-                          {
-                            backgroundColor: theme.colors.inputBackground,
-                            borderColor: theme.colors.border,
-                            color: theme.colors.text,
-                          },
-                        ]}
-                        placeholder="Buscar categoría..."
-                        placeholderTextColor={theme.colors.placeholder}
-                        defaultValue=""
-                        onChangeText={(text) => {
-                          searchCategory(text);
-                        }}
-                        autoCorrect={false}
-                        clearButtonMode="while-editing"
-                      />
-                    </View>
-                    {visibleInputCat && (
-                      <View style={styles.inputRow}>
-                        <TextInput
-                          style={[
-                            styles.categoryInput,
-                            {
-                              backgroundColor: theme.colors.surface,
-                              borderColor: theme.colors.border,
-                              color: theme.colors.text,
-                            },
-                          ]}
-                          placeholder="Nueva Categoria"
-                          placeholderTextColor={theme.colors.placeholder}
-                          value={inputCategory}
-                          onChangeText={(text) => {
-                            setInputCategory(text);
-                          }}
-                        />
-                        <Pressable
-                          style={({ pressed }) => [
-                            styles.addButton,
-                            { backgroundColor: theme.colors.primary },
-                            pressed && styles.addButtonPressed,
-                          ]}
-                          onPress={() => addCategory()}
-                        >
-                          <Text style={styles.addButtonText}>Agregar</Text>
-                        </Pressable>
-                      </View>
-                    )}
-                    <GestureHandlerRootView style={{ flex: 1 }}>
-                      <GHScrollView>
-                        {categories.map((cat) => (
-                          <View key={cat.value}>
-                            <SwipeableCategoryItem
-                              cat={cat}
-                              parent={true}
-                              onPress={() => expandCategories(cat)}
-                              onDelete={deleteCategory}
-                              onEdit={updateCategory}
-                              isLoading={updatingCategory === cat.value}
-                            />
-                            {expandedCategories.has(cat.value) && (
-                              <>
-                                {cat.sub_categorias.map((sub) => (
-                                  <View
-                                    key={sub.value}
-                                    style={styles.subCategoryContainer}
-                                  >
-                                    <SwipeableCategoryItem
-                                      parentId={cat.value}
-                                      cat={sub}
-                                      onDelete={deleteSubcategory}
-                                      onEdit={updateSubcategory}
-                                    />
-                                  </View>
-                                ))}
-                                {addingSubcategoryForId === cat.value ? (
-                                  <View
-                                    key={`${cat.value}-input`}
-                                    style={styles.subCategoryInputRow}
-                                  >
-                                    <TextInput
-                                      style={[
-                                        styles.subCategoryInput,
-                                        {
-                                          backgroundColor: theme.colors.surface,
-                                          borderColor: theme.colors.border,
-                                          color: theme.colors.text,
-                                        },
-                                      ]}
-                                      placeholder="Nueva subcategoría"
-                                      placeholderTextColor={
-                                        theme.colors.placeholder
-                                      }
-                                      value={inputSubcategory}
-                                      onChangeText={setInputSubcategory}
-                                      autoFocus
-                                    />
-                                    <Pressable
-                                      onPress={() => {
-                                        setAddingSubcategoryForId(null);
-                                        setInputSubcategory("");
-                                      }}
-                                      style={[
-                                        styles.subCategoryAddButton,
-                                        {
-                                          backgroundColor:
-                                            theme.colors.inputBackground,
-                                        },
-                                      ]}
-                                    >
-                                      <Text
-                                        style={{
-                                          color: theme.colors.text,
-                                          fontSize: 14,
-                                        }}
-                                      >
-                                        Cancelar
-                                      </Text>
-                                    </Pressable>
-                                    <Pressable
-                                      onPress={() => addSubcategory(cat.value)}
-                                      style={({ pressed }) => [
-                                        styles.subCategoryAddButton,
-                                        {
-                                          backgroundColor: theme.colors.primary,
-                                        },
-                                        pressed &&
-                                          styles.subCategoryAddButtonPressed,
-                                      ]}
-                                    >
-                                      <Text
-                                        style={{
-                                          color: "#ffffff",
-                                          fontWeight: "600",
-                                          fontSize: 14,
-                                        }}
-                                      >
-                                        Agregar
-                                      </Text>
-                                    </Pressable>
-                                  </View>
-                                ) : (
-                                  <Pressable
-                                    onPress={() =>
-                                      setAddingSubcategoryForId(cat.value)
-                                    }
-                                    style={[
-                                      styles.addSubcategoryButton,
-                                      {
-                                        borderColor: theme.colors.border,
-                                      },
-                                    ]}
-                                  >
-                                    <Feather
-                                      name="plus"
-                                      size={16}
-                                      color={theme.colors.primary}
-                                    />
-                                    <Text
-                                      style={[
-                                        styles.addSubcategoryButtonText,
-                                        { color: theme.colors.primary },
-                                      ]}
-                                    >
-                                      Agregar subcategoría
-                                    </Text>
-                                  </Pressable>
-                                )}
-                              </>
-                            )}
-                          </View>
-                        ))}
-                      </GHScrollView>
-                    </GestureHandlerRootView>
-                  </SafeAreaView>
-                </SafeAreaProvider>
-              </KeyboardAvoidingView>
-            </Modal>
           </View>
           <View style={[styles.containerStyle, { gap: 16 }]}>
             <View style={styles.categoryHeader}>
@@ -1026,7 +483,7 @@ export default function Input() {
                   styles.editButton,
                   pressed && styles.editButtonPressed,
                 ]}
-                onPress={() => setShowBankModal(true)}
+                onPress={() => router.push("/manage-banks")}
               >
                 <Feather name="edit" size={20} color={theme.colors.text} />
               </Pressable>
@@ -1078,117 +535,6 @@ export default function Input() {
                 setSelectedBank(item);
               }}
             />
-            <Modal
-              transparent={false}
-              animationType="slide"
-              visible={showBankModal}
-            >
-              <KeyboardAvoidingView
-                behavior={Platform.OS === "ios" ? "padding" : "height"}
-                style={{ flex: 1 }}
-              >
-                <SafeAreaProvider>
-                  <SafeAreaView
-                    style={[
-                      { flex: 1 },
-                      { backgroundColor: theme.colors.background },
-                    ]}
-                  >
-                    <View style={styles.modalHeader}>
-                      <Pressable
-                        onPress={() => {
-                          setShowBankModal(false);
-                          setVisibleInputBank(false);
-                          setInputBank("");
-                        }}
-                        style={styles.iconButton}
-                      >
-                        {({ pressed }) => (
-                          <AntDesign
-                            name="close"
-                            size={24}
-                            color={
-                              pressed
-                                ? theme.colors.textSecondary
-                                : theme.colors.text
-                            }
-                          />
-                        )}
-                      </Pressable>
-                      <Text
-                        style={[
-                          styles.modalTitle,
-                          { color: theme.colors.text },
-                        ]}
-                      >
-                        Bancos
-                      </Text>
-                      <Pressable
-                        onPress={() => setVisibleInputBank(!visibleInputBank)}
-                        style={styles.iconButton}
-                      >
-                        {({ pressed }) => (
-                          <AntDesign
-                            name={visibleInputBank ? "close" : "plus"}
-                            size={24}
-                            color={
-                              pressed
-                                ? theme.colors.textSecondary
-                                : theme.colors.text
-                            }
-                          />
-                        )}
-                      </Pressable>
-                    </View>
-                    {visibleInputBank && (
-                      <View style={styles.inputRow}>
-                        <TextInput
-                          style={[
-                            styles.categoryInput,
-                            {
-                              backgroundColor: theme.colors.surface,
-                              borderColor: theme.colors.border,
-                              color: theme.colors.text,
-                            },
-                          ]}
-                          placeholder="Nuevo banco"
-                          placeholderTextColor={theme.colors.placeholder}
-                          value={inputBank}
-                          onChangeText={setInputBank}
-                        />
-                        <Pressable
-                          style={({ pressed }) => [
-                            styles.addButton,
-                            { backgroundColor: theme.colors.primary },
-                            pressed && styles.addButtonPressed,
-                          ]}
-                          onPress={() => addBank()}
-                        >
-                          <Text style={styles.addButtonText}>Agregar</Text>
-                        </Pressable>
-                      </View>
-                    )}
-                    <GestureHandlerRootView style={{ flex: 1 }}>
-                      <GHScrollView>
-                        {bankList.map((b) => (
-                          <SwipeableCategoryItem
-                            key={b.value}
-                            cat={b}
-                            onDelete={deleteBank}
-                            onEdit={(value, newLabel) =>
-                              updateBank(value, newLabel)
-                            }
-                            isLoading={updatingBank === b.value}
-                            emptyNameMessage="El nombre del banco no puede estar vacío."
-                            renameConfirmMessage="¿Está seguro que desea cambiar el nombre del banco?"
-                          />
-                        ))}
-                      </GHScrollView>
-                    </GestureHandlerRootView>
-                  </SafeAreaView>
-                </SafeAreaProvider>
-              </KeyboardAvoidingView>
-            </Modal>
           </View>
           <View style={styles.containerStyle}>
             <Pressable
@@ -1285,112 +631,6 @@ const styles = StyleSheet.create({
   },
   editButtonPressed: {
     opacity: 0.5,
-  },
-  modalHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-  },
-  iconButton: {
-    padding: 8,
-  },
-  modalTitle: {
-    fontSize: 24,
-    fontWeight: "600",
-  },
-  inputRow: {
-    flexDirection: "row",
-    gap: 8,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-  },
-  categoryInput: {
-    borderRadius: 8,
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    color: "#000000",
-    flex: 1,
-    borderWidth: 1,
-    borderColor: "#d1d5db",
-    marginBottom: 8,
-  },
-  addButton: {
-    backgroundColor: "#0a84ff",
-    borderRadius: 8,
-    padding: 12,
-    marginBottom: 8,
-  },
-  addButtonPressed: {
-    opacity: 0.8,
-  },
-  addButtonText: {
-    color: "#ffffff",
-    fontWeight: "600",
-  },
-  subCategoryContainer: {
-    width: "100%",
-  },
-  subCategoryInputRow: {
-    flexDirection: "row",
-    gap: 8,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    marginLeft: 16,
-  },
-  subCategoryInput: {
-    borderRadius: 8,
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    color: "#000000",
-    flex: 1,
-    borderWidth: 1,
-    borderColor: "#d1d5db",
-  },
-  subCategoryAddButton: {
-    paddingHorizontal: 16,
-    justifyContent: "center",
-    borderRadius: 8,
-  },
-  subCategoryAddButtonPressed: {
-    opacity: 0.8,
-  },
-  addSubcategoryButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    marginLeft: 16,
-    marginBottom: 8,
-    borderWidth: 1,
-    borderRadius: 8,
-    borderStyle: "dashed",
-  },
-  addSubcategoryButtonText: {
-    fontSize: 14,
-    fontWeight: "500",
-  },
-  searchContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-  },
-  searchIcon: {
-    position: "absolute",
-    left: 28,
-    zIndex: 1,
-  },
-  searchInput: {
-    flex: 1,
-    height: 44,
-    borderRadius: 22,
-    paddingLeft: 40,
-    paddingRight: 16,
-    fontSize: 16,
-    borderWidth: 1,
   },
   submitButton: {
     width: "50%",

@@ -15,10 +15,10 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import TxnTable from "../../components/TxnTable";
-import { useAuth } from "../../contexts/AuthContext";
-import { useTheme } from "../../contexts/ThemeContext";
-import { useCategories } from "../../hooks/useCategories";
+import TxnTable from "../../../components/TxnTable";
+import { useAuth } from "../../../contexts/AuthContext";
+import { useTheme } from "../../../contexts/ThemeContext";
+import { useCategories } from "../../../hooks/useCategories";
 import { reconcileStyles } from "../reconcileStyles";
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL;

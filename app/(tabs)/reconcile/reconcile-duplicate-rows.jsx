@@ -3,9 +3,9 @@ import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
 import { ScrollView, Text } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import TxnTable from "../../components/TxnTable";
-import { useTheme } from "../../contexts/ThemeContext";
-import { useCategories } from "../../hooks/useCategories";
+import TxnTable from "../../../components/TxnTable";
+import { useTheme } from "../../../contexts/ThemeContext";
+import { useCategories } from "../../../hooks/useCategories";
 import { reconcileStyles } from "../reconcileStyles";
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL;
