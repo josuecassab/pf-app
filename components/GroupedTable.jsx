@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import AntDesign from "@expo/vector-icons/AntDesign";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   FlatList,
   Pressable,
@@ -34,7 +34,7 @@ export default function GroupedTable({
   selectedGroupTab = "all",
   onSelectGroupTab,
   onAddGroupPress,
-  onDeleteGroup,
+  onGroupLongPress,
 }) {
   const { theme } = useTheme();
   const leftRef = useRef(null);
@@ -60,13 +60,13 @@ export default function GroupedTable({
     );
   }, [sortedData, activeColumns]);
 
-  const toggleCategory = useCallback((categoria) => {
+  const toggleCategory = useCallback((category) => {
     setExpandedCategories((prev) => {
       const newSet = new Set(prev);
-      if (newSet.has(categoria)) {
-        newSet.delete(categoria);
+      if (newSet.has(category)) {
+        newSet.delete(category);
       } else {
-        newSet.add(categoria);
+        newSet.add(category);
       }
       return newSet;
     });
@@ -188,7 +188,7 @@ export default function GroupedTable({
 
   const renderLeftColumnItem = useCallback(
     ({ item }) => {
-      const isExpanded = expandedCategories.has(item.categoria);
+      const isExpanded = expandedCategories.has(item.category);
 
       return (
         <View>
@@ -204,7 +204,7 @@ export default function GroupedTable({
               },
               styles.rowHeight,
             ]}
-            onPress={() => toggleCategory(item.categoria)}
+            onPress={() => toggleCategory(item.category)}
           >
             <Text
               style={[
@@ -215,11 +215,11 @@ export default function GroupedTable({
               numberOfLines={1}
             >
               {isExpanded ? "▼ " : "▶ "}
-              {item.categoria}
+              {item.category}
             </Text>
           </TouchableOpacity>
           {isExpanded &&
-            item.subcategorias.map((subItem, index) => (
+            item.subcategories.map((subItem, index) => (
               <View
                 key={index}
                 style={[
@@ -239,7 +239,7 @@ export default function GroupedTable({
                   ]}
                   numberOfLines={1}
                 >
-                  {subItem?.sub_categoria || "Sin subcategoría"}
+                  {subItem?.subcategory || "Sin subcategoría"}
                 </Text>
               </View>
             ))}
@@ -251,7 +251,7 @@ export default function GroupedTable({
 
   const renderRightColumnsItem = useCallback(
     ({ item }) => {
-      const isExpanded = expandedCategories.has(item.categoria);
+      const isExpanded = expandedCategories.has(item.category);
       const cellWidth = "w-32";
 
       const cellWidthNum = 128; // w-32 = 128px
@@ -286,7 +286,7 @@ export default function GroupedTable({
             ))}
           </View>
           {isExpanded &&
-            item.subcategorias.map((subItem, index) => (
+            item.subcategories.map((subItem, index) => (
               <View
                 key={index}
                 style={[groupedTableStyles.row, styles.rowHeight]}
@@ -352,7 +352,7 @@ export default function GroupedTable({
           },
           styles.headerHeight,
         ]}
-        onPress={() => handleSort("categoria")}
+        onPress={() => handleSort("category")}
       >
         <Text
           style={[
@@ -361,7 +361,7 @@ export default function GroupedTable({
           ]}
         >
           Name{" "}
-          {sortConfig.key === "categoria"
+          {sortConfig.key === "category"
             ? sortConfig.direction === "asc"
               ? "↑"
               : "↓"
@@ -463,18 +463,16 @@ export default function GroupedTable({
           </Pressable>
           {categoryGroups.map((g) => (
             <Pressable
-              key={g.grupo_categoria}
-              onPress={() => onSelectGroupTab(g.grupo_categoria)}
+              key={String(g.id)}
+              onPress={() => onSelectGroupTab(Number(g.id))}
               onLongPress={
-                onDeleteGroup
-                  ? () => onDeleteGroup(g.grupo_categoria)
-                  : undefined
+                onGroupLongPress ? () => onGroupLongPress(g) : undefined
               }
               style={({ pressed }) => [
                 groupedTableStyles.tabPill,
                 {
                   backgroundColor:
-                    selectedGroupTab === g.grupo_categoria
+                    Number(selectedGroupTab) === Number(g.id)
                       ? theme.colors.inputBackground
                       : theme.colors.surface,
                   borderColor: theme.colors.border,
@@ -488,12 +486,14 @@ export default function GroupedTable({
                   {
                     color: theme.colors.text,
                     fontWeight:
-                      selectedGroupTab === g.grupo_categoria ? "700" : "500",
+                      Number(selectedGroupTab) === Number(g.id)
+                        ? "700"
+                        : "500",
                   },
                 ]}
                 numberOfLines={1}
               >
-                {g.grupo_categoria}
+                {g.name}
               </Text>
             </Pressable>
           ))}
@@ -511,11 +511,7 @@ export default function GroupedTable({
                 pressed && groupedTableStyles.tabPillPressed,
               ]}
             >
-              <AntDesign
-                name="plus"
-                size={20}
-                color={theme.colors.primary}
-              />
+              <AntDesign name="plus" size={20} color={theme.colors.primary} />
             </Pressable>
           )}
         </ScrollView>
@@ -535,7 +531,7 @@ export default function GroupedTable({
           <FlatList
             ref={leftRef}
             data={sortedData}
-            keyExtractor={(item) => item.categoria}
+            keyExtractor={(item) => item.category}
             renderItem={renderLeftColumnItem}
             ListHeaderComponent={renderLeftHeader}
             ListFooterComponent={renderLeftFooter}
@@ -573,7 +569,7 @@ export default function GroupedTable({
               <FlatList
                 ref={rightRef}
                 data={sortedData}
-                keyExtractor={(item) => item.categoria}
+                keyExtractor={(item) => item.category}
                 renderItem={renderRightColumnsItem}
                 ListHeaderComponent={renderRightHeader}
                 ListFooterComponent={renderRightFooter}

@@ -15,6 +15,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import GroupedTable from "../../components/GroupedTable";
 import { useAuth } from "../../contexts/AuthContext";
 import { useTheme } from "../../contexts/ThemeContext";
+import { useCategories } from "../../hooks/useCategories";
 import { useCategoryGroups } from "../../hooks/useCategoryGroups";
 
 const months = [
@@ -35,74 +36,169 @@ const months = [
 
 const years = [2026, 2025, 2024, 2023, 2022, 2021];
 
+/** Category label on a group member from GET /groups/ (shape varies by API). */
+function groupCategoryLabel(c) {
+  if (c == null) return "";
+  if (typeof c === "string") return c.trim();
+  const nested = c.category ?? c.categoria;
+  return String(
+    c.name ??
+      c.label ??
+      c.nombre ??
+      nested?.name ??
+      nested?.label ??
+      "",
+  ).trim();
+}
+
+/** Category id on a group member from GET /groups/ (shape varies by API). */
+function groupCategoryMemberId(c) {
+  if (c == null) return null;
+  const raw =
+    c.id ??
+    c.category_id ??
+    c.categoryId ??
+    c.category?.id ??
+    c.categoria?.id;
+  if (raw == null || raw === "") return null;
+  const n = Number(raw);
+  return Number.isFinite(n) ? n : raw;
+}
+
+function initialCategoryIdsForGroupModal(group) {
+  const raw = group?.category_ids;
+  if (Array.isArray(raw) && raw.length) {
+    return new Set(
+      raw.map((id) => {
+        const n = Number(id);
+        return Number.isFinite(n) ? n : id;
+      }),
+    );
+  }
+  const next = new Set();
+  for (const c of group?.categories ?? []) {
+    const id = groupCategoryMemberId(c);
+    if (id != null) next.add(id);
+  }
+  return next;
+}
+
 export default function Summary() {
   const { theme } = useTheme();
-  const { schema } = useAuth();
+  const { tenantId, getAuthHeaders } = useAuth();
   const API_URL = process.env.EXPO_PUBLIC_API_URL;
   const [text, setText] = useState("");
   const [showYears, setShowYears] = useState(false);
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   const [selectedGroupTab, setSelectedGroupTab] = useState("all");
   const [groupModalVisible, setGroupModalVisible] = useState(false);
+  const [editingGroupId, setEditingGroupId] = useState(null);
   const [newGroupName, setNewGroupName] = useState("");
   const [newGroupCategories, setNewGroupCategories] = useState(() => new Set());
 
   const {
     data: categoryGroups = [],
-    mergeGroup,
+    createGroup,
+    updateGroup,
     deleteGroup,
   } = useCategoryGroups();
+  const { data: categoriesData } = useCategories();
 
   const { isPending, error, data, refetch, isRefetching } = useQuery({
-    queryKey: ["grouped_txns", schema, selectedYear],
+    queryKey: ["grouped_txns", tenantId, selectedYear],
     queryFn: async () => {
       const response = await fetch(
-        `${API_URL}/grouped_txns?year=${selectedYear}&schema=${schema}`,
+        `${API_URL}/grouped_txns/?year=${selectedYear}`,
+        { headers: getAuthHeaders() },
       );
+      if (!response.ok) {
+        const t = await response.text();
+        throw new Error(t || response.statusText);
+      }
       return await response.json();
     },
-    enabled: !!schema,
+    enabled: !!tenantId,
   });
 
-  const filteredData = useMemo(() => {
+  /** Align with TxnTable / API: rows use categoria; GroupedTable reads category. */
+  const baseRows = useMemo(() => {
     if (!data) return [];
-    if (!text.trim()) return data;
-    return data.filter((item) =>
-      item.categoria.toLowerCase().includes(text.toLowerCase()),
+    return data.map((row) => {
+      const cat = row.categoria ?? row.category ?? "";
+      return { ...row, categoria: cat, category: cat };
+    });
+  }, [data]);
+
+  const filteredData = useMemo(() => {
+    if (!baseRows.length) return [];
+    if (!text.trim()) return baseRows;
+    const q = text.toLowerCase();
+    return baseRows.filter((item) =>
+      String(item.categoria ?? "").toLowerCase().includes(q),
     );
-  }, [data, text]);
+  }, [baseRows, text]);
 
   const tableData = useMemo(() => {
     if (selectedGroupTab === "all") return filteredData;
     const g = categoryGroups.find(
-      (x) => x.grupo_categoria === selectedGroupTab,
+      (x) => Number(x.id) === Number(selectedGroupTab),
     );
-    if (!g?.categoria?.length) return filteredData;
-    const allowed = new Set(g.categoria);
-    return filteredData.filter((item) => allowed.has(item.categoria));
+    const names = (g?.categories ?? [])
+      .map(groupCategoryLabel)
+      .filter(Boolean);
+    if (!names.length) return filteredData;
+    const allowedLower = new Set(names.map((n) => n.toLowerCase()));
+    return filteredData.filter((item) =>
+      allowedLower.has(String(item.categoria ?? "").toLowerCase()),
+    );
   }, [filteredData, selectedGroupTab, categoryGroups]);
 
-  const rowCategoryOptions = useMemo(
-    () => data?.map((d) => d.categoria) ?? [],
-    [data],
-  );
+  const rowCategoryOptions = useMemo(() => {
+    return (categoriesData ?? [])
+      .map((c) => {
+        const raw = c?.id ?? c?.value;
+        if (raw == null || raw === "") return null;
+        const n = Number(raw);
+        const id = Number.isFinite(n) ? n : raw;
+        return { id, label: c.label };
+      })
+      .filter(Boolean);
+  }, [categoriesData]);
 
-  const toggleNewGroupCategory = useCallback((categoria) => {
+  const toggleNewGroupCategory = useCallback((categoryId) => {
     setNewGroupCategories((prev) => {
       const next = new Set(prev);
-      if (next.has(categoria)) next.delete(categoria);
-      else next.add(categoria);
+      if (next.has(categoryId)) next.delete(categoryId);
+      else next.add(categoryId);
       return next;
     });
   }, []);
 
+  const closeGroupModal = useCallback(() => {
+    setGroupModalVisible(false);
+    setEditingGroupId(null);
+    setNewGroupName("");
+    setNewGroupCategories(new Set());
+  }, []);
+
   const openCreateGroupModal = useCallback(() => {
+    setEditingGroupId(null);
     setNewGroupName("");
     setNewGroupCategories(new Set());
     setGroupModalVisible(true);
   }, []);
 
-  const submitNewGroup = useCallback(() => {
+  const openEditGroupModal = useCallback((group) => {
+    const gid = group?.id;
+    if (gid == null) return;
+    const n = Number(gid);
+    setEditingGroupId(Number.isFinite(n) ? n : gid);
+    setNewGroupName(String(group?.name ?? "").trim());
+    setNewGroupCategories(initialCategoryIdsForGroupModal(group));
+    setGroupModalVisible(true);
+  }, []);
+
+  const submitGroupModal = useCallback(() => {
     const name = newGroupName.trim();
     if (!name) {
       Alert.alert("Nombre requerido", "Escribe un nombre para el grupo.");
@@ -115,38 +211,69 @@ export default function Summary() {
       );
       return;
     }
-    mergeGroup.mutate(
+    const category_ids = Array.from(newGroupCategories).map((id) => {
+      const n = Number(id);
+      return Number.isFinite(n) ? n : id;
+    });
+    if (category_ids.length === 0) {
+      Alert.alert(
+        "Categorías no válidas",
+        "No se pudieron resolver los ids de las categorías seleccionadas.",
+      );
+      return;
+    }
+    if (editingGroupId != null) {
+      updateGroup.mutate(
+        { id: editingGroupId, name, category_ids },
+        {
+          onSuccess: () => {
+            closeGroupModal();
+            setSelectedGroupTab(Number(editingGroupId));
+          },
+          onError: (e) =>
+            Alert.alert("Error al guardar el grupo", e.message ?? String(e)),
+        },
+      );
+      return;
+    }
+    createGroup.mutate(
+      { name, category_ids },
       {
-        grupo_categoria: name,
-        categoria: Array.from(newGroupCategories),
-      },
-      {
-        onSuccess: () => {
-          setGroupModalVisible(false);
-          setNewGroupName("");
-          setNewGroupCategories(new Set());
-          setSelectedGroupTab(name);
+        onSuccess: (created) => {
+          closeGroupModal();
+          if (created != null && created.id != null) {
+            setSelectedGroupTab(Number(created.id));
+          }
         },
         onError: (e) =>
           Alert.alert("Error al guardar el grupo", e.message ?? String(e)),
       },
     );
-  }, [newGroupName, newGroupCategories, mergeGroup]);
+  }, [
+    newGroupName,
+    newGroupCategories,
+    editingGroupId,
+    createGroup,
+    updateGroup,
+    closeGroupModal,
+    setSelectedGroupTab,
+  ]);
 
   const handleDeleteGroup = useCallback(
-    (grupo_categoria) => {
+    (group) => {
+      const { id, name: groupName } = group;
       Alert.alert(
         "Eliminar grupo",
-        `¿Eliminar el grupo «${grupo_categoria}»? Las categorías no se borran.`,
+        `¿Eliminar el grupo «${groupName}»? Las categorías no se borran.`,
         [
           { text: "Cancelar", style: "cancel" },
           {
             text: "Eliminar",
             style: "destructive",
             onPress: () => {
-              deleteGroup.mutate(grupo_categoria, {
+              deleteGroup.mutate(id, {
                 onSuccess: () => {
-                  if (selectedGroupTab === grupo_categoria) {
+                  if (Number(selectedGroupTab) === Number(id)) {
                     setSelectedGroupTab("all");
                   }
                 },
@@ -159,6 +286,24 @@ export default function Summary() {
       );
     },
     [deleteGroup, selectedGroupTab],
+  );
+
+  const handleGroupLongPress = useCallback(
+    (group) => {
+      Alert.alert(String(group?.name ?? "Grupo"), undefined, [
+        { text: "Cancelar", style: "cancel" },
+        {
+          text: "Editar",
+          onPress: () => openEditGroupModal(group),
+        },
+        {
+          text: "Eliminar",
+          style: "destructive",
+          onPress: () => handleDeleteGroup(group),
+        },
+      ]);
+    },
+    [openEditGroupModal, handleDeleteGroup],
   );
 
   const filterData = useCallback((searchText) => {
@@ -262,7 +407,7 @@ export default function Summary() {
             selectedGroupTab={selectedGroupTab}
             onSelectGroupTab={setSelectedGroupTab}
             onAddGroupPress={openCreateGroupModal}
-            onDeleteGroup={handleDeleteGroup}
+            onGroupLongPress={handleGroupLongPress}
           />
         )}
 
@@ -270,7 +415,7 @@ export default function Summary() {
           visible={groupModalVisible}
           animationType="slide"
           presentationStyle="pageSheet"
-          onRequestClose={() => setGroupModalVisible(false)}
+          onRequestClose={closeGroupModal}
         >
           <SafeAreaView
             style={[
@@ -280,10 +425,12 @@ export default function Summary() {
             edges={["top", "bottom"]}
           >
             <Text style={[styles.modalTitle, { color: theme.colors.text }]}>
-              Nuevo grupo de categorías
+              {editingGroupId != null
+                ? "Editar grupo de categorías"
+                : "Nuevo grupo de categorías"}
             </Text>
             <Text style={[styles.modalHint, { color: theme.colors.text }]}>
-              Mantén pulsado un grupo en la tabla para eliminarlo.
+              Mantén pulsado un grupo en las pestañas para editarlo o eliminarlo.
             </Text>
             <TextInput
               style={[
@@ -303,15 +450,18 @@ export default function Summary() {
             <Text
               style={[styles.modalSectionLabel, { color: theme.colors.text }]}
             >
-              Categorías en este año
+              Categorías
             </Text>
-            <ScrollView style={styles.modalScroll} keyboardShouldPersistTaps="handled">
+            <ScrollView
+              style={styles.modalScroll}
+              keyboardShouldPersistTaps="handled"
+            >
               {rowCategoryOptions.map((cat) => {
-                const on = newGroupCategories.has(cat);
+                const on = newGroupCategories.has(cat.id);
                 return (
                   <Pressable
-                    key={cat}
-                    onPress={() => toggleNewGroupCategory(cat)}
+                    key={String(cat.id)}
+                    onPress={() => toggleNewGroupCategory(cat.id)}
                     style={({ pressed }) => [
                       styles.modalRow,
                       {
@@ -323,7 +473,7 @@ export default function Summary() {
                       pressed && styles.modalRowPressed,
                     ]}
                   >
-                    <Text style={{ color: theme.colors.text }}>{cat}</Text>
+                    <Text style={{ color: theme.colors.text }}>{cat.label}</Text>
                     <Text style={{ color: theme.colors.primary }}>
                       {on ? "✓" : ""}
                     </Text>
@@ -333,7 +483,7 @@ export default function Summary() {
             </ScrollView>
             <View style={styles.modalActions}>
               <Pressable
-                onPress={() => setGroupModalVisible(false)}
+                onPress={closeGroupModal}
                 style={({ pressed }) => [
                   styles.modalButton,
                   {
@@ -346,17 +496,21 @@ export default function Summary() {
                 <Text style={{ color: theme.colors.text }}>Cancelar</Text>
               </Pressable>
               <Pressable
-                onPress={submitNewGroup}
-                disabled={mergeGroup.isPending}
+                onPress={submitGroupModal}
+                disabled={createGroup.isPending || updateGroup.isPending}
                 style={({ pressed }) => [
                   styles.modalButton,
                   styles.modalButtonPrimary,
                   {
                     backgroundColor: theme.colors.primary,
                     borderColor: theme.colors.primary,
-                    opacity: mergeGroup.isPending ? 0.6 : 1,
+                    opacity:
+                      createGroup.isPending || updateGroup.isPending ? 0.6 : 1,
                   },
-                  pressed && !mergeGroup.isPending && styles.modalButtonPressed,
+                  pressed &&
+                    !createGroup.isPending &&
+                    !updateGroup.isPending &&
+                    styles.modalButtonPressed,
                 ]}
               >
                 <Text style={{ color: theme.colors.background }}>Guardar</Text>

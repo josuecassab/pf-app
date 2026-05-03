@@ -18,7 +18,6 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import TxnTable from "../../../components/TxnTable";
 import { useAuth } from "../../../contexts/AuthContext";
 import { useTheme } from "../../../contexts/ThemeContext";
-import { useCategories } from "../../../hooks/useCategories";
 import { reconcileStyles } from "../reconcileStyles";
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL;
@@ -26,7 +25,7 @@ const TXNS_TABLE = "txns";
 
 export default function ReconcileResults() {
   const { theme } = useTheme();
-  const { schema } = useAuth();
+  const { tenantId, getAuthHeaders } = useAuth();
   const queryClient = useQueryClient();
   const [isReconciling, setIsReconciling] = useState(false);
   const navigation = useNavigation();
@@ -36,20 +35,17 @@ export default function ReconcileResults() {
   /** When set, compare API reported duplicate row groups — show navigation to detail screen. */
   const [duplicateRowsNav, setDuplicateRowsNav] = useState(null);
 
-  const { data: categoriesData } = useCategories();
-
   const refreshDuplicateRowsInfo = useCallback(async () => {
-    if (!statementLabel || !schema) {
+    if (!statementLabel || !tenantId) {
       setDuplicateRowsNav(null);
       return;
     }
     const compareParams = new URLSearchParams({
-      schema,
       table_name: `${statementLabel}_joined`,
     });
     const compareRes = await fetch(
       `${API_URL}/compare_statement_tables/?${compareParams.toString()}`,
-      { method: "GET" },
+      { method: "GET", headers: getAuthHeaders() },
     );
     const compareBody = await compareRes.json().catch(() => ({}));
     if (!compareRes.ok || !Array.isArray(compareBody?.duplicates)) {
@@ -60,11 +56,10 @@ export default function ReconcileResults() {
       setDuplicateRowsNav(null);
       return;
     }
-    const tableName =
-      compareBody.table_name ?? `${statementLabel}_joined`;
+    const tableName = compareBody.table_name ?? `${statementLabel}_joined`;
     const dupIds = compareBody.duplicates.map((d) => d.id);
     setDuplicateRowsNav({ table: tableName, ids: dupIds });
-  }, [statementLabel, schema]);
+  }, [statementLabel, tenantId, getAuthHeaders]);
 
   useEffect(() => {
     if (!statementLabel || !bankLabel) {
@@ -79,16 +74,15 @@ export default function ReconcileResults() {
   );
 
   const goToDuplicateRows = useCallback(() => {
-    if (!duplicateRowsNav || !schema) return;
+    if (!duplicateRowsNav) return;
     router.push({
       pathname: "/reconcile/reconcile-duplicate-rows",
       params: {
-        schema,
         table: duplicateRowsNav.table,
         ids: JSON.stringify(duplicateRowsNav.ids),
       },
     });
-  }, [duplicateRowsNav, schema]);
+  }, [duplicateRowsNav]);
 
   const {
     data: matchedTxns,
@@ -99,10 +93,11 @@ export default function ReconcileResults() {
     isPending: isMatchedTxnsPending,
     refetch: refetchMatchedTxns,
   } = useInfiniteQuery({
-    queryKey: ["matched_txns", `${statementLabel}_joined`],
+    queryKey: ["matched_txns", tenantId, `${statementLabel}_joined`],
     queryFn: async ({ pageParam }) => {
       const res = await fetch(
-        `${API_URL}/reconcile_matched_txns/?table_name=${pageParam.table_name}&page=${pageParam.page}&limit=${pageParam.limit}&schema=${schema}`,
+        `${API_URL}/reconcile_matched_txns/?table_name=${pageParam.table_name}&page=${pageParam.page}&limit=${pageParam.limit}`,
+        { headers: getAuthHeaders() },
       );
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
@@ -112,7 +107,7 @@ export default function ReconcileResults() {
       }
       return res.json();
     },
-    enabled: !!statementLabel,
+    enabled: !!statementLabel && !!tenantId,
     initialPageParam: {
       table_name: `${statementLabel}_joined`,
       page: 0,
@@ -145,10 +140,11 @@ export default function ReconcileResults() {
     isPending: isUnmatchedTxnsPending,
     refetch: refetchUnmatchedTxns,
   } = useInfiniteQuery({
-    queryKey: ["unmatched_txns", statementLabel],
+    queryKey: ["unmatched_txns", tenantId, statementLabel],
     queryFn: async ({ pageParam }) => {
       const res = await fetch(
-        `${API_URL}/reconcile_unmatched_txns/?table_name=${statementLabel}&page=${pageParam.page}&limit=${pageParam.limit}&schema=${schema}&bank_name=${bankLabel}`,
+        `${API_URL}/reconcile_unmatched_txns/?table_name=${statementLabel}&page=${pageParam.page}&limit=${pageParam.limit}`,
+        { headers: getAuthHeaders() },
       );
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
@@ -158,7 +154,7 @@ export default function ReconcileResults() {
       }
       return res.json();
     },
-    enabled: !!statementLabel && !matchedTxnsError,
+    enabled: !!statementLabel && !!tenantId && !matchedTxnsError,
     initialPageParam: { page: 0, limit: 100 },
     getNextPageParam: (lastPage, _allPages, lastPageParam) => {
       if (
@@ -186,8 +182,8 @@ export default function ReconcileResults() {
     setIsReconciling(true);
     try {
       const dropRes = await fetch(
-        `${API_URL}/drop_statement_table/?schema=${schema}&table=${statementLabel}_joined`,
-        { method: "POST" },
+        `${API_URL}/drop_statement_table/?table=${encodeURIComponent(`${statementLabel}_joined`)}`,
+        { method: "POST", headers: getAuthHeaders() },
       );
       const dropBody = await dropRes.json().catch(() => ({}));
       if (!dropRes.ok) {
@@ -201,8 +197,8 @@ export default function ReconcileResults() {
       }
 
       const joinRes = await fetch(
-        `${API_URL}/create_statement_joined?table_name=${statementLabel}&schema=${schema}&bank_name=${bankLabel}`,
-        { method: "POST" },
+        `${API_URL}/create_statement_joined/?table_name=${encodeURIComponent(statementLabel)}&bank_name=${encodeURIComponent(bankLabel)}`,
+        { method: "POST", headers: getAuthHeaders() },
       );
       const joinBody = await joinRes.json().catch(() => ({}));
       if (!joinRes.ok) {
@@ -214,10 +210,10 @@ export default function ReconcileResults() {
       }
 
       await queryClient.invalidateQueries({
-        queryKey: ["matched_txns", `${statementLabel}_joined`],
+        queryKey: ["matched_txns", tenantId, `${statementLabel}_joined`],
       });
       await queryClient.invalidateQueries({
-        queryKey: ["unmatched_txns", statementLabel],
+        queryKey: ["unmatched_txns", tenantId, statementLabel],
       });
       refetchMatchedTxns();
       refetchUnmatchedTxns();
@@ -234,12 +230,11 @@ export default function ReconcileResults() {
   const completeReconcile = async () => {
     try {
       const compareParams = new URLSearchParams({
-        schema,
         table_name: `${statementLabel}_joined`,
       });
       const compareRes = await fetch(
         `${API_URL}/compare_statement_tables/?${compareParams.toString()}`,
-        { method: "GET" },
+        { method: "GET", headers: getAuthHeaders() },
       );
       const compareBody = await compareRes.json().catch(() => ({}));
       if (!compareRes.ok) {
@@ -259,13 +254,11 @@ export default function ReconcileResults() {
         return;
       }
       if (compareBody.duplicates.length > 0) {
-        const tableName =
-          compareBody.table_name ?? `${statementLabel}_joined`;
+        const tableName = compareBody.table_name ?? `${statementLabel}_joined`;
         const dupIds = compareBody.duplicates.map((d) => d.id);
         router.push({
           pathname: "/reconcile/reconcile-duplicate-rows",
           params: {
-            schema,
             table: tableName,
             ids: JSON.stringify(dupIds),
           },
@@ -274,9 +267,10 @@ export default function ReconcileResults() {
       }
 
       const res = await fetch(
-        `${API_URL}/get_uncategorized_count/?table_name=${statementLabel}_joined&schema=${schema}`,
+        `${API_URL}/get_uncategorized_count/?table_name=${encodeURIComponent(`${statementLabel}_joined`)}`,
         {
           method: "GET",
+          headers: getAuthHeaders(),
         },
       );
       const response = await res.json();
@@ -293,7 +287,8 @@ export default function ReconcileResults() {
       }
 
       const minMaxDatesRes = await fetch(
-        `${API_URL}/min_and_max_dates/?table_name=${statementLabel}_joined&schema=${schema}`,
+        `${API_URL}/min_and_max_dates/?table_name=${encodeURIComponent(`${statementLabel}_joined`)}`,
+        { headers: getAuthHeaders() },
       );
       const minMaxDatesResponse = await minMaxDatesRes.json();
       if (!minMaxDatesRes.ok) {
@@ -301,9 +296,10 @@ export default function ReconcileResults() {
         return;
       }
       const deleteTxnsRes = await fetch(
-        `${API_URL}/delete_txns/?table=${TXNS_TABLE}&bank_name=${bankLabel}&from_date=${minMaxDatesResponse.min_date}&to_date=${minMaxDatesResponse.max_date}&schema=${schema}`,
+        `${API_URL}/delete_txns/?table=${encodeURIComponent(`${statementLabel}_joined`)}&from_date=${encodeURIComponent(minMaxDatesResponse.min_date)}&to_date=${encodeURIComponent(minMaxDatesResponse.max_date)}`,
         {
           method: "DELETE",
+          headers: getAuthHeaders(),
         },
       );
       const deleteTxnsResponse = await deleteTxnsRes.json();
@@ -312,9 +308,10 @@ export default function ReconcileResults() {
         return;
       }
       const insertTxnsRes = await fetch(
-        `${API_URL}/insert_txns/?from_table=${statementLabel}_joined&to_table=${TXNS_TABLE}&schema=${schema}`,
+        `${API_URL}/insert_txns/?from_table=${encodeURIComponent(`${statementLabel}_joined`)}`,
         {
           method: "POST",
+          headers: getAuthHeaders(),
         },
       );
       const insertTxnsResponse = await insertTxnsRes.json();
@@ -430,7 +427,6 @@ export default function ReconcileResults() {
             Transacciones concilidadas
           </Text>
           <TxnTable
-            categories={categoriesData}
             table={`${statementLabel}_joined`}
             txns={flattenedMatchedTxns}
             error={matchedTxnsError}

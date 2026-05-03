@@ -1,7 +1,7 @@
 import Feather from "@expo/vector-icons/Feather";
-import { router, useFocusEffect } from "expo-router";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import SegmentedControl from "@react-native-segmented-control/segmented-control";
+import { router, useFocusEffect } from "expo-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
@@ -22,6 +22,7 @@ import { useAuth } from "../contexts/AuthContext";
 import { useTheme } from "../contexts/ThemeContext";
 import { useBanks } from "../hooks/useBanks";
 import { useCategories } from "../hooks/useCategories";
+import { authJsonHeaders } from "../lib/apiHeaders";
 import { takePendingBankSelection } from "../lib/pendingBankSelection";
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL;
@@ -117,7 +118,7 @@ export default function Input() {
   const [value, setValue] = useState("");
   const [isSending, setIsSending] = useState(false);
   const [selectedBank, setSelectedBank] = useState(null);
-  const { schema } = useAuth();
+  const { tenantId, getAuthHeaders } = useAuth();
 
   const { theme } = useTheme();
   const insets = useSafeAreaInsets();
@@ -205,10 +206,17 @@ export default function Input() {
   }, [amountSeparators]);
 
   const submitTxn = async () => {
+    if (!tenantId) {
+      Alert.alert(
+        "Sesión",
+        "Inicia sesión de nuevo para agregar transacciones.",
+      );
+      return;
+    }
     setIsSending(true);
     const txn = {};
     // Format date in local timezone as YYYY-MM-DD (using 'en-CA' locale for ISO format)
-    txn.fecha = date.toLocaleDateString("en-CA");
+    txn.date = date.toLocaleDateString("en-CA");
     const parsedAmount = parseLocalizedAmount(
       value,
       amountSeparators.decimal,
@@ -222,20 +230,19 @@ export default function Input() {
       setIsSending(false);
       return;
     }
-    txn.valor = txtType === 0 ? parsedAmount : -1 * parsedAmount;
-    console.log(txn.valor);
+    txn.amount = txtType === 0 ? parsedAmount : -1 * parsedAmount;
     if (selectedCategory?.value) {
-      txn.id_categoria = selectedCategory.value;
+      txn.category_id = selectedCategory.value;
     } else {
       Alert.alert("Error de validación", "Porfavor seleccione una categoria");
       setIsSending(false);
       return;
     }
-    txn.id_subcategoria = selectedSubcategory?.value
+    txn.subcategory_id = selectedSubcategory?.value
       ? selectedSubcategory.value
       : null;
-    if (selectedBank?.label) {
-      txn.banco = selectedBank.label;
+    if (selectedBank?.value != null && selectedBank.value !== "") {
+      txn.bank_id = selectedBank.value;
     } else {
       Alert.alert("Error de validación", "Por favor seleccione un banco");
       setIsSending(false);
@@ -244,11 +251,9 @@ export default function Input() {
 
     console.log(txn);
     try {
-      const res = await fetch(`${API_URL}/insert_txn/?schema=${schema}`, {
+      const res = await fetch(`${API_URL}/insert_txn/`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: authJsonHeaders(getAuthHeaders),
         body: JSON.stringify(txn),
       });
 

@@ -17,13 +17,9 @@ import {
 } from "react-native";
 import { useAuth } from "../contexts/AuthContext";
 import { useTheme } from "../contexts/ThemeContext";
+import { authJsonHeaders } from "../lib/apiHeaders";
 import DropdownModal from "./DropdownModal";
 import MyCustomModal from "./MyCustomModal";
-
-const BANK_LIST = [
-  { label: "Bancolombia", value: "bancolombia" },
-  { label: "Nubank", value: "nubank" },
-];
 
 /** Sentinel for header filters: rows with null/empty categoría, subcategoría o banco. */
 const TXN_FILTER_NULL_VALUE = "__txn_filter_null__";
@@ -33,6 +29,108 @@ const TXN_FILTER_NULL_OPTION = {
 };
 
 const txnFieldIsEmpty = (v) => v == null || String(v).trim() === "";
+
+function collectDistinctCategoryOptionsFromTxns(rows) {
+  const seen = new Map();
+  for (const t of rows || []) {
+    const raw = t.categoria ?? t.category;
+    if (txnFieldIsEmpty(raw)) continue;
+    const label = String(raw).trim();
+    const id = t.category_id;
+    const dedupeKey =
+      id != null && id !== ""
+        ? `id:${String(id)}`
+        : `name:${label.toLowerCase()}`;
+    if (seen.has(dedupeKey)) continue;
+    const value = id != null && id !== "" ? id : label;
+    seen.set(dedupeKey, { label, value });
+  }
+  return Array.from(seen.values()).sort((a, b) =>
+    String(a.label).localeCompare(String(b.label), "es"),
+  );
+}
+
+function collectDistinctSubcategoryOptionsFromTxns(rows) {
+  const seen = new Map();
+  for (const t of rows || []) {
+    const raw = t.sub_categoria ?? t.subcategory;
+    if (txnFieldIsEmpty(raw)) continue;
+    const label = String(raw).trim();
+    const id = t.subcategory_id;
+    const dedupeKey =
+      id != null && id !== ""
+        ? `id:${String(id)}`
+        : `name:${label.toLowerCase()}`;
+    if (seen.has(dedupeKey)) continue;
+    const value = id != null && id !== "" ? id : label;
+    seen.set(dedupeKey, { label, value });
+  }
+  return Array.from(seen.values()).sort((a, b) =>
+    String(a.label).localeCompare(String(b.label), "es"),
+  );
+}
+
+function categoryKeySetForTxn(txn) {
+  const keys = new Set();
+  if (!txn) return keys;
+  const id = txn.category_id;
+  if (id != null && id !== "") keys.add(`id:${String(id)}`);
+  const n = txn.categoria ?? txn.category;
+  if (!txnFieldIsEmpty(n)) keys.add(`name:${String(n).toLowerCase()}`);
+  return keys;
+}
+
+function txnMatchesCategoryKeySet(t, keySet) {
+  if (!keySet.size) return false;
+  const id = t.category_id;
+  if (id != null && id !== "" && keySet.has(`id:${String(id)}`)) return true;
+  const n = t.categoria ?? t.category;
+  if (!txnFieldIsEmpty(n) && keySet.has(`name:${String(n).toLowerCase()}`))
+    return true;
+  return false;
+}
+
+/** Subcategorías seen in `rows` on any txn whose category matches `keySet`. */
+function subcategoryOptionsForRowsMatchingCategoryKeys(rows, keySet) {
+  const seen = new Map();
+  for (const t of rows || []) {
+    if (!txnMatchesCategoryKeySet(t, keySet)) continue;
+    const raw = t.sub_categoria ?? t.subcategory;
+    if (txnFieldIsEmpty(raw)) continue;
+    const label = String(raw).trim();
+    const sid = t.subcategory_id;
+    const dedupeKey =
+      sid != null && sid !== ""
+        ? `id:${String(sid)}`
+        : `name:${label.toLowerCase()}`;
+    if (seen.has(dedupeKey)) continue;
+    const value = sid != null && sid !== "" ? sid : label;
+    seen.set(dedupeKey, { label, value });
+  }
+  return Array.from(seen.values()).sort((a, b) =>
+    String(a.label).localeCompare(String(b.label), "es"),
+  );
+}
+
+function collectDistinctBankOptionsFromTxns(rows) {
+  const seen = new Map();
+  for (const t of rows || []) {
+    const raw = t.banco ?? t.bank;
+    if (txnFieldIsEmpty(raw)) continue;
+    const label = String(raw).trim();
+    const id = t.bank_id;
+    const dedupeKey =
+      id != null && id !== ""
+        ? `id:${String(id)}`
+        : `name:${label.toLowerCase()}`;
+    if (seen.has(dedupeKey)) continue;
+    const value = id != null && id !== "" ? id : label;
+    seen.set(dedupeKey, { label, value });
+  }
+  return Array.from(seen.values()).sort((a, b) =>
+    String(a.label).localeCompare(String(b.label), "es"),
+  );
+}
 
 const formatSpanishNumber = (num) => {
   const isNegative = num < 0;
@@ -58,7 +156,6 @@ const formatSpanishNumber = (num) => {
 export default function TxnTable({
   table,
   txns,
-  categories,
   error,
   fetchNextPage,
   hasNextPage,
@@ -69,7 +166,7 @@ export default function TxnTable({
   style,
 }) {
   const { theme } = useTheme();
-  const { schema } = useAuth();
+  const { tenantId, getAuthHeaders } = useAuth();
   const API_URL = process.env.EXPO_PUBLIC_API_URL;
   const queryClient = useQueryClient();
   const [categoryModalVisible, setCategoryModalVisible] = useState(false);
@@ -86,21 +183,16 @@ export default function TxnTable({
   const [filterBank, setFilterBank] = useState(null);
   const [filterDate, setFilterDate] = useState(null);
   const [filterValue, setFilterValue] = useState(null);
-  const [filterDescripcion, setFilterDescripcion] = useState("");
+  const [filterDescription, setFilterDescription] = useState("");
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedTxnIds, setSelectedTxnIds] = useState({});
-  const [fechaModal, setFechaModal] = useState(null);
-  const allSubcategories = useMemo(
-    () =>
-      (categories || [])
-        .flatMap((c) => c.sub_categorias || [])
-        .filter(Boolean) ?? [],
-    [categories],
-  );
-
+  const [dateModal, setDateModal] = useState(null);
   const categoryModalLabels = useMemo(
-    () => [TXN_FILTER_NULL_OPTION, ...(categories || [])],
-    [categories],
+    () => [
+      TXN_FILTER_NULL_OPTION,
+      ...collectDistinctCategoryOptionsFromTxns(txns),
+    ],
+    [txns],
   );
 
   const subcategoryModalLabels = useMemo(
@@ -108,97 +200,46 @@ export default function TxnTable({
     [subCategories],
   );
 
-  /** Options for header filters: only values that appear in loaded transactions. */
+  /** Header filter "Categoria": options only from loaded txns. */
   const tableTxnFilterCategories = useMemo(() => {
-    const cats = categories || [];
-    const seen = new Map();
-    for (const t of txns || []) {
-      const name = t.categoria;
-      if (name == null || String(name).trim() === "") continue;
-      const key = String(name).toLowerCase();
-      if (seen.has(key)) continue;
-      const def =
-        cats.find((c) => c.label === name) ??
-        cats.find((c) => c.label?.toLowerCase() === String(name).toLowerCase());
-      seen.set(
-        key,
-        def ? { ...def } : { label: String(name), value: String(name) },
-      );
-    }
+    const sorted = collectDistinctCategoryOptionsFromTxns(txns);
     const rows = txns || [];
-    const hasNull = rows.some((t) => txnFieldIsEmpty(t.categoria));
-    const sorted = Array.from(seen.values()).sort((a, b) =>
-      String(a.label).localeCompare(String(b.label), "es"),
-    );
-    return hasNull ? [TXN_FILTER_NULL_OPTION, ...sorted] : sorted;
-  }, [txns, categories]);
-
-  const tableTxnFilterSubcategories = useMemo(() => {
-    const subs = allSubcategories;
-    const seen = new Map();
-    for (const t of txns || []) {
-      const sub = t.sub_categoria;
-      if (sub == null || String(sub).trim() === "") continue;
-      const key = String(sub).toLowerCase();
-      if (seen.has(key)) continue;
-      const match = subs.find(
-        (s) =>
-          String(s.label ?? "").toLowerCase() === key ||
-          String(s.value ?? "").toLowerCase() === key,
-      );
-      seen.set(key, match ?? { label: String(sub), value: String(sub) });
-    }
-    const rows = txns || [];
-    const hasNull = rows.some((t) => txnFieldIsEmpty(t.sub_categoria));
-    const sorted = Array.from(seen.values()).sort((a, b) =>
-      String(a.label).localeCompare(String(b.label), "es"),
-    );
-    return hasNull ? [TXN_FILTER_NULL_OPTION, ...sorted] : sorted;
-  }, [txns, allSubcategories]);
-
-  const tableTxnFilterBanks = useMemo(() => {
-    const seen = new Map();
-    for (const t of txns || []) {
-      const b = t.banco;
-      if (b == null || String(b).trim() === "") continue;
-      const key = String(b).toLowerCase();
-      if (seen.has(key)) continue;
-      const match = BANK_LIST.find(
-        (x) =>
-          String(x.label ?? "").toLowerCase() === key ||
-          String(x.value ?? "").toLowerCase() === key,
-      );
-      seen.set(key, match ?? { label: String(b), value: String(b) });
-    }
-    const rows = txns || [];
-    const hasNull = rows.some((t) => txnFieldIsEmpty(t.banco));
-    const sorted = Array.from(seen.values()).sort((a, b) =>
-      String(a.label).localeCompare(String(b.label), "es"),
+    const hasNull = rows.some((t) =>
+      txnFieldIsEmpty(t.categoria ?? t.category),
     );
     return hasNull ? [TXN_FILTER_NULL_OPTION, ...sorted] : sorted;
   }, [txns]);
 
-  const resolveCategoryDef = (categoriaName) => {
-    if (categoriaName == null || categoriaName === "" || !categories?.length) {
-      return null;
-    }
-    return (
-      categories.find((c) => c.label === categoriaName) ??
-      categories.find(
-        (c) => c.label?.toLowerCase() === String(categoriaName).toLowerCase(),
-      )
+  /** Header filter "Subcategoria": options only from loaded txns. */
+  const tableTxnFilterSubcategories = useMemo(() => {
+    const sorted = collectDistinctSubcategoryOptionsFromTxns(txns);
+    const rows = txns || [];
+    const hasNull = rows.some((t) =>
+      txnFieldIsEmpty(t.sub_categoria ?? t.subcategory),
     );
-  };
+    return hasNull ? [TXN_FILTER_NULL_OPTION, ...sorted] : sorted;
+  }, [txns]);
+
+  /** Header filter "Banco": options only from loaded txns. */
+  const tableTxnFilterBanks = useMemo(() => {
+    const sorted = collectDistinctBankOptionsFromTxns(txns);
+    const rows = txns || [];
+    const hasNull = rows.some((t) => txnFieldIsEmpty(t.banco ?? t.bank));
+    return hasNull ? [TXN_FILTER_NULL_OPTION, ...sorted] : sorted;
+  }, [txns]);
 
   const handleCategoriaPress = (id) => {
     setSelectedCategory({ id: id, label: null, value: null });
     setCategoryModalVisible(true);
   };
 
-  const handleSubcategoryPress = (id, category) => {
+  const handleSubcategoryPress = (id) => {
     setSelectedSubcategory({ id: id, label: null, value: null });
-    const subCategories = resolveCategoryDef(category)?.sub_categorias || [];
-    setSubCategories(subCategories);
+    const txn = (txns || []).find((t) => String(t.id) === String(id));
+    const keySet = categoryKeySetForTxn(txn);
+    setSubCategories(
+      subcategoryOptionsForRowsMatchingCategoryKeys(txns, keySet),
+    );
     setSubCategoryModalVisible(true);
   };
 
@@ -235,19 +276,12 @@ export default function TxnTable({
     const idSet = new Set(ids.map((x) => String(x)));
     const selectedTxns = txns.filter((t) => idSet.has(String(t.id)));
 
-    const seenCat = new Set();
-    const categoryNames = [];
+    const keySet = new Set();
     for (const t of selectedTxns) {
-      const name = t.categoria;
-      if (name == null || name === "") continue;
-      const lk = String(name).toLowerCase();
-      if (!seenCat.has(lk)) {
-        seenCat.add(lk);
-        categoryNames.push(name);
-      }
+      for (const k of categoryKeySetForTxn(t)) keySet.add(k);
     }
 
-    if (categoryNames.length === 0) {
+    if (keySet.size === 0) {
       Alert.alert(
         "Subcategoría",
         "Las transacciones seleccionadas no tienen categoría asignada.",
@@ -255,25 +289,15 @@ export default function TxnTable({
       return;
     }
 
-    const seenSubKeys = new Set();
-    const mergedSubs = [];
-    for (const name of categoryNames) {
-      const def = resolveCategoryDef(name);
-      for (const sub of def?.sub_categorias || []) {
-        const sk = sub.value ?? sub.label;
-        if (sk == null) continue;
-        const k = String(sk);
-        if (!seenSubKeys.has(k)) {
-          seenSubKeys.add(k);
-          mergedSubs.push(sub);
-        }
-      }
-    }
+    const mergedSubs = subcategoryOptionsForRowsMatchingCategoryKeys(
+      txns,
+      keySet,
+    );
 
     if (mergedSubs.length === 0) {
       Alert.alert(
         "Subcategoría",
-        "No hay subcategorías definidas para las categorías de esta selección.",
+        "No hay subcategorías en los datos cargados para las categorías de esta selección.",
       );
       return;
     }
@@ -298,7 +322,9 @@ export default function TxnTable({
 
   if (error)
     return (
-      <View style={[styles.root, style, { padding: 16, justifyContent: "center" }]}>
+      <View
+        style={[styles.root, style, { padding: 16, justifyContent: "center" }]}
+      >
         <Text style={{ color: theme.colors.error }}>
           An error has occurred: {error.message}
         </Text>
@@ -320,6 +346,7 @@ export default function TxnTable({
   };
 
   const updateCategory = async () => {
+    if (!tenantId) return;
     setLoading(true);
     try {
       const ids =
@@ -338,12 +365,10 @@ export default function TxnTable({
         return;
       const apiValue = clearingCategory ? null : categoryValue;
       const res = await fetch(
-        `${API_URL}/update_txn_category/?table=${table}&schema=${schema}`,
+        `${API_URL}/update_txn_category/?table=${table}`,
         {
           method: "PUT",
-          headers: {
-            "Content-Type": "application/json",
-          },
+          headers: authJsonHeaders(getAuthHeaders),
           body: JSON.stringify({ ids, value: apiValue }),
         },
       );
@@ -387,9 +412,9 @@ export default function TxnTable({
     }
   };
 
-  const parseTxnFecha = (fecha) => {
-    if (!fecha) return new Date();
-    const str = String(fecha).trim();
+  const parseTxnDate = (date) => {
+    if (!date) return new Date();
+    const str = String(date).trim();
     const m = str.match(/^(\d{4})-(\d{2})-(\d{2})/);
     if (m) {
       return new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
@@ -399,29 +424,33 @@ export default function TxnTable({
   };
 
   const updateTxnDate = async (id, date) => {
-    const fecha = date.toLocaleDateString("en-CA");
+    if (!tenantId) return;
+    const dateStr = date.toLocaleDateString("en-CA");
     setLoading(true);
     try {
-      const res = await fetch(
-        `${API_URL}/update_txn_date/?table=${table}&schema=${schema}`,
-        {
-          method: "PUT",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({ id, fecha }),
-        },
-      );
+      const res = await fetch(`${API_URL}/update_txn_date/?table=${table}`, {
+        method: "PUT",
+        headers: authJsonHeaders(getAuthHeaders),
+        body: JSON.stringify({ id, date: dateStr }),
+      });
       const result = await res.json();
-      console.log("Update fecha result:", result);
-      if (!res.ok) return;
+      console.log("Update date result:", result);
+      if (!res.ok) {
+        Alert.alert(
+          "Error actualizando la fecha",
+          result.message || JSON.stringify(result),
+        );
+        return;
+      }
       queryClient.setQueryData(queryKey, (oldData) => {
         if (!oldData?.pages) return oldData;
         return {
           ...oldData,
           pages: oldData.pages.map((page) =>
             Array.isArray(page)
-              ? page.map((txn) => (txn.id === id ? { ...txn, fecha } : txn))
+              ? page.map((txn) =>
+                  txn.id === id ? { ...txn, date: dateStr } : txn,
+                )
               : page,
           ),
         };
@@ -434,6 +463,7 @@ export default function TxnTable({
   };
 
   const updateSubcategory = async () => {
+    if (!tenantId) return;
     setLoading(true);
     try {
       const ids =
@@ -454,12 +484,10 @@ export default function TxnTable({
       const apiValue = clearingSubcategory ? null : subcategoryValue;
 
       const res = await fetch(
-        `${API_URL}/update_txn_subcategory/?table=${table}&schema=${schema}`,
+        `${API_URL}/update_txn_subcategory/?table=${table}`,
         {
           method: "PUT",
-          headers: {
-            "Content-Type": "application/json",
-          },
+          headers: authJsonHeaders(getAuthHeaders),
           body: JSON.stringify({ ids, value: apiValue }),
         },
       );
@@ -504,17 +532,13 @@ export default function TxnTable({
   };
 
   const deleteTxn = async (id) => {
+    if (!tenantId) return;
     setLoading(true);
     try {
-      const res = await fetch(
-        `${API_URL}/delete_txn/?id=${id}&schema=${schema}`,
-        {
-          method: "DELETE",
-          headers: {
-            "Content-Type": "application/json",
-          },
-        },
-      );
+      const res = await fetch(`${API_URL}/delete_txn/?id=${id}`, {
+        method: "DELETE",
+        headers: getAuthHeaders(),
+      });
       const result = await res.json();
       console.log("deleted result:", result);
       // Invalidate and refetch the transactions query to update the UI
@@ -530,9 +554,9 @@ export default function TxnTable({
 
   // Table rendering functions — column widths come from StyleSheet only
   const headerColumnStyle = {
-    Fecha: styles.colFecha,
-    Descripcion: styles.colDescripcion,
-    Valor: styles.colValor,
+    Fecha: styles.colDate,
+    Descripcion: styles.colDescription,
+    Valor: styles.colAmount,
     Categoria: styles.colCategoria,
     Subcategoria: styles.colSubCategoria,
     Banco: styles.colBanco,
@@ -568,7 +592,7 @@ export default function TxnTable({
     </Pressable>
   );
 
-  const showEditColumn = txns.some((item) => item?.conciliado !== undefined);
+  const showEditColumn = txns.some((item) => item?.reconciled !== undefined);
 
   const renderSelectAllHeaderCell = () => {
     const allFilteredSelected =
@@ -647,17 +671,17 @@ export default function TxnTable({
     </View>
   );
 
-  const renderFechaCell = (id, value) => (
+  const renderDateCell = (id, value) => (
     <TouchableHighlight
       style={[
         styles.cell,
-        styles.colFecha,
+        styles.colDate,
         {
           borderColor: theme.colors.border,
           backgroundColor: theme.colors.background,
         },
       ]}
-      onPress={() => setFechaModal({ id, date: parseTxnFecha(value) })}
+      onPress={() => setDateModal({ id, date: parseTxnDate(value) })}
       underlayColor={theme.colors.inputBackground}
     >
       <View>
@@ -668,13 +692,13 @@ export default function TxnTable({
     </TouchableHighlight>
   );
 
-  const renderValorCell = (value) => {
+  const renderAmountCell = (value) => {
     const formattedValue = formatSpanishNumber(value);
     return (
       <View
         style={[
           styles.cell,
-          styles.colValor,
+          styles.colAmount,
           {
             borderColor: theme.colors.border,
             backgroundColor: theme.colors.background,
@@ -688,11 +712,11 @@ export default function TxnTable({
     );
   };
 
-  const renderDescripcionCell = (value) => (
+  const renderDescriptionCell = (value) => (
     <View
       style={[
         styles.cell,
-        styles.colDescripcion,
+        styles.colDescription,
         {
           borderColor: theme.colors.border,
           backgroundColor: theme.colors.background,
@@ -735,7 +759,7 @@ export default function TxnTable({
     );
   };
 
-  const renderSubCategoryCell = (id, category, subCategory) => {
+  const renderSubCategoryCell = (id, subCategory) => {
     const inner = (
       <View>
         <Text style={[styles.cellText, { color: theme.colors.text }]}>
@@ -757,7 +781,7 @@ export default function TxnTable({
     return (
       <TouchableHighlight
         style={cellStyle}
-        onPress={() => handleSubcategoryPress(id, category)}
+        onPress={() => handleSubcategoryPress(id)}
         underlayColor={theme.colors.inputBackground}
       >
         {inner}
@@ -860,13 +884,13 @@ export default function TxnTable({
   const renderTxns = (item) => (
     <View style={styles.row}>
       {selectionMode && renderSelectRowCell(item.id)}
-      {renderFechaCell(item.id, item.fecha)}
-      {renderDescripcionCell(item?.descripcion)}
-      {renderValorCell(item.valor)}
-      {renderCategoryCell(item.id, item.categoria)}
-      {renderSubCategoryCell(item.id, item.categoria, item.sub_categoria)}
-      {renderBancoCell(item.banco)}
-      {showEditColumn && renderEditCell(item.id, item.conciliado)}
+      {renderDateCell(item.id, item.date)}
+      {renderDescriptionCell(item?.description)}
+      {renderAmountCell(item.amount)}
+      {renderCategoryCell(item.id, item.categoria ?? item.category)}
+      {renderSubCategoryCell(item.id, item.sub_categoria ?? item.subcategory)}
+      {renderBancoCell(item.banco ?? item.bank)}
+      {showEditColumn && renderEditCell(item.id, item.reconciled)}
     </View>
   );
 
@@ -884,53 +908,73 @@ export default function TxnTable({
     if (filterDate?.year && filterDate?.month) {
       const prefix = `${filterDate.year}-${String(filterDate.month).padStart(2, "0")}`;
       list = list.filter(
-        (item) => item.fecha && String(item.fecha).startsWith(prefix),
+        (item) => item.date && String(item.date).startsWith(prefix),
       );
     }
     if (filterCategory) {
       if (filterCategory.value === TXN_FILTER_NULL_VALUE) {
-        list = list.filter((item) => txnFieldIsEmpty(item.categoria));
-      } else {
-        list = list.filter(
-          (item) =>
-            item.categoria?.toLowerCase() ===
-            filterCategory.label?.toLowerCase(),
+        list = list.filter((item) =>
+          txnFieldIsEmpty(item.categoria ?? item.category),
         );
+      } else {
+        const fv = filterCategory.value;
+        const fl = filterCategory.label?.toLowerCase();
+        list = list.filter((item) => {
+          const cid = item.category_id;
+          if (cid != null && cid !== "" && String(cid) === String(fv)) {
+            return true;
+          }
+          const name = item.categoria ?? item.category;
+          return name?.toLowerCase() === fl;
+        });
       }
     }
     if (filterSubcategory) {
       if (filterSubcategory.value === TXN_FILTER_NULL_VALUE) {
-        list = list.filter((item) => txnFieldIsEmpty(item.sub_categoria));
-      } else {
-        list = list.filter(
-          (item) =>
-            item.sub_categoria?.toLowerCase() ===
-            filterSubcategory.label?.toLowerCase(),
+        list = list.filter((item) =>
+          txnFieldIsEmpty(item.sub_categoria ?? item.subcategory),
         );
+      } else {
+        const fv = filterSubcategory.value;
+        const fl = filterSubcategory.label?.toLowerCase();
+        list = list.filter((item) => {
+          const sid = item.subcategory_id;
+          if (sid != null && sid !== "" && String(sid) === String(fv)) {
+            return true;
+          }
+          const sub = item.sub_categoria ?? item.subcategory;
+          return sub?.toLowerCase() === fl;
+        });
       }
     }
     if (filterBank) {
       if (filterBank.value === TXN_FILTER_NULL_VALUE) {
-        list = list.filter((item) => txnFieldIsEmpty(item.banco));
+        list = list.filter((item) => txnFieldIsEmpty(item.banco ?? item.bank));
       } else {
-        list = list.filter(
-          (item) =>
-            item.banco?.toLowerCase() === filterBank.label?.toLowerCase(),
-        );
+        const fv = filterBank.value;
+        const fl = filterBank.label?.toLowerCase();
+        list = list.filter((item) => {
+          const bid = item.bank_id;
+          if (bid != null && bid !== "" && String(bid) === String(fv)) {
+            return true;
+          }
+          const b = item.banco ?? item.bank;
+          return b?.toLowerCase() === fl;
+        });
       }
     }
-    const descQ = filterDescripcion?.trim();
+    const descQ = filterDescription?.trim();
     if (descQ) {
       const q = descQ.toLowerCase();
       list = list.filter((item) =>
-        String(item.descripcion ?? "")
+        String(item.description ?? "")
           .toLowerCase()
           .includes(q),
       );
     }
     if (filterValue != null && filterValue !== "") {
       const target = Number(filterValue);
-      list = list.filter((item) => Number(item.valor) === target);
+      list = list.filter((item) => Number(item.amount) === target);
     }
     return list;
   })();
@@ -941,7 +985,7 @@ export default function TxnTable({
     filterSubcategory ||
     filterBank ||
     filterValue != null ||
-    (filterDescripcion && filterDescripcion.trim() !== "");
+    (filterDescription && filterDescription.trim() !== "");
 
   const selectedCount = Object.keys(selectedTxnIds).filter(
     (id) => selectedTxnIds[id],
@@ -1156,9 +1200,9 @@ export default function TxnTable({
           />
         </Pressable>
       )}
-      {filterDescripcion && filterDescripcion.trim() !== "" && (
+      {filterDescription && filterDescription.trim() !== "" && (
         <Pressable
-          onPress={() => setFilterDescripcion("")}
+          onPress={() => setFilterDescription("")}
           style={[
             styles.filterChip,
             {
@@ -1171,7 +1215,7 @@ export default function TxnTable({
             style={[styles.filterChipText, { color: theme.colors.text }]}
             numberOfLines={1}
           >
-            Descripción: {filterDescripcion.trim()}
+            Descripción: {filterDescription.trim()}
           </Text>
           <MaterialIcons
             name="close"
@@ -1187,17 +1231,17 @@ export default function TxnTable({
   return (
     <View style={[styles.root, style]}>
       <Modal
-        visible={fechaModal != null}
+        visible={dateModal != null}
         transparent
         animationType="fade"
-        onRequestClose={() => setFechaModal(null)}
+        onRequestClose={() => setDateModal(null)}
       >
         <Pressable
           style={[
             styles.dateModalOverlay,
             { backgroundColor: theme.colors.modalOverlay },
           ]}
-          onPress={() => setFechaModal(null)}
+          onPress={() => setDateModal(null)}
         >
           <Pressable
             style={[
@@ -1212,16 +1256,16 @@ export default function TxnTable({
             <Text style={[styles.dateModalTitle, { color: theme.colors.text }]}>
               Fecha
             </Text>
-            {fechaModal != null && (
+            {dateModal != null && (
               <View style={styles.dateModalPickerWrap}>
                 <DateTimePicker
-                  value={fechaModal.date}
+                  value={dateModal.date}
                   mode="date"
                   // display={Platform.OS === "ios" ? "spinner" : "calendar"}
                   display="default"
                   onChange={(_, selectedDate) => {
                     if (selectedDate) {
-                      setFechaModal((prev) =>
+                      setDateModal((prev) =>
                         prev ? { ...prev, date: selectedDate } : null,
                       );
                     }
@@ -1239,7 +1283,7 @@ export default function TxnTable({
               ]}
             >
               <Pressable
-                onPress={() => setFechaModal(null)}
+                onPress={() => setDateModal(null)}
                 style={({ pressed }) => [
                   styles.dateModalButton,
                   { opacity: pressed ? 0.7 : 1 },
@@ -1249,9 +1293,9 @@ export default function TxnTable({
               </Pressable>
               <Pressable
                 onPress={async () => {
-                  if (!fechaModal) return;
-                  const { id, date } = fechaModal;
-                  setFechaModal(null);
+                  if (!dateModal) return;
+                  const { id, date } = dateModal;
+                  setDateModal(null);
                   await updateTxnDate(id, date);
                 }}
                 style={({ pressed }) => [
@@ -1350,8 +1394,8 @@ export default function TxnTable({
         }
         currencyValue={filterValue}
         onCurrencyValueChange={setFilterValue}
-        textValue={filterDescripcion}
-        onTextValueChange={setFilterDescripcion}
+        textValue={filterDescription}
+        onTextValueChange={setFilterDescription}
         textPlaceholder="Filtrar por texto en descripción"
         doneLabel="Listo"
         onChange={(item) => {
@@ -1431,9 +1475,9 @@ const styles = StyleSheet.create({
     flexDirection: "row",
   },
   colSelect: { width: 44 },
-  colFecha: { width: 99 },
-  colDescripcion: { width: 112 },
-  colValor: { width: 112 },
+  colDate: { width: 99 },
+  colDescription: { width: 112 },
+  colAmount: { width: 112 },
   colCategoria: { width: 112 },
   colSubCategoria: { width: 112 },
   colBanco: { width: 80 },

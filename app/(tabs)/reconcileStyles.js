@@ -149,10 +149,10 @@ export const reconcileStyles = StyleSheet.create({
   row: {
     flexDirection: "row",
   },
-  colFecha: { width: 98 },
-  colDescripcion: { width: 144 },
-  colValor: { width: 112 },
-  colSaldo: { width: 112 },
+  colDate: { width: 98 },
+  colDescription: { width: 144 },
+  colAmount: { width: 112 },
+  colBalance: { width: 112 },
   colBanco: { width: 80 },
   headerCell: {
     borderBottomWidth: 1,

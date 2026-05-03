@@ -5,14 +5,12 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import TxnTable from "../../components/TxnTable";
 import { useAuth } from "../../contexts/AuthContext";
 import { useTheme } from "../../contexts/ThemeContext";
-import { useCategories } from "../../hooks/useCategories";
-
 const API_URL = process.env.EXPO_PUBLIC_API_URL;
 const TABLE = "txns";
 
 export default function Txns() {
   const { theme } = useTheme();
-  const { schema } = useAuth();
+  const { tenantId, getAuthHeaders } = useAuth();
   const {
     data,
     error,
@@ -22,11 +20,13 @@ export default function Txns() {
     isPending,
     refetch,
   } = useInfiniteQuery({
-    queryKey: ["txns", schema],
+    queryKey: ["txns", tenantId],
     queryFn: ({ pageParam }) =>
       fetch(
-        `${API_URL}/latests_txns/?page=${pageParam.page}&limit=${pageParam.limit}&schema=${schema}`,
+        `${API_URL}/latests_txns/?page=${pageParam.page}&limit=${pageParam.limit}`,
+        { headers: getAuthHeaders() },
       ).then((res) => res.json()),
+    enabled: !!tenantId,
     initialPageParam: { page: 0, limit: 100 },
     getNextPageParam: (lastPage, allPages, lastPageParam) => {
       if (
@@ -48,8 +48,6 @@ export default function Txns() {
     // refetchOnMount: false,
   });
 
-  const { data: categoriesData } = useCategories();
-
   // Flatten all pages into a single array of transactions
   const txns = useMemo(() => {
     return data?.pages?.flatMap((page) => page) ?? [];
@@ -61,7 +59,6 @@ export default function Txns() {
     >
       <View style={{ flex: 1 }}>
         <TxnTable
-          categories={categoriesData}
           style={styles.tableContainer}
           table={TABLE}
           txns={txns}
@@ -70,7 +67,7 @@ export default function Txns() {
           hasNextPage={hasNextPage}
           isFetchingNextPage={isFetchingNextPage}
           isPending={isPending}
-          queryKey={["txns", schema]}
+          queryKey={["txns", tenantId]}
           refetch={refetch}
         />
       </View>

@@ -4,14 +4,16 @@ import { useAuth } from "../contexts/AuthContext";
 const API_URL = process.env.EXPO_PUBLIC_API_URL;
 
 /**
- * Banks list for input, filters, etc. Cache key ["banks", schema].
+ * Banks list for input, filters, etc. Cache key ["banks", tenantId].
  */
 export function useBanks() {
-  const { schema } = useAuth();
+  const { tenantId, getAuthHeaders } = useAuth();
   return useQuery({
-    queryKey: ["banks", schema],
+    queryKey: ["banks", tenantId],
     queryFn: async () => {
-      const response = await fetch(`${API_URL}/banks?schema=${schema}`);
+      const response = await fetch(`${API_URL}/banks/`, {
+        headers: getAuthHeaders(),
+      });
       const data = await response.json();
       if (!response.ok) {
         const msg =
@@ -20,7 +22,7 @@ export function useBanks() {
       }
       return data;
     },
-    enabled: !!schema,
+    enabled: !!tenantId,
     select: (data) =>
       [...data].sort((a, b) =>
         String(a.label ?? "").localeCompare(String(b.label ?? "")),

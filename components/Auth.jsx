@@ -52,29 +52,34 @@ console.log(redirectTo);
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL;
 
-/** Idempotent: backend should no-op if schema already exists. */
-function ensureUserTxnSchema(username) {
-  const schemaName =
-    typeof username === "string" && username.trim() ? username.trim() : "";
-  if (!schemaName || !API_URL) return;
-  const url = `${API_URL}/create_txns_table/`;
-  fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ schema: schemaName }),
-  })
-    .then((res) => res.json())
-    .then((body) => {
-      console.log(body);
-    })
-    .catch((err) => {
-      console.warn("ensureUserTxnSchema", err);
+/**
+ * Ensures per-user txn storage exists on the API. Call and await before
+ * `setSession` on sign-in so hooks (e.g. /categories/) do not race ahead.
+ */
+async function ensureUserTxnSchema(accessToken) {
+  if (!API_URL || !accessToken) return;
+  try {
+    const res = await fetch(`${API_URL}/create_txns_table/`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
+      },
     });
+    if (!res.ok) {
+      await res.json().catch(() => ({}));
+      console.warn("ensureUserTxnSchema", res.status);
+      return;
+    }
+    await res.json().catch(() => ({}));
+  } catch (err) {
+    console.warn("ensureUserTxnSchema", err);
+  }
 }
 
 export default function Auth() {
   const { theme } = useTheme();
-  const { setSession, schema } = useAuth();
+  const { setSession } = useAuth();
   const [mode, setMode] = useState("signIn"); // "signIn" | "signUp" | "resetPassword" | "changePassword"
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -311,11 +316,13 @@ export default function Auth() {
         );
         return;
       }
+      const accessToken = data.access_token ?? data.token;
+      await ensureUserTxnSchema(accessToken);
       await setSession({
-        access_token: data.access_token ?? data.token,
+        access_token: accessToken,
+        ...(data.refresh_token ? { refresh_token: data.refresh_token } : {}),
         user: data.user ?? data.user,
       });
-      ensureUserTxnSchema(data.user?.username);
     } catch (err) {
       Alert.alert(
         "Error al iniciar sesión",
@@ -376,12 +383,12 @@ export default function Auth() {
       }
       const u = nextSession.user;
       const username = usernameFromGoogleSupabaseUser(u);
+      await ensureUserTxnSchema(nextSession.access_token);
       await setSession({
         access_token: nextSession.access_token,
         refresh_token: nextSession.refresh_token,
         user: { ...u, username },
       });
-      ensureUserTxnSchema(username);
     } catch (err) {
       if (
         isErrorWithCode(err) &&
@@ -464,8 +471,11 @@ export default function Auth() {
         return;
       }
       if (data.access_token ?? data.token) {
+        const accessToken = data.access_token ?? data.token;
+        await ensureUserTxnSchema(accessToken);
         await setSession({
-          access_token: data.access_token ?? data.token,
+          access_token: accessToken,
+          ...(data.refresh_token ? { refresh_token: data.refresh_token } : {}),
           user: data.user ?? data.user,
         });
       } else {
@@ -475,7 +485,6 @@ export default function Auth() {
         );
       }
       console.log(data);
-      ensureUserTxnSchema(data.user?.username);
     } catch (err) {
       Alert.alert(
         "Error al registrarse",

@@ -4,6 +4,7 @@ import RevenueCatUI, { PAYWALL_RESULT } from "react-native-purchases-ui";
 
 import { useAuth } from "./AuthContext";
 import { REVENUECAT_ENTITLEMENT_PRO } from "../lib/revenuecatConstants";
+import { hasActiveEntitlement } from "../lib/revenuecatEntitlements";
 import {
   getRevenueCatApiKey,
   hasPurchasesBeenConfigured,
@@ -135,11 +136,10 @@ export function PurchasesProvider({ children }) {
     }
   }, [sdkReady]);
 
-  const isProActive = useMemo(() => {
-    const active = customerInfo?.entitlements?.active;
-    if (!active) return false;
-    return Object.prototype.hasOwnProperty.call(active, REVENUECAT_ENTITLEMENT_PRO);
-  }, [customerInfo]);
+  const isProActive = useMemo(
+    () => hasActiveEntitlement(customerInfo, REVENUECAT_ENTITLEMENT_PRO),
+    [customerInfo],
+  );
 
   const restorePurchases = useCallback(async () => {
     if (!sdkReady || !isPurchasesSupportedPlatform()) {
@@ -178,10 +178,10 @@ export function PurchasesProvider({ children }) {
       const result = await RevenueCatUI.presentPaywallIfNeeded({
         requiredEntitlementIdentifier: REVENUECAT_ENTITLEMENT_PRO,
       });
-      await refreshCustomerInfo();
-      return { ok: true, result };
+      const customerInfoAfter = await refreshCustomerInfo();
+      return { ok: true, result, customerInfo: customerInfoAfter };
     } catch (error) {
-      return { ok: false, result: null, error };
+      return { ok: false, result: null, error, customerInfo: null };
     }
   }, [sdkReady, refreshCustomerInfo]);
 

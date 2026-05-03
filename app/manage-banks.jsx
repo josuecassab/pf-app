@@ -23,6 +23,13 @@ import { useTheme } from "../contexts/ThemeContext";
 import { useBanks } from "../hooks/useBanks";
 import { setPendingBankSelection } from "../lib/pendingBankSelection";
 
+function formatApiError(data) {
+  if (data == null || typeof data !== "object") return String(data ?? "");
+  const msg = data.detail ?? data.message;
+  if (msg == null) return JSON.stringify(data);
+  return typeof msg === "string" ? msg : JSON.stringify(msg);
+}
+
 const API_URL = process.env.EXPO_PUBLIC_API_URL;
 const EMPTY_BANK_LIST = [];
 
@@ -32,7 +39,7 @@ function closeModal() {
 
 export default function ManageBanksScreen() {
   const queryClient = useQueryClient();
-  const { schema } = useAuth();
+  const { tenantId, getAuthHeaders } = useAuth();
   const { theme } = useTheme();
   const { data: banksData } = useBanks();
   const bankList = Array.isArray(banksData) ? banksData : EMPTY_BANK_LIST;
@@ -46,15 +53,12 @@ export default function ManageBanksScreen() {
     if (label === "") return;
     try {
       const res = await fetch(
-        `${API_URL}/insert_bank/?schema=${schema}&name=${encodeURIComponent(label)}`,
-        { method: "POST" },
+        `${API_URL}/banks/insert_bank/?name=${encodeURIComponent(label)}`,
+        { method: "POST", headers: getAuthHeaders() },
       );
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        Alert.alert(
-          "Error agregando el banco",
-          data.message || JSON.stringify(data),
-        );
+        Alert.alert("Error agregando el banco", formatApiError(data));
         return;
       }
       await queryClient.invalidateQueries({ queryKey: ["banks"] });
@@ -75,17 +79,15 @@ export default function ManageBanksScreen() {
   const deleteBank = async (bankValue) => {
     try {
       const res = await fetch(
-        `${API_URL}/delete_bank/?id=${bankValue}&schema=${schema}`,
+        `${API_URL}/banks/delete_bank/?id=${bankValue}`,
         {
           method: "DELETE",
+          headers: getAuthHeaders(),
         },
       );
       const result = await res.json().catch(() => ({}));
       if (!res.ok) {
-        Alert.alert(
-          "Error eliminando el banco",
-          result.message || JSON.stringify(result),
-        );
+        Alert.alert("Error eliminando el banco", formatApiError(result));
         return;
       }
       await queryClient.invalidateQueries({ queryKey: ["banks"] });
@@ -99,17 +101,15 @@ export default function ManageBanksScreen() {
     setUpdatingBank(value);
     try {
       const res = await fetch(
-        `${API_URL}/update_bank/?value=${value}&name=${encodeURIComponent(newLabel)}&schema=${schema}`,
+        `${API_URL}/banks/update_bank/?value=${value}&name=${encodeURIComponent(newLabel)}`,
         {
           method: "PUT",
+          headers: getAuthHeaders(),
         },
       );
-      const result = await res.json();
+      const result = await res.json().catch(() => ({}));
       if (!res.ok) {
-        Alert.alert(
-          "Error actualizando el banco",
-          result.message || JSON.stringify(result),
-        );
+        Alert.alert("Error actualizando el banco", formatApiError(result));
         return;
       }
       await queryClient.invalidateQueries({ queryKey: ["banks"] });

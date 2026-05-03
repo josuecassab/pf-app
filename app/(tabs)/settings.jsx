@@ -9,11 +9,12 @@ import {
   Text,
   View,
 } from "react-native";
+import { PAYWALL_RESULT } from "react-native-purchases-ui";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useAuth } from "../../contexts/AuthContext";
-import { PAYWALL_RESULT } from "react-native-purchases-ui";
 import { usePurchasesContext } from "../../contexts/PurchasesContext";
 import { useTheme } from "../../contexts/ThemeContext";
+import { hasActiveEntitlement } from "../../lib/revenuecatEntitlements";
 import { REVENUECAT_PRODUCT_IDS } from "../../lib/revenuecatConstants";
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL;
@@ -34,7 +35,7 @@ export default function Settings() {
     customerInfo,
   } = usePurchasesContext();
   const [purchaseBusy, setPurchaseBusy] = useState(false);
-
+  console.log("customerInfo", customerInfo);
   async function signOut() {
     try {
       await fetch(`${API_URL}/auth/sign_out`, {
@@ -64,7 +65,10 @@ export default function Settings() {
         Alert.alert("Paywall", error.message ?? String(error));
         return;
       }
-      if (result === PAYWALL_RESULT.PURCHASED || result === PAYWALL_RESULT.RESTORED) {
+      if (
+        result === PAYWALL_RESULT.PURCHASED ||
+        result === PAYWALL_RESULT.RESTORED
+      ) {
         Alert.alert("ZeroGasto Pro", "Tu suscripción está activa. ¡Gracias!");
       }
     } finally {
@@ -99,15 +103,18 @@ export default function Settings() {
     if (!isNativePurchasesPlatform) return;
     setPurchaseBusy(true);
     try {
-      const { ok, error, cancelled, customerInfo: restored } = await restorePurchases();
+      const {
+        ok,
+        error,
+        cancelled,
+        customerInfo: restored,
+      } = await restorePurchases();
       if (cancelled) return;
       if (!ok) {
         Alert.alert("Restaurar", error?.message ?? "No se pudo restaurar.");
         return;
       }
-      const hasEntitlement =
-        restored?.entitlements?.active &&
-        Object.prototype.hasOwnProperty.call(restored.entitlements.active, entitlementId);
+      const hasEntitlement = hasActiveEntitlement(restored, entitlementId);
       Alert.alert(
         "Restaurar",
         hasEntitlement
@@ -189,13 +196,25 @@ export default function Settings() {
             },
           ]}
         >
-          <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
+          <View
+            style={{
+              flexDirection: "row",
+              justifyContent: "space-between",
+              alignItems: "center",
+            }}
+          >
             <View style={{ flex: 1, paddingRight: 12 }}>
-              <Text style={[styles.settingLabel, { color: theme.colors.text }]}>ZeroGasto Pro</Text>
-              <Text style={[styles.subLabel, { color: theme.colors.textSecondary }]}>
+              <Text style={[styles.settingLabel, { color: theme.colors.text }]}>
+                ZeroGasto Pro
+              </Text>
+              <Text
+                style={[styles.subLabel, { color: theme.colors.textSecondary }]}
+              >
                 {proSubtitle}
               </Text>
-              {isNativePurchasesPlatform && sdkReady && customerInfo?.originalAppUserId ? (
+              {isNativePurchasesPlatform &&
+              sdkReady &&
+              customerInfo?.originalAppUserId ? (
                 <Text
                   style={[styles.monoHint, { color: theme.colors.border }]}
                   numberOfLines={1}
@@ -206,13 +225,15 @@ export default function Settings() {
               ) : null}
             </View>
             {isProActive ? (
-              <Text style={[styles.badge, { color: theme.colors.primary }]}>Pro</Text>
+              <Text style={[styles.badge, { color: theme.colors.primary }]}>
+                Pro
+              </Text>
             ) : null}
           </View>
 
           <Text style={[styles.productHint, { color: theme.colors.border }]}>
-            Productos en tienda: {REVENUECAT_PRODUCT_IDS.MONTHLY}, {REVENUECAT_PRODUCT_IDS.YEARLY} · Entitlement:{" "}
-            {entitlementId}
+            Productos en tienda: {REVENUECAT_PRODUCT_IDS.MONTHLY},{" "}
+            {REVENUECAT_PRODUCT_IDS.YEARLY} · Entitlement: {entitlementId}
           </Text>
 
           <Pressable
@@ -228,7 +249,12 @@ export default function Settings() {
             {purchaseBusy ? (
               <ActivityIndicator color={theme.colors.primary} />
             ) : (
-              <Text style={[styles.secondaryButtonText, { color: theme.colors.primary }]}>
+              <Text
+                style={[
+                  styles.secondaryButtonText,
+                  { color: theme.colors.primary },
+                ]}
+              >
                 Ver oferta (si no eres Pro)
               </Text>
             )}
@@ -244,7 +270,12 @@ export default function Settings() {
               paywallButtonsDisabled && styles.buttonDisabled,
             ]}
           >
-            <Text style={[styles.secondaryButtonText, { color: theme.colors.primary }]}>
+            <Text
+              style={[
+                styles.secondaryButtonText,
+                { color: theme.colors.primary },
+              ]}
+            >
               Mostrar paywall
             </Text>
           </Pressable>
@@ -259,7 +290,11 @@ export default function Settings() {
               paywallButtonsDisabled && styles.buttonDisabled,
             ]}
           >
-            <Text style={[styles.secondaryButtonText, { color: theme.colors.text }]}>Restaurar compras</Text>
+            <Text
+              style={[styles.secondaryButtonText, { color: theme.colors.text }]}
+            >
+              Restaurar compras
+            </Text>
           </Pressable>
 
           <Pressable
@@ -272,7 +307,9 @@ export default function Settings() {
               paywallButtonsDisabled && styles.buttonDisabled,
             ]}
           >
-            <Text style={[styles.secondaryButtonText, { color: theme.colors.text }]}>
+            <Text
+              style={[styles.secondaryButtonText, { color: theme.colors.text }]}
+            >
               Gestionar suscripción (Customer Center)
             </Text>
           </Pressable>
@@ -347,7 +384,11 @@ const styles = StyleSheet.create({
   monoHint: {
     fontSize: 11,
     marginTop: 6,
-    fontFamily: Platform.select({ ios: "Menlo", android: "monospace", default: undefined }),
+    fontFamily: Platform.select({
+      ios: "Menlo",
+      android: "monospace",
+      default: undefined,
+    }),
   },
   productHint: {
     fontSize: 12,

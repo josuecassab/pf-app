@@ -22,6 +22,7 @@ import SwipeableCategoryItem from "../components/SwipeableCategoryItem";
 import { useAuth } from "../contexts/AuthContext";
 import { useTheme } from "../contexts/ThemeContext";
 import { useCategories } from "../hooks/useCategories";
+import { authJsonHeaders } from "../lib/apiHeaders";
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL;
 
@@ -31,7 +32,7 @@ function closeModal() {
 
 export default function ManageCategoriesScreen() {
   const queryClient = useQueryClient();
-  const { schema } = useAuth();
+  const { tenantId, getAuthHeaders } = useAuth();
   const { theme } = useTheme();
   const { data } = useCategories();
 
@@ -53,16 +54,11 @@ export default function ManageCategoriesScreen() {
   const addCategory = async () => {
     if (inputCategory.trim() === "") return;
     try {
-      const res = await fetch(
-        `${API_URL}/categories/insert_category/?schema=${schema}`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({ label: inputCategory }),
-        },
-      );
+      const res = await fetch(`${API_URL}/categories/insert_category/`, {
+        method: "POST",
+        headers: authJsonHeaders(getAuthHeaders),
+        body: JSON.stringify({ label: inputCategory }),
+      });
 
       const resData = await res.json();
       if (!res.ok) {
@@ -81,22 +77,17 @@ export default function ManageCategoriesScreen() {
     }
   };
 
-  const addSubcategory = async (category) => {
+  const addSubcategory = async (categoryId) => {
     if (inputSubcategory.trim() === "") return;
     try {
-      const res = await fetch(
-        `${API_URL}/categories/insert_subcategory/?schema=${schema}`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            sub_categoria: inputSubcategory,
-            id_categoria: category,
-          }),
-        },
-      );
+      const res = await fetch(`${API_URL}/categories/insert_subcategory/`, {
+        method: "POST",
+        headers: authJsonHeaders(getAuthHeaders),
+        body: JSON.stringify({
+          name: inputSubcategory,
+          category_id: categoryId,
+        }),
+      });
 
       const resData = await res.json();
       if (!res.ok) {
@@ -119,9 +110,10 @@ export default function ManageCategoriesScreen() {
   const deleteCategory = async (categoryValue) => {
     try {
       const res = await fetch(
-        `${API_URL}/categories/delete_category/?id=${categoryValue}&schema=${schema}`,
+        `${API_URL}/categories/delete_category/?id=${categoryValue}`,
         {
           method: "DELETE",
+          headers: getAuthHeaders(),
         },
       );
 
@@ -144,9 +136,10 @@ export default function ManageCategoriesScreen() {
   const deleteSubcategory = async (categoryValue) => {
     try {
       const res = await fetch(
-        `${API_URL}/categories/delete_subcategory/?id=${categoryValue}&schema=${schema}`,
+        `${API_URL}/categories/delete_subcategory/?id=${categoryValue}`,
         {
           method: "DELETE",
+          headers: getAuthHeaders(),
         },
       );
 
@@ -170,9 +163,10 @@ export default function ManageCategoriesScreen() {
     setUpdatingCategory(value);
     try {
       const res = await fetch(
-        `${API_URL}/categories/update_category/?value=${value}&label=${newLabel}&schema=${schema}`,
+        `${API_URL}/categories/update_category/?value=${value}&label=${newLabel}`,
         {
           method: "PUT",
+          headers: getAuthHeaders(),
         },
       );
       const result = await res.json();
@@ -195,9 +189,10 @@ export default function ManageCategoriesScreen() {
     setUpdatingCategory(value);
     try {
       const res = await fetch(
-        `${API_URL}/categories/update_subcategory/?value=${value}&label=${newLabel}&schema=${schema}`,
+        `${API_URL}/categories/update_subcategory/?value=${value}&label=${newLabel}`,
         {
           method: "PUT",
+          headers: getAuthHeaders(),
         },
       );
       const result = await res.json();

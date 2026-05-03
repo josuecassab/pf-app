@@ -1,41 +1,56 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "../contexts/AuthContext";
+import { authJsonHeaders } from "../lib/apiHeaders";
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL;
 
-export const categoryGroupsQueryKey = (schema) => ["categoryGroups", schema];
+export const categoryGroupsQueryKey = (tenantId) => [
+  "categoryGroups",
+  tenantId,
+];
+
+async function parseErrorBody(res) {
+  const text = await res.text();
+  if (!text) return res.statusText;
+  try {
+    const data = JSON.parse(text);
+    return (
+      data.message || data.detail || JSON.stringify(data) || res.statusText
+    );
+  } catch {
+    return text || res.statusText;
+  }
+}
 
 /**
- * Fetches persisted category groups for the schema and exposes merge/delete mutations.
+ * Fetches persisted category groups for the tenant and exposes create/update/delete mutations.
  */
 export function useCategoryGroups() {
-  const { schema } = useAuth();
+  const { tenantId, getAuthHeaders } = useAuth();
   const queryClient = useQueryClient();
 
   const query = useQuery({
-    queryKey: categoryGroupsQueryKey(schema),
+    queryKey: categoryGroupsQueryKey(tenantId),
     queryFn: async () => {
-      const res = await fetch(`${API_URL}/groups/?schema=${schema}`);
+      const res = await fetch(`${API_URL}/groups/`, {
+        headers: getAuthHeaders(),
+      });
       if (!res.ok) {
-        const t = await res.text();
-        throw new Error(t || res.statusText);
+        throw new Error(await parseErrorBody(res));
       }
       const data = await res.json();
       return Array.isArray(data) ? data : [];
     },
-    enabled: !!schema,
+    enabled: !!tenantId,
   });
 
-  const mergeGroup = useMutation({
-    mutationFn: async ({ grupo_categoria, categoria }) => {
-      const res = await fetch(
-        `${API_URL}/groups/merge_group/?schema=${schema}`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ grupo_categoria, categoria }),
-        },
-      );
+  const createGroup = useMutation({
+    mutationFn: async ({ name, category_ids }) => {
+      const res = await fetch(`${API_URL}/groups/`, {
+        method: "POST",
+        headers: authJsonHeaders(getAuthHeaders),
+        body: JSON.stringify({ name, category_ids }),
+      });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
         throw new Error(
@@ -45,28 +60,60 @@ export function useCategoryGroups() {
       return data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: categoryGroupsQueryKey(schema) });
+      queryClient.invalidateQueries({
+        queryKey: categoryGroupsQueryKey(tenantId),
+      });
+    },
+  });
+
+  const updateGroup = useMutation({
+    mutationFn: async ({ id, name, category_ids }) => {
+      const res = await fetch(`${API_URL}/groups/${encodeURIComponent(id)}`, {
+        method: "PUT",
+        headers: authJsonHeaders(getAuthHeaders),
+        body: JSON.stringify({ name, category_ids }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(
+          data.message || data.detail || JSON.stringify(data) || res.statusText,
+        );
+      }
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: categoryGroupsQueryKey(tenantId),
+      });
     },
   });
 
   const deleteGroup = useMutation({
-    mutationFn: async (grupo_categoria) => {
+    mutationFn: async (groupId) => {
       const res = await fetch(
-        `${API_URL}/groups/delete_group/?schema=${schema}&grupo_categoria=${encodeURIComponent(grupo_categoria)}`,
-        { method: "DELETE" },
+        `${API_URL}/groups/${encodeURIComponent(groupId)}`,
+        {
+          method: "DELETE",
+          headers: getAuthHeaders(),
+        },
       );
-      const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        throw new Error(
-          data.message || data.detail || JSON.stringify(data) || res.statusText,
-        );
+        throw new Error(await parseErrorBody(res));
       }
-      return data;
+      const text = await res.text();
+      if (!text.trim()) return null;
+      try {
+        return JSON.parse(text);
+      } catch {
+        return null;
+      }
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: categoryGroupsQueryKey(schema) });
+      queryClient.invalidateQueries({
+        queryKey: categoryGroupsQueryKey(tenantId),
+      });
     },
   });
 
-  return { ...query, mergeGroup, deleteGroup };
+  return { ...query, createGroup, updateGroup, deleteGroup };
 }

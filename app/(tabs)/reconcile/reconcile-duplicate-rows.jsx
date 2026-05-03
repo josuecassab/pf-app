@@ -4,8 +4,9 @@ import { useMemo } from "react";
 import { ScrollView, Text } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import TxnTable from "../../../components/TxnTable";
+import { useAuth } from "../../../contexts/AuthContext";
 import { useTheme } from "../../../contexts/ThemeContext";
-import { useCategories } from "../../../hooks/useCategories";
+import { authJsonHeaders } from "../../../lib/apiHeaders";
 import { reconcileStyles } from "../reconcileStyles";
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL;
@@ -20,14 +21,18 @@ function parseIdsParam(raw) {
   }
 }
 
+function routeParamOne(raw) {
+  if (raw == null) return "";
+  if (Array.isArray(raw)) return String(raw[0] ?? "");
+  return String(raw);
+}
+
 export default function ReconcileDuplicateRows() {
   const { theme } = useTheme();
+  const { tenantId, getAuthHeaders } = useAuth();
   const params = useLocalSearchParams();
-  const schema = params.schema;
-  const table = params.table;
+  const table = routeParamOne(params.table);
   const ids = useMemo(() => parseIdsParam(params.ids), [params.ids]);
-
-  const { data: categoriesData } = useCategories();
 
   const idsKey = useMemo(() => ids.join(","), [ids]);
 
@@ -37,17 +42,16 @@ export default function ReconcileDuplicateRows() {
     isPending,
     refetch,
   } = useQuery({
-    queryKey: ["statement_records", schema, table, idsKey],
+    queryKey: ["statement_records", tenantId, table, idsKey],
     queryFn: async () => {
       const qs = new URLSearchParams({
-        schema: String(schema),
         table: String(table),
       });
       const res = await fetch(
         `${API_URL}/statement_records/?${qs.toString()}`,
         {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: authJsonHeaders(getAuthHeaders),
           body: JSON.stringify({ ids }),
         },
       );
@@ -60,7 +64,7 @@ export default function ReconcileDuplicateRows() {
       const rows = Array.isArray(body) ? body : body?.records ?? [];
       return { pages: [rows], pageParams: [null] };
     },
-    enabled: Boolean(schema && table && ids.length > 0),
+    enabled: Boolean(tenantId && table && ids.length > 0),
   });
 
   const txns = useMemo(
@@ -68,7 +72,7 @@ export default function ReconcileDuplicateRows() {
     [queryData],
   );
 
-  if (!schema || !table) {
+  if (!table) {
     return (
       <SafeAreaView
         style={[
@@ -78,7 +82,23 @@ export default function ReconcileDuplicateRows() {
         edges={["bottom"]}
       >
         <Text style={{ color: theme.colors.text, padding: 16 }}>
-          Faltan parámetros de tabla o esquema.
+          Falta el nombre de la tabla.
+        </Text>
+      </SafeAreaView>
+    );
+  }
+
+  if (!tenantId) {
+    return (
+      <SafeAreaView
+        style={[
+          reconcileStyles.container,
+          { flex: 1, backgroundColor: theme.colors.background },
+        ]}
+        edges={["bottom"]}
+      >
+        <Text style={{ color: theme.colors.text, padding: 16 }}>
+          Inicia sesión para ver estas filas.
         </Text>
       </SafeAreaView>
     );
@@ -125,7 +145,6 @@ export default function ReconcileDuplicateRows() {
           conciliación.
         </Text>
         <TxnTable
-          categories={categoriesData}
           table={String(table)}
           txns={txns}
           error={error}
@@ -133,7 +152,7 @@ export default function ReconcileDuplicateRows() {
           hasNextPage={false}
           isFetchingNextPage={false}
           isPending={isPending}
-          queryKey={["statement_records", schema, table, idsKey]}
+          queryKey={["statement_records", tenantId, table, idsKey]}
           refetch={refetch}
         />
       </ScrollView>
