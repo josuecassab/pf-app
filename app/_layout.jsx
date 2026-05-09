@@ -38,6 +38,13 @@ function AuthenticatedStack() {
           headerShown: false,
         }}
       />
+      <Stack.Screen
+        name="txn-modals"
+        options={{
+          presentation: "modal",
+          headerShown: false,
+        }}
+      />
     </Stack>
   );
 }

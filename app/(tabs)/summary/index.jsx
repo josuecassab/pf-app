@@ -12,11 +12,11 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import GroupedTable from "../../components/GroupedTable";
-import { useAuth } from "../../contexts/AuthContext";
-import { useTheme } from "../../contexts/ThemeContext";
-import { useCategories } from "../../hooks/useCategories";
-import { useCategoryGroups } from "../../hooks/useCategoryGroups";
+import GroupedTable from "../../../components/GroupedTable";
+import { useAuth } from "../../../contexts/AuthContext";
+import { useTheme } from "../../../contexts/ThemeContext";
+import { useCategories } from "../../../hooks/useCategories";
+import { useCategoryGroups } from "../../../hooks/useCategoryGroups";
 
 const months = [
   "enero",
@@ -311,7 +311,10 @@ export default function Summary() {
   }, []);
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.background }}>
+    <SafeAreaView
+      edges={["bottom", "left", "right"]}
+      style={{ flex: 1, backgroundColor: theme.colors.background }}
+    >
       <View
         style={[styles.container, { backgroundColor: theme.colors.background }]}
       >

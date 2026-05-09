@@ -26,6 +26,17 @@ import { reconcileStyles } from "../reconcileStyles";
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL;
 
+/** List endpoint may return strings or objects with a path field */
+function statementPathFromListItem(item) {
+  if (typeof item === "string") return item;
+  if (item && typeof item === "object") {
+    for (const k of ["uri", "path", "gcs_uri", "value", "url"]) {
+      if (typeof item[k] === "string") return item[k];
+    }
+  }
+  return null;
+}
+
 /** gs://bucket/<bank_slug>/file.xlsx → matching bank option from list, if known */
 function bankFromStatementGcsUri(uri, bankOptions) {
   if (!uri || typeof uri !== "string") return null;
@@ -72,14 +83,45 @@ export default function Reconcile() {
   const fetchStatements = useCallback(async () => {
     if (!tenantId) return;
     try {
-      const data = await fetch(`${API_URL}/list_statements/`, {
+      const res = await fetch(`${API_URL}/list_statements/`, {
         headers: getAuthHeaders(),
-      }).then((res) => res.json());
-      console.log("data:", data);
-      const statements = data.map((item) => ({
-        label: item.split("/").at(-1).split(".")[0],
-        value: item,
-      }));
+      });
+      const payload = await res.json();
+      if (!res.ok) {
+        console.error("list_statements failed:", res.status, payload);
+        setStatements([]);
+        setSelectedStatement(null);
+        return;
+      }
+      const rawList = Array.isArray(payload)
+        ? payload
+        : Array.isArray(payload?.statements)
+          ? payload.statements
+          : Array.isArray(payload?.uris)
+            ? payload.uris
+            : Array.isArray(payload?.results)
+              ? payload.results
+              : Array.isArray(payload?.data)
+                ? payload.data
+                : [];
+      if (
+        rawList.length === 0 &&
+        payload != null &&
+        typeof payload === "object" &&
+        !Array.isArray(payload)
+      ) {
+        console.warn(
+          "list_statements: expected an array or known wrapper; got keys:",
+          Object.keys(payload),
+        );
+      }
+      const statements = rawList
+        .map(statementPathFromListItem)
+        .filter(Boolean)
+        .map((item) => ({
+          label: item.split("/").at(-1).split(".")[0],
+          value: item,
+        }));
       setStatements(statements);
       setSelectedStatement((prev) => {
         if (prev && statements.some((s) => s.value === prev.value)) {
@@ -425,15 +467,13 @@ export default function Reconcile() {
   };
   return (
     <SafeAreaView
+      edges={["bottom", "left", "right"]}
       style={[
         reconcileStyles.container,
         { backgroundColor: theme.colors.background },
       ]}
     >
       <View style={reconcileStyles.headerSection}>
-        <Text style={[reconcileStyles.title, { color: theme.colors.text }]}>
-          Conciliar
-        </Text>
         <StatusBar barStyle={theme.isDark ? "light-content" : "dark-content"} />
         <View style={reconcileStyles.section}>
           <View style={reconcileStyles.filePickAndUploadRow}>

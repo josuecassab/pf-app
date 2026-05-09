@@ -3,12 +3,13 @@ import { NativeTabs } from "expo-router/unstable-native-tabs";
 import { useTheme } from "../../contexts/ThemeContext";
 import { useBanks } from "../../hooks/useBanks";
 import { useCategories } from "../../hooks/useCategories";
+import { useSubcategories } from "../../hooks/useSubcategories";
 
 export default function TabsLayout() {
   const { theme } = useTheme();
   useCategories();
   useBanks();
-
+  useSubcategories();
   return (
     <NativeTabs
       initialRouteName="index"

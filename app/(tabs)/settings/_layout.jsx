@@ -1,7 +1,8 @@
 import { Stack } from "expo-router";
+
 import { useTheme } from "../../../contexts/ThemeContext";
 
-export default function ReconcileLayout() {
+export default function SettingsLayout() {
   const { theme } = useTheme();
 
   return (
@@ -13,15 +14,7 @@ export default function ReconcileLayout() {
         headerShadowVisible: theme.isDark ? false : undefined,
       }}
     >
-      <Stack.Screen name="index" options={{ title: "Conciliar" }} />
-      <Stack.Screen
-        name="reconcile-results"
-        options={{ title: "Conciliación" }}
-      />
-      <Stack.Screen
-        name="reconcile-duplicate-rows"
-        options={{ title: "Duplicados" }}
-      />
+      <Stack.Screen name="index" options={{ title: "Configuración" }} />
     </Stack>
   );
 }

@@ -10,12 +10,6 @@ export const reconcileStyles = StyleSheet.create({
     paddingVertical: 16,
     gap: 16,
   },
-  title: {
-    fontSize: 24,
-    fontWeight: "bold",
-    marginBottom: 8,
-    marginTop: 8,
-  },
   section: {
     gap: 8,
   },
