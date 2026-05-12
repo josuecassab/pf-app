@@ -14,7 +14,7 @@ export default function TxnsLayout() {
         headerShadowVisible: theme.isDark ? false : undefined,
       }}
     >
-      <Stack.Screen name="index" options={{ title: "Transacción" }} />
+      <Stack.Screen name="index" options={{ title: "Transacciones" }} />
     </Stack>
   );
 }

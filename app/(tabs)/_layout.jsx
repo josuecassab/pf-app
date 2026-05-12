@@ -28,7 +28,7 @@ export default function TabsLayout() {
         />
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="txns">
-        <NativeTabs.Trigger.Label>Transacción</NativeTabs.Trigger.Label>
+        <NativeTabs.Trigger.Label>Txns</NativeTabs.Trigger.Label>
         <NativeTabs.Trigger.Icon sf="list.bullet" md="list" />
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="index">
@@ -46,7 +46,7 @@ export default function TabsLayout() {
         />
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="settings">
-        <NativeTabs.Trigger.Label>Configuración</NativeTabs.Trigger.Label>
+        <NativeTabs.Trigger.Label>Config</NativeTabs.Trigger.Label>
         <NativeTabs.Trigger.Icon
           sf={{ default: "gearshape", selected: "gearshape.fill" }}
           md="settings"

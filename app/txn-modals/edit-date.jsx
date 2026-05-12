@@ -14,6 +14,8 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useAuth } from "../../contexts/AuthContext";
 import { useTheme } from "../../contexts/ThemeContext";
+import { authJsonHeaders } from "../../lib/apiHeaders";
+import { setPendingTxnTablePostEffects } from "../../lib/pendingTxnTableModal";
 import { parseQueryKeyParam } from "../../lib/queryKeyParams";
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL;
@@ -37,50 +39,41 @@ function parseTxndate(date) {
 
 export default function TxnModalEditDate() {
   const { theme } = useTheme();
-  const { schema } = useAuth();
+  const { schema, getAuthHeaders } = useAuth();
   const queryClient = useQueryClient();
   const params = useLocalSearchParams();
-  const idRaw = paramOne(params.id);
   const table = paramOne(params.table);
   const dateStr = paramOne(params.dateStr);
   const queryKey = useMemo(
     () => parseQueryKeyParam(paramOne(params.queryKeyJson)),
     [params.queryKeyJson],
   );
+  const ids = JSON.parse(params.ids);
 
   const [date, setDate] = useState(() => parseTxndate(dateStr));
-  const [saving, setSaving] = useState(false);
-
-  const id = useMemo(() => {
-    const n = Number(idRaw);
-    if (!Number.isNaN(n) && String(n) === idRaw) return n;
-    return idRaw;
-  }, [idRaw]);
+  const [loading, setLoading] = useState(false);
 
   const closeModal = useCallback(() => {
     router.back();
   }, []);
 
-  const save = useCallback(async () => {
-    if (!table || queryKey == null) {
-      closeModal();
-      return;
-    }
+  const onAccept = async () => {
+    if (ids.length === 0 || queryKey == null) return;
     const formatted = date.toLocaleDateString("en-CA");
-    setSaving(true);
+    setLoading(true);
     try {
       const res = await fetch(
         `${API_URL}/update_txn_date/?table=${table}&schema=${schema ?? ""}`,
         {
           method: "PUT",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({ id, date: formatted }),
+          headers: authJsonHeaders(getAuthHeaders),
+          body: JSON.stringify({ ids, date: formatted }),
         },
       );
       await res.json().catch(() => ({}));
       if (!res.ok) return;
+
+      const idSet = new Set(ids.map((x) => String(x)));
       queryClient.setQueryData(queryKey, (oldData) => {
         if (!oldData?.pages) return oldData;
         return {
@@ -88,7 +81,7 @@ export default function TxnModalEditDate() {
           pages: oldData.pages.map((page) =>
             Array.isArray(page)
               ? page.map((txn) =>
-                  String(txn.id) === String(id)
+                  idSet.has(String(txn.id))
                     ? { ...txn, date: formatted }
                     : txn,
                 )
@@ -96,13 +89,17 @@ export default function TxnModalEditDate() {
           ),
         };
       });
-      closeModal();
-    } catch (e) {
-      console.error("Failed to update transaction date:", e);
+
+      if (ids.length > 1) {
+        setPendingTxnTablePostEffects({ clearSelection: true });
+      }
+      router.back();
+    } catch (error) {
+      console.error("Failed to update transactions:", error);
     } finally {
-      setSaving(false);
+      setLoading(false);
     }
-  }, [id, date, table, schema, queryKey, queryClient, closeModal]);
+  };
 
   return (
     <KeyboardAvoidingView
@@ -127,7 +124,11 @@ export default function TxnModalEditDate() {
           </Text>
           <View style={styles.iconButton} />
         </View>
-        <View style={styles.sheet}>
+        <View style={styles.content}>
+          <Text style={[styles.description, { color: theme.colors.text }]}>
+            Seleccione una fecha para{" "}
+            {ids.length > 1 ? "las transacciones" : "la transacción"}.
+          </Text>
           <View style={styles.pickerWrap}>
             <DateTimePicker
               value={date}
@@ -141,31 +142,17 @@ export default function TxnModalEditDate() {
               accentColor={theme.colors.primary}
             />
           </View>
-          <View
-            style={[styles.actions, { borderTopColor: theme.colors.border }]}
+          <Pressable
+            style={({ pressed }) => [
+              styles.acceptButton,
+              { backgroundColor: theme.colors.primary },
+              (pressed || loading) && { opacity: 0.85 },
+            ]}
+            onPress={onAccept}
+            disabled={loading}
           >
-            <Pressable
-              onPress={closeModal}
-              style={({ pressed }) => [
-                styles.button,
-                { opacity: pressed ? 0.7 : 1 },
-              ]}
-            >
-              <Text style={{ color: theme.colors.text }}>Cancelar</Text>
-            </Pressable>
-            <Pressable
-              onPress={save}
-              disabled={saving}
-              style={({ pressed }) => [
-                styles.button,
-                { opacity: pressed || saving ? 0.7 : 1 },
-              ]}
-            >
-              <Text style={{ color: theme.colors.primary, fontWeight: "600" }}>
-                Guardar
-              </Text>
-            </Pressable>
-          </View>
+            <Text style={styles.acceptButtonText}>Aceptar</Text>
+          </Pressable>
         </View>
       </SafeAreaView>
     </KeyboardAvoidingView>
@@ -189,24 +176,26 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: "600",
   },
-  sheet: {
-    flex: 1,
-    paddingHorizontal: 24,
-    paddingTop: 16,
+  content: {
+    paddingHorizontal: 20,
+    paddingTop: 8,
+  },
+  description: {
+    marginBottom: 16,
+    fontSize: 15,
   },
   pickerWrap: {
     width: "100%",
     alignItems: "center",
+    marginBottom: 16,
   },
-  actions: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    marginTop: 16,
-    paddingTop: 12,
-    borderTopWidth: StyleSheet.hairlineWidth,
+  acceptButton: {
+    borderRadius: 8,
+    padding: 12,
   },
-  button: {
-    paddingVertical: 10,
-    paddingHorizontal: 8,
+  acceptButtonText: {
+    color: "#ffffff",
+    textAlign: "center",
+    fontWeight: "600",
   },
 });

@@ -27,6 +27,6 @@ export function useSubcategories() {
     },
     enabled: !!tenantId,
     select: (data) => data.sort((a, b) => a.label.localeCompare(b.label)),
-    staleTime: 1000 * 60 * 5,
+    staleTime: 1000 * 60 * 60, // 1 hour - treat as global, avoid refetch on tab switch
   });
 }

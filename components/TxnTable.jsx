@@ -1,7 +1,13 @@
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import { useQueryClient } from "@tanstack/react-query";
-import { router, useFocusEffect } from "expo-router";
-import { useCallback, useState } from "react";
+import { router, useLocalSearchParams, usePathname } from "expo-router";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useState,
+} from "react";
 import {
   ActivityIndicator,
   FlatList,
@@ -14,11 +20,16 @@ import {
 } from "react-native";
 import { useTheme } from "../contexts/ThemeContext";
 import { formatSpanishNumber } from "../lib/formatSpanishNumber";
-import { consumePendingTxnTablePostEffects } from "../lib/pendingTxnTableModal";
-import { stringifyQueryKeyForParams } from "../lib/queryKeyParams";
+import { getTxnFilterModalPathname } from "../lib/txnFilterModalRoutes";
+import { applyTxnFilters } from "../lib/txnTableFilters";
+
+function paramOne(raw) {
+  if (raw == null) return "";
+  if (Array.isArray(raw)) return String(raw[0] ?? "");
+  return String(raw);
+}
 
 export default function TxnTable({
-  table,
   txns,
   allTxns,
   error,
@@ -30,90 +41,339 @@ export default function TxnTable({
   refetch,
   style,
   onHeaderFilterPress,
+  tableName,
+  onDisplayTxnsChange,
+  selectionMode = false,
+  selectedTxnIds = {},
+  onToggleTxnSelected,
+  onToggleSelectAllVisible,
 }) {
   const { theme } = useTheme();
   const queryClient = useQueryClient();
+  const pathname = usePathname();
+  const routeParams = useLocalSearchParams();
   const [refreshing, setRefreshing] = useState(false);
-  const [selectionMode, setSelectionMode] = useState(false);
-  const [selectedTxnIds, setSelectedTxnIds] = useState({});
-  const sourceTxns = allTxns ?? txns;
+  const headerFiltersOwned =
+    typeof tableName === "string" && tableName.length > 0;
 
-  const toggleTxnSelected = (id) => {
-    setSelectedTxnIds((prev) => {
-      const next = { ...prev };
-      if (next[id]) delete next[id];
-      else next[id] = true;
-      return next;
-    });
-  };
+  const [filterCategory, setFilterCategory] = useState(null);
+  const [filterSubcategory, setFilterSubcategory] = useState(null);
+  const [filterBank, setFilterBank] = useState(null);
+  const [filterDate, setFilterDate] = useState(null);
+  const [filterValue, setFilterValue] = useState(null);
+  const [filterDescription, setFilterDescription] = useState("");
 
-  const openBulkCategorySelectionModal = () => {
-    const idsArray = Object.keys(selectedTxnIds);
-    const ids = idsArray.map((id) => {
-      const n = Number(id);
-      return !Number.isNaN(n) && String(n) === id ? n : id;
-    });
-    console.log(ids);
-    if (ids.length === 0) return;
-    router.push({
-      pathname: "/txn-modals/select-category",
-      params: {
-        table: String(table),
-        queryKeyJson: stringifyQueryKeyForParams(queryKey),
-        ids: JSON.stringify(ids),
-      },
-    });
-  };
+  useEffect(() => {
+    if (!headerFiltersOwned) return;
+    const raw = paramOne(routeParams.txnFilterApplyJson);
+    if (!raw) return;
+    let parsed;
+    try {
+      parsed = JSON.parse(raw);
+    } catch {
+      return;
+    }
+    if (String(parsed.table ?? "") !== String(tableName)) return;
 
-  const openBulkSubcategorySelectionModal = () => {
-    const idsArray = Object.keys(selectedTxnIds);
-    const ids = idsArray.map((id) => {
-      const n = Number(id);
-      return !Number.isNaN(n) && String(id) === id ? n : id;
-    });
-    if (ids.length === 0) return;
+    const {
+      headerDropdownLabel,
+      item,
+      filterValue: fv,
+      filterDescription: fd,
+    } = parsed;
+    if (headerDropdownLabel === "Categoria") {
+      setFilterCategory(
+        item
+          ? {
+              label: item.label,
+              value: item.value,
+              sub_categorias: item.sub_categorias,
+            }
+          : null,
+      );
+    } else if (headerDropdownLabel === "Subcategoria") {
+      setFilterSubcategory(
+        item ? { label: item.label, value: item.value } : null,
+      );
+    } else if (
+      headerDropdownLabel === "Banco" ||
+      headerDropdownLabel === "Cuenta"
+    ) {
+      setFilterBank(item ? { label: item.label, value: item.value } : null);
+    } else if (headerDropdownLabel === "Fecha" && item?.year && item?.month) {
+      setFilterDate({ year: item.year, month: item.month });
+    } else if (headerDropdownLabel === "Monto") {
+      setFilterValue(fv != null && fv !== "" ? fv : null);
+    } else if (headerDropdownLabel === "Descripción") {
+      setFilterDescription(typeof fd === "string" ? fd : "");
+    }
+    router.setParams({ txnFilterApplyJson: undefined });
+  }, [tableName, routeParams.txnFilterApplyJson]);
 
-    router.push({
-      pathname: "/txn-modals/select-subcategory",
-      params: {
-        table: String(table),
-        queryKeyJson: stringifyQueryKeyForParams(queryKey),
-        ids: JSON.stringify(ids),
-      },
-    });
-  };
+  const openHeaderFilter = useCallback(
+    (label) => {
+      if (!headerFiltersOwned) return;
+      const modalPath = getTxnFilterModalPathname(label);
+      if (!modalPath) return;
 
-  useFocusEffect(
-    useCallback(() => {
-      const fx = consumePendingTxnTablePostEffects();
-      if (fx?.clearSelection) {
-        setSelectedTxnIds({});
-        setSelectionMode(false);
+      const omittedFromReturnSnapshot = new Set(["txnFilterApplyJson"]);
+      const snapshot = {};
+      for (const [k, v] of Object.entries(routeParams)) {
+        if (omittedFromReturnSnapshot.has(k)) continue;
+        snapshot[k] = Array.isArray(v) ? v[0] : v;
       }
-    }, []),
+      const params = {
+        returnPathname: pathname,
+        returnParamsJson: JSON.stringify(snapshot),
+        table: String(tableName),
+      };
+      if (filterCategory) {
+        params.filterCategoryJson = JSON.stringify(filterCategory);
+      }
+      if (filterSubcategory) {
+        params.filterSubcategoryJson = JSON.stringify(filterSubcategory);
+      }
+      if (filterBank) {
+        params.filterBankJson = JSON.stringify(filterBank);
+      }
+      if (filterDate?.year != null && filterDate?.month != null) {
+        params.filterDateJson = JSON.stringify(filterDate);
+      }
+      if (filterValue != null && filterValue !== "") {
+        params.filterValue = String(filterValue);
+      }
+      if (filterDescription && filterDescription.trim() !== "") {
+        params.filterDescription = filterDescription;
+      }
+      router.push({
+        pathname: modalPath,
+        params,
+      });
+    },
+    [
+      tableName,
+      pathname,
+      routeParams,
+      filterCategory,
+      filterSubcategory,
+      filterBank,
+      filterDate,
+      filterValue,
+      filterDescription,
+    ],
+  );
+
+  const filterPayload = useMemo(
+    () => ({
+      filterCategory,
+      filterSubcategory,
+      filterBank,
+      filterDate,
+      filterValue,
+      filterDescription,
+    }),
+    [
+      filterCategory,
+      filterSubcategory,
+      filterBank,
+      filterDate,
+      filterValue,
+      filterDescription,
+    ],
+  );
+
+  const displayTxns = useMemo(() => {
+    if (headerFiltersOwned) {
+      return applyTxnFilters(txns, filterPayload);
+    }
+    return txns;
+  }, [headerFiltersOwned, txns, filterPayload]);
+
+  useLayoutEffect(() => {
+    onDisplayTxnsChange?.(displayTxns);
+  }, [displayTxns, onDisplayTxnsChange]);
+
+  const sourceTxns = headerFiltersOwned ? txns : (allTxns ?? txns);
+
+  const handleHeaderFilterPress = headerFiltersOwned
+    ? openHeaderFilter
+    : onHeaderFilterPress;
+
+  const showFilterChips =
+    headerFiltersOwned &&
+    (filterCategory ||
+      filterDate ||
+      filterSubcategory ||
+      filterBank ||
+      filterValue != null ||
+      (filterDescription && filterDescription.trim() !== ""));
+
+  const filterChipsRow = !showFilterChips ? null : (
+    <View style={styles.filterChipsRow}>
+      {filterDate?.year && filterDate?.month && (
+        <Pressable
+          onPress={() => setFilterDate(null)}
+          style={[
+            styles.filterChip,
+            {
+              backgroundColor: theme.colors.surface,
+              borderColor: theme.colors.border,
+            },
+          ]}
+        >
+          <Text style={[styles.filterChipText, { color: theme.colors.text }]}>
+            date: {String(filterDate.month).padStart(2, "0")}/{filterDate.year}
+          </Text>
+          <MaterialIcons
+            name="close"
+            size={18}
+            color={theme.colors.text}
+            style={styles.filterChipIcon}
+          />
+        </Pressable>
+      )}
+      {filterCategory && (
+        <Pressable
+          onPress={() => setFilterCategory(null)}
+          style={[
+            styles.filterChip,
+            {
+              backgroundColor: theme.colors.surface,
+              borderColor: theme.colors.border,
+            },
+          ]}
+        >
+          <Text style={[styles.filterChipText, { color: theme.colors.text }]}>
+            Categoría: {filterCategory.label}
+          </Text>
+          <MaterialIcons
+            name="close"
+            size={18}
+            color={theme.colors.text}
+            style={styles.filterChipIcon}
+          />
+        </Pressable>
+      )}
+      {filterSubcategory && (
+        <Pressable
+          onPress={() => setFilterSubcategory(null)}
+          style={[
+            styles.filterChip,
+            {
+              backgroundColor: theme.colors.surface,
+              borderColor: theme.colors.border,
+            },
+          ]}
+        >
+          <Text style={[styles.filterChipText, { color: theme.colors.text }]}>
+            Subcategoría: {filterSubcategory.label}
+          </Text>
+          <MaterialIcons
+            name="close"
+            size={18}
+            color={theme.colors.text}
+            style={styles.filterChipIcon}
+          />
+        </Pressable>
+      )}
+      {filterBank && (
+        <Pressable
+          onPress={() => setFilterBank(null)}
+          style={[
+            styles.filterChip,
+            {
+              backgroundColor: theme.colors.surface,
+              borderColor: theme.colors.border,
+            },
+          ]}
+        >
+          <Text style={[styles.filterChipText, { color: theme.colors.text }]}>
+            Banco: {filterBank.label}
+          </Text>
+          <MaterialIcons
+            name="close"
+            size={18}
+            color={theme.colors.text}
+            style={styles.filterChipIcon}
+          />
+        </Pressable>
+      )}
+      {filterValue != null && filterValue !== "" && (
+        <Pressable
+          onPress={() => setFilterValue(null)}
+          style={[
+            styles.filterChip,
+            {
+              backgroundColor: theme.colors.surface,
+              borderColor: theme.colors.border,
+            },
+          ]}
+        >
+          <Text style={[styles.filterChipText, { color: theme.colors.text }]}>
+            Valor: {formatSpanishNumber(Number(filterValue))}
+          </Text>
+          <MaterialIcons
+            name="close"
+            size={18}
+            color={theme.colors.text}
+            style={styles.filterChipIcon}
+          />
+        </Pressable>
+      )}
+      {filterDescription && filterDescription.trim() !== "" && (
+        <Pressable
+          onPress={() => setFilterDescription("")}
+          style={[
+            styles.filterChip,
+            {
+              backgroundColor: theme.colors.surface,
+              borderColor: theme.colors.border,
+            },
+          ]}
+        >
+          <Text
+            style={[styles.filterChipText, { color: theme.colors.text }]}
+            numberOfLines={1}
+          >
+            Descripción: {filterDescription.trim()}
+          </Text>
+          <MaterialIcons
+            name="close"
+            size={18}
+            color={theme.colors.text}
+            style={styles.filterChipIcon}
+          />
+        </Pressable>
+      )}
+    </View>
   );
 
   if (isPending)
     return (
-      <View
-        style={[
-          styles.root,
-          style,
-          { padding: 16, alignItems: "center", justifyContent: "center" },
-        ]}
-      >
-        <ActivityIndicator size="small" color={theme.colors.primary} />
+      <View style={[styles.root, style, { flex: 1 }]}>
+        {filterChipsRow}
+        <View
+          style={{
+            flex: 1,
+            padding: 16,
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          <ActivityIndicator size="small" color={theme.colors.primary} />
+        </View>
       </View>
     );
 
   if (error)
     return (
-      <View
-        style={[styles.root, style, { padding: 16, justifyContent: "center" }]}
-      >
-        <Text style={{ color: theme.colors.error }}>
-          An error has occurred: {error.message}
-        </Text>
+      <View style={[styles.root, style, { flex: 1 }]}>
+        {filterChipsRow}
+        <View style={{ flex: 1, padding: 16, justifyContent: "center" }}>
+          <Text style={{ color: theme.colors.error }}>
+            An error has occurred: {error.message}
+          </Text>
+        </View>
       </View>
     );
 
@@ -139,7 +399,7 @@ export default function TxnTable({
     Categoria: styles.colCategory,
     Subcategoria: styles.colSubcategoria,
     Cuenta: styles.colBank,
-    Editar: styles.colEditar,
+    Editar: styles.colEdit,
   };
 
   const renderHeaderCell = (label) => (
@@ -147,7 +407,7 @@ export default function TxnTable({
       style={[headerColumnStyle[label]]}
       onPress={() => {
         if (label === "Editar") return;
-        onHeaderFilterPress?.(label);
+        handleHeaderFilterPress?.(label);
       }}
     >
       {({ pressed }) => (
@@ -171,16 +431,23 @@ export default function TxnTable({
     </Pressable>
   );
 
-  const showEditColumn = sourceTxns.some(
+  const hasReconciledField = sourceTxns.some(
     (item) => item?.reconciled !== undefined,
   );
+  // Txns tab passes row-selection handlers: hide Editar until selectionMode.
+  // Reconcile tables omit those handlers and keep Editar whenever data has reconciled.
+  const showEditColumn =
+    hasReconciledField && (!onToggleTxnSelected || selectionMode);
 
   const renderSelectAllHeaderCell = () => {
     const allVisibleSelected =
-      txns.length > 0 && txns.every((t) => selectedTxnIds[String(t.id)]);
-    const someVisibleSelected = txns.some((t) => selectedTxnIds[String(t.id)]);
+      displayTxns.length > 0 &&
+      displayTxns.every((t) => selectedTxnIds[String(t.id)]);
+    const someVisibleSelected = displayTxns.some(
+      (t) => selectedTxnIds[String(t.id)],
+    );
     const iconName =
-      txns.length === 0
+      displayTxns.length === 0
         ? "check-box-outline-blank"
         : allVisibleSelected
           ? "check-box"
@@ -188,28 +455,11 @@ export default function TxnTable({
             ? "indeterminate-check-box"
             : "check-box-outline-blank";
 
-    const toggleSelectAllVisible = () => {
-      if (allVisibleSelected) {
-        setSelectedTxnIds((prev) => {
-          const next = { ...prev };
-          for (const t of txns) {
-            delete next[String(t.id)];
-          }
-          return next;
-        });
-      } else {
-        setSelectedTxnIds((prev) => {
-          const next = { ...prev };
-          for (const t of txns) {
-            next[String(t.id)] = true;
-          }
-          return next;
-        });
-      }
-    };
-
     return (
-      <Pressable style={styles.colSelect} onPress={toggleSelectAllVisible}>
+      <Pressable
+        style={styles.colSelect}
+        onPress={() => onToggleSelectAllVisible?.()}
+      >
         {({ pressed }) => (
           <View
             style={[
@@ -406,7 +656,7 @@ export default function TxnTable({
             justifyContent: "center",
           },
         ]}
-        onPress={() => toggleTxnSelected(id)}
+        onPress={() => onToggleTxnSelected?.(id)}
       >
         <MaterialIcons
           name={checked ? "check-box" : "check-box-outline-blank"}
@@ -439,111 +689,10 @@ export default function TxnTable({
     );
   };
 
-  const selectedCount = Object.keys(selectedTxnIds).filter(
-    (id) => selectedTxnIds[id],
-  ).length;
-
-  const selectionToolbar = (
-    <View style={styles.selectionToolbar}>
-      {selectionMode ? (
-        <>
-          <Pressable
-            onPress={() => {
-              setSelectionMode(false);
-              setSelectedTxnIds({});
-            }}
-            style={({ pressed }) => [
-              styles.selectionToolbarButton,
-              {
-                backgroundColor: theme.colors.surface,
-                borderColor: theme.colors.border,
-                opacity: pressed ? 0.75 : 1,
-              },
-            ]}
-          >
-            <Text
-              style={[
-                styles.selectionToolbarButtonText,
-                { color: theme.colors.text },
-              ]}
-            >
-              Cancelar selección
-            </Text>
-          </Pressable>
-          {selectedCount > 0 && (
-            <>
-              <Pressable
-                onPress={openBulkCategorySelectionModal}
-                style={({ pressed }) => [
-                  styles.selectionToolbarButton,
-                  {
-                    backgroundColor: theme.colors.surface,
-                    borderColor: theme.colors.border,
-                    opacity: pressed ? 0.75 : 1,
-                  },
-                ]}
-              >
-                <Text
-                  style={[
-                    styles.selectionToolbarButtonText,
-                    { color: theme.colors.primary, fontWeight: "600" },
-                  ]}
-                >
-                  Cambiar categoría ({selectedCount})
-                </Text>
-              </Pressable>
-              <Pressable
-                onPress={openBulkSubcategorySelectionModal}
-                style={({ pressed }) => [
-                  styles.selectionToolbarButton,
-                  {
-                    backgroundColor: theme.colors.surface,
-                    borderColor: theme.colors.border,
-                    opacity: pressed ? 0.75 : 1,
-                  },
-                ]}
-              >
-                <Text
-                  style={[
-                    styles.selectionToolbarButtonText,
-                    { color: theme.colors.primary, fontWeight: "600" },
-                  ]}
-                >
-                  Cambiar subcategoría ({selectedCount})
-                </Text>
-              </Pressable>
-            </>
-          )}
-        </>
-      ) : (
-        <Pressable
-          onPress={() => setSelectionMode(true)}
-          style={({ pressed }) => [
-            styles.selectionToolbarButton,
-            {
-              backgroundColor: theme.colors.surface,
-              borderColor: theme.colors.border,
-              opacity: pressed ? 0.75 : 1,
-            },
-          ]}
-        >
-          <Text
-            style={[
-              styles.selectionToolbarButtonText,
-              { color: theme.colors.text },
-            ]}
-          >
-            Seleccionar varias
-          </Text>
-        </Pressable>
-      )}
-    </View>
-  );
-
   return (
     <View style={[styles.root, style]}>
+      {filterChipsRow}
       <View style={styles.tableMain}>
-        {selectionToolbar}
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={true}
@@ -558,7 +707,7 @@ export default function TxnTable({
               { flex: 1, borderColor: theme.colors.border },
             ]}
             keyExtractor={(item) => item.id}
-            data={txns}
+            data={displayTxns}
             ListHeaderComponent={renderHeader}
             renderItem={({ item }) => renderTxns(item)}
             stickyHeaderIndices={[0]}
@@ -630,20 +779,26 @@ const styles = StyleSheet.create({
   flatList: {
     borderRadius: 16,
   },
-  selectionToolbar: {
+  filterChipsRow: {
     flexDirection: "row",
     flexWrap: "wrap",
     gap: 8,
-    alignItems: "center",
     marginBottom: 8,
   },
-  selectionToolbarButton: {
+  filterChip: {
+    flexDirection: "row",
+    alignItems: "center",
     paddingVertical: 8,
-    paddingHorizontal: 12,
+    paddingLeft: 12,
+    paddingRight: 8,
     borderRadius: 20,
     borderWidth: 1,
   },
-  selectionToolbarButtonText: {
+  filterChipText: {
     fontSize: 14,
+    marginRight: 6,
+  },
+  filterChipIcon: {
+    marginLeft: 2,
   },
 });

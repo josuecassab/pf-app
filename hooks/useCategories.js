@@ -20,6 +20,6 @@ export function useCategories() {
     },
     enabled: !!tenantId,
     select: (data) => data.sort((a, b) => a.label.localeCompare(b.label)),
-    staleTime: 1000 * 60 * 5, // 5 minutes - treat as global, avoid refetch on tab switch
+    staleTime: 1000 * 60 * 60, // 1 hour - treat as global, avoid refetch on tab switch
   });
 }

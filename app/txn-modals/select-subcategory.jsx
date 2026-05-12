@@ -49,6 +49,7 @@ export default function TxnModalSelectSubcategory() {
   const queryClient = useQueryClient();
   const params = useLocalSearchParams();
   const table = paramOne(params.table);
+  const categoryIdParam = paramOne(params.category_id);
   const [selectedSubcategory, setSelectedSubcategory] = useState(null);
   const [loading, setLoading] = useState(false);
   const { data: subcategoriesData } = useSubcategories();
@@ -59,10 +60,14 @@ export default function TxnModalSelectSubcategory() {
   );
   const ids = JSON.parse(params.ids);
 
-  const labels = useMemo(
-    () => [TXN_FILTER_NULL_OPTION, ...subcategoriesData],
-    [subcategoriesData],
-  );
+  const labels = useMemo(() => {
+    const list = subcategoriesData ?? [];
+    const forCategory =
+      categoryIdParam === ""
+        ? list
+        : list.filter((sc) => String(sc.category_id) === categoryIdParam);
+    return [TXN_FILTER_NULL_OPTION, ...forCategory];
+  }, [subcategoriesData, categoryIdParam]);
 
   const closeModal = useCallback(() => {
     router.back();

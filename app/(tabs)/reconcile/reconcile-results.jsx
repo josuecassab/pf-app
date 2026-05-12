@@ -16,6 +16,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import TxnTable from "../../../components/TxnTable";
+import TxnTableWithSelectionToolbar from "../../../components/TxnTableWithSelectionToolbar";
 import { useAuth } from "../../../contexts/AuthContext";
 import { useTheme } from "../../../contexts/ThemeContext";
 import { reconcileStyles } from "../reconcileStyles";
@@ -426,15 +427,15 @@ export default function ReconcileResults() {
           >
             Transacciones concilidadas
           </Text>
-          <TxnTable
-            table={`${statementLabel}_joined`}
+          <TxnTableWithSelectionToolbar
+            queryKey={["matched_txns", `${statementLabel}_joined`]}
+            tableName={`${statementLabel}_joined`}
             txns={flattenedMatchedTxns}
             error={matchedTxnsError}
             fetchNextPage={fetchNextMatchedTxnsPage}
             hasNextPage={hasNextMatchedTxnsPage}
             isFetchingNextPage={isFetchingNextMatchedTxnsPage}
             isPending={isMatchedTxnsPending}
-            queryKey={["matched_txns", `${statementLabel}_joined`]}
             refetch={refetchMatchedTxns}
           />
         </View>

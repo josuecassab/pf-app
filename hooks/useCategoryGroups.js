@@ -42,6 +42,7 @@ export function useCategoryGroups() {
       return Array.isArray(data) ? data : [];
     },
     enabled: !!tenantId,
+    staleTime: 1000 * 60 * 60, // 1 hour - treat as global, avoid refetch on tab switch
   });
 
   const createGroup = useMutation({

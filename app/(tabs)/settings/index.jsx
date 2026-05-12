@@ -14,8 +14,8 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useAuth } from "../../../contexts/AuthContext";
 import { usePurchasesContext } from "../../../contexts/PurchasesContext";
 import { useTheme } from "../../../contexts/ThemeContext";
-import { hasActiveEntitlement } from "../../../lib/revenuecatEntitlements";
 import { REVENUECAT_PRODUCT_IDS } from "../../../lib/revenuecatConstants";
+import { hasActiveEntitlement } from "../../../lib/revenuecatEntitlements";
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL;
 
@@ -35,7 +35,7 @@ export default function Settings() {
     customerInfo,
   } = usePurchasesContext();
   const [purchaseBusy, setPurchaseBusy] = useState(false);
-  console.log("customerInfo", customerInfo);
+
   async function signOut() {
     try {
       await fetch(`${API_URL}/auth/sign_out`, {

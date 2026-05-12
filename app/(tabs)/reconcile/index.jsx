@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import * as DocumentPicker from "expo-document-picker";
 import { router } from "expo-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { PDFDocument } from "pdf-lib";
 import {
   ActivityIndicator,
   Alert,
@@ -13,6 +14,7 @@ import {
   StatusBar,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from "react-native";
 import { Dropdown } from "react-native-element-dropdown";
@@ -25,6 +27,27 @@ import { hasActiveEntitlement } from "../../../lib/revenuecatEntitlements";
 import { reconcileStyles } from "../reconcileStyles";
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL;
+
+/** `create_statement_table` 400 responses (API contract). */
+const CREATE_STATEMENT_PDF_NEED_PASSWORD =
+  "This PDF is password protected. Provide pdf_password in the form data.";
+const CREATE_STATEMENT_PDF_WRONG_PASSWORD =
+  "The password does not correspond to this PDF.";
+
+function detailStringFromBody(body) {
+  const d = body?.detail;
+  if (typeof d === "string") return d;
+  if (Array.isArray(d)) {
+    return d
+      .map((item) =>
+        typeof item === "object" && item != null && "msg" in item
+          ? String(item.msg)
+          : String(item),
+      )
+      .join(" ");
+  }
+  return "";
+}
 
 /** List endpoint may return strings or objects with a path field */
 function statementPathFromListItem(item) {
@@ -58,6 +81,39 @@ function navigateToReconcileResults(params) {
   });
 }
 
+function isPdfPickedFile(file) {
+  if (!file) return false;
+  const mime = (file.mimeType ?? "").toLowerCase();
+  const name = (file.name ?? "").toLowerCase();
+  return mime === "application/pdf" || name.endsWith(".pdf");
+}
+
+async function pdfIsPasswordProtected(arrayBuffer) {
+  try {
+    const doc = await PDFDocument.load(arrayBuffer, {
+      ignoreEncryption: true,
+    });
+    return doc.isEncrypted;
+  } catch {
+    return false;
+  }
+}
+
+async function pickedFileToArrayBuffer(file) {
+  if (Platform.OS === "web") {
+    if (file.file instanceof Blob) {
+      return await file.file.arrayBuffer();
+    }
+    if (file.uri) {
+      const blobRes = await fetch(file.uri);
+      return await blobRes.arrayBuffer();
+    }
+    throw new Error("No se pudo leer el archivo");
+  }
+  const res = await fetch(file.uri);
+  return await res.arrayBuffer();
+}
+
 export default function Reconcile() {
   const { theme } = useTheme();
   const { tenantId, getAuthHeaders } = useAuth();
@@ -67,6 +123,8 @@ export default function Reconcile() {
   const { data: banksFromApi } = useBanks();
   const bankList = Array.isArray(banksFromApi) ? banksFromApi : [];
   const [file, setFile] = useState(null);
+  const [pdfPassword, setPdfPassword] = useState("");
+  const [pdfPasswordRequired, setPdfPasswordRequired] = useState(false);
   const [statements, setStatements] = useState([]);
   const [selectedStatement, setSelectedStatement] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -166,6 +224,33 @@ export default function Reconcile() {
     setIsLoading(true);
 
     try {
+      let passwordToSend = "";
+
+      if (isPdfPickedFile(file)) {
+        const ab = await pickedFileToArrayBuffer(file);
+        const encrypted = await pdfIsPasswordProtected(ab);
+        if (encrypted) {
+          if (!pdfPassword.trim()) {
+            setPdfPasswordRequired(true);
+            if (pdfPasswordRequired) {
+              Alert.alert(
+                "PDF protegido",
+                "Introduce la contraseña del documento para continuar.",
+              );
+            }
+            setIsLoading(false);
+            return;
+          }
+          passwordToSend = pdfPassword.trim();
+        } else {
+          setPdfPasswordRequired(false);
+          setPdfPassword("");
+        }
+      } else {
+        setPdfPasswordRequired(false);
+        setPdfPassword("");
+      }
+
       const formData = new FormData();
       // Web FormData only accepts Blob/File; RN's { uri, name, type } becomes "[object Object]".
       if (Platform.OS === "web") {
@@ -184,29 +269,69 @@ export default function Reconcile() {
           setIsLoading(false);
           return;
         }
+        if (isPdfPickedFile(file)) {
+          formData.append("pdf_password", passwordToSend);
+        }
       } else {
         formData.append("file", {
           uri: file.uri,
           name: file.name,
           type: file.mimeType ?? "application/octet-stream",
         });
+        if (isPdfPickedFile(file)) {
+          formData.append("pdf_password", passwordToSend);
+        }
       }
 
+      const res = await fetch(`${API_URL}/create_statement_table/`, {
+        method: "POST",
+        headers: {
+          ...getAuthHeaders(),
+          Accept: "application/json",
+        },
+        body: formData,
+      });
+
+      let body = {};
       try {
-        const result = await fetch(`${API_URL}/create_statement_table/`, {
-          method: "POST",
-          headers: {
-            ...getAuthHeaders(),
-            Accept: "application/json",
-          },
-          body: formData,
-        }).then((res) => res.json());
-        console.log("Upload successful:", result);
-      } catch (error) {
-        console.error("Upload failed:", error);
+        body = await res.json();
+      } catch {
+        body = {};
       }
-      fetchStatements();
 
+      const detail = detailStringFromBody(body);
+
+      if (!res.ok) {
+        if (res.status === 400) {
+          if (detail === CREATE_STATEMENT_PDF_NEED_PASSWORD) {
+            setPdfPasswordRequired(true);
+            setIsLoading(false);
+            return;
+          }
+          if (detail === CREATE_STATEMENT_PDF_WRONG_PASSWORD) {
+            setPdfPasswordRequired(true);
+            setPdfPassword("");
+            Alert.alert(
+              "Contraseña incorrecta",
+              "La contraseña no corresponde a este PDF. Inténtalo de nuevo.",
+            );
+            setIsLoading(false);
+            return;
+          }
+        }
+        const fallback =
+          detail ||
+          (typeof body?.message === "string" ? body.message : "") ||
+          `Error ${res.status}`;
+        Alert.alert("Error", fallback);
+        setIsLoading(false);
+        return;
+      }
+
+      console.log("Upload successful:", body);
+      fetchStatements();
+      setPdfPassword("");
+      setPdfPasswordRequired(false);
       setIsLoading(false);
     } catch (error) {
       console.error("Error uploading file:", error);
@@ -228,6 +353,8 @@ export default function Reconcile() {
         // Success: The result contains an 'assets' array
         const pickedFile = result.assets[0];
         setFile(pickedFile);
+        setPdfPassword("");
+        setPdfPasswordRequired(false);
         console.log("File picked:", pickedFile);
       } else {
         console.log("User canceled the document picker");
@@ -514,7 +641,11 @@ export default function Reconcile() {
                     reconcileStyles.filePickClearHit,
                     pressed && reconcileStyles.filePickBarPressed,
                   ]}
-                  onPress={() => setFile(null)}
+                  onPress={() => {
+                    setFile(null);
+                    setPdfPassword("");
+                    setPdfPasswordRequired(false);
+                  }}
                   accessibilityLabel="Quitar archivo seleccionado"
                   accessibilityRole="button"
                   hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
@@ -549,6 +680,37 @@ export default function Reconcile() {
               </Pressable>
             )}
           </View>
+
+          {pdfPasswordRequired ? (
+            <View style={reconcileStyles.selectBlock}>
+              <Text
+                style={[
+                  reconcileStyles.fieldLabel,
+                  { color: theme.colors.text },
+                ]}
+              >
+                Contraseña del PDF
+              </Text>
+              <TextInput
+                value={pdfPassword}
+                onChangeText={setPdfPassword}
+                placeholder="Contraseña"
+                placeholderTextColor={theme.colors.placeholder}
+                secureTextEntry
+                autoCapitalize="none"
+                autoCorrect={false}
+                editable={!isLoading}
+                style={[
+                  styles.dropdown,
+                  reconcileStyles.bankDropdown,
+                  {
+                    backgroundColor: theme.colors.inputBackground,
+                    color: theme.colors.text,
+                  },
+                ]}
+              />
+            </View>
+          ) : null}
 
           <View style={reconcileStyles.statementRow}>
             <Text

@@ -310,25 +310,45 @@ export default function Index() {
               <Text style={[styles.labelText, { color: theme.colors.text }]}>
                 Valor
               </Text>
-              <TextInput
-                style={[
-                  styles.currencyInput,
-                  {
-                    backgroundColor: theme.colors.inputBackground,
-                    color: theme.colors.text,
-                    fontSize: 16,
-                    textAlign: "center",
-                    borderRadius: 30,
-                    paddingHorizontal: 10,
-                  },
-                ]}
-                value={value}
-                onChangeText={handleAmountChangeText}
-                onBlur={handleAmountBlur}
-                keyboardType="decimal-pad"
-                placeholder="ingresa el valor"
-                placeholderTextColor={theme.colors.placeholder}
-              />
+              <View style={styles.currencyInputWrapper}>
+                <TextInput
+                  style={[
+                    styles.currencyInput,
+                    {
+                      backgroundColor: theme.colors.inputBackground,
+                      color: theme.colors.text,
+                      fontSize: 16,
+                      textAlign: "center",
+                      borderRadius: 30,
+                      paddingLeft: 10,
+                      paddingRight: value ? 34 : 10,
+                    },
+                  ]}
+                  value={value}
+                  onChangeText={handleAmountChangeText}
+                  onBlur={handleAmountBlur}
+                  keyboardType="decimal-pad"
+                  placeholder="ingresa el valor"
+                  placeholderTextColor={theme.colors.placeholder}
+                />
+                {value !== "" ? (
+                  <Pressable
+                    accessibilityLabel="Limpiar valor"
+                    onPress={() => setValue("")}
+                    style={({ pressed }) => [
+                      styles.currencyClearButton,
+                      pressed && { opacity: 0.55 },
+                    ]}
+                    hitSlop={10}
+                  >
+                    <Feather
+                      name="x"
+                      size={18}
+                      color={theme.colors.placeholder}
+                    />
+                  </Pressable>
+                ) : null}
+              </View>
             </View>
             <View style={styles.containerStyle}>
               <Text style={[styles.labelText, { color: theme.colors.text }]}>
@@ -605,6 +625,20 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
 
+  currencyInputWrapper: {
+    position: "relative",
+    width: 150,
+    justifyContent: "center",
+  },
+  currencyClearButton: {
+    position: "absolute",
+    right: 6,
+    top: 0,
+    bottom: 0,
+    justifyContent: "center",
+    alignItems: "center",
+    paddingHorizontal: 4,
+  },
   currencyInput: {
     borderRadius: 24,
     paddingVertical: 8,

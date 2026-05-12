@@ -17,7 +17,9 @@ export function useBanks() {
       const data = await response.json();
       if (!response.ok) {
         const msg =
-          data?.detail ?? data?.message ?? `Request failed (${response.status})`;
+          data?.detail ??
+          data?.message ??
+          `Request failed (${response.status})`;
         throw new Error(typeof msg === "string" ? msg : JSON.stringify(msg));
       }
       return data;
@@ -27,6 +29,6 @@ export function useBanks() {
       [...data].sort((a, b) =>
         String(a.label ?? "").localeCompare(String(b.label ?? "")),
       ),
-    staleTime: 1000 * 60 * 5,
+    staleTime: 1000 * 60 * 60, // 1 hour - treat as global, avoid refetch on tab switch
   });
 }

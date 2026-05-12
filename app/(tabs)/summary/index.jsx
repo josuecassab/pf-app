@@ -42,12 +42,7 @@ function groupCategoryLabel(c) {
   if (typeof c === "string") return c.trim();
   const nested = c.category ?? c.categoria;
   return String(
-    c.name ??
-      c.label ??
-      c.nombre ??
-      nested?.name ??
-      nested?.label ??
-      "",
+    c.name ?? c.label ?? c.nombre ?? nested?.name ?? nested?.label ?? "",
   ).trim();
 }
 
@@ -55,11 +50,7 @@ function groupCategoryLabel(c) {
 function groupCategoryMemberId(c) {
   if (c == null) return null;
   const raw =
-    c.id ??
-    c.category_id ??
-    c.categoryId ??
-    c.category?.id ??
-    c.categoria?.id;
+    c.id ?? c.category_id ?? c.categoryId ?? c.category?.id ?? c.categoria?.id;
   if (raw == null || raw === "") return null;
   const n = Number(raw);
   return Number.isFinite(n) ? n : raw;
@@ -134,7 +125,9 @@ export default function Summary() {
     if (!text.trim()) return baseRows;
     const q = text.toLowerCase();
     return baseRows.filter((item) =>
-      String(item.categoria ?? "").toLowerCase().includes(q),
+      String(item.categoria ?? "")
+        .toLowerCase()
+        .includes(q),
     );
   }, [baseRows, text]);
 
@@ -143,9 +136,7 @@ export default function Summary() {
     const g = categoryGroups.find(
       (x) => Number(x.id) === Number(selectedGroupTab),
     );
-    const names = (g?.categories ?? [])
-      .map(groupCategoryLabel)
-      .filter(Boolean);
+    const names = (g?.categories ?? []).map(groupCategoryLabel).filter(Boolean);
     if (!names.length) return filteredData;
     const allowedLower = new Set(names.map((n) => n.toLowerCase()));
     return filteredData.filter((item) =>
@@ -318,9 +309,6 @@ export default function Summary() {
       <View
         style={[styles.container, { backgroundColor: theme.colors.background }]}
       >
-        <Text style={[styles.title, { color: theme.colors.text }]}>
-          Ingresos y gastos
-        </Text>
         <View style={styles.controlsRow}>
           <TextInput
             style={[
@@ -433,7 +421,8 @@ export default function Summary() {
                 : "Nuevo grupo de categorías"}
             </Text>
             <Text style={[styles.modalHint, { color: theme.colors.text }]}>
-              Mantén pulsado un grupo en las pestañas para editarlo o eliminarlo.
+              Mantén pulsado un grupo en las pestañas para editarlo o
+              eliminarlo.
             </Text>
             <TextInput
               style={[
@@ -476,7 +465,9 @@ export default function Summary() {
                       pressed && styles.modalRowPressed,
                     ]}
                   >
-                    <Text style={{ color: theme.colors.text }}>{cat.label}</Text>
+                    <Text style={{ color: theme.colors.text }}>
+                      {cat.label}
+                    </Text>
                     <Text style={{ color: theme.colors.primary }}>
                       {on ? "✓" : ""}
                     </Text>
