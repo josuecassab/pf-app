@@ -9,6 +9,7 @@ import {
   StyleSheet,
   Text,
   View,
+  Alert,
 } from "react-native";
 import { Dropdown } from "react-native-element-dropdown";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -16,6 +17,7 @@ import { useAuth } from "../../contexts/AuthContext";
 import { useTheme } from "../../contexts/ThemeContext";
 import { useSubcategories } from "../../hooks/useSubcategories";
 import { authJsonHeaders } from "../../lib/apiHeaders";
+import { formatApiError } from "../../lib/apiErrors";
 import { setPendingTxnTablePostEffects } from "../../lib/pendingTxnTableModal";
 import { parseQueryKeyParam } from "../../lib/queryKeyParams";
 
@@ -86,8 +88,14 @@ export default function TxnModalSelectSubcategory() {
           body: JSON.stringify({ ids, value: selectedSubcategory?.value }),
         },
       );
-      await res.json().catch(() => ({}));
-      if (!res.ok) return;
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        Alert.alert(
+          "Error",
+          formatApiError(body) || `Error ${res.status}`,
+        );
+        return;
+      }
 
       const clearingSubcategory = selectedSubcategory?.value == null;
       const subcategoryLabel = clearingSubcategory
@@ -123,6 +131,10 @@ export default function TxnModalSelectSubcategory() {
       router.back();
     } catch (error) {
       console.error("Failed to update transactions:", error);
+      Alert.alert(
+        "Error",
+        error?.message ?? "No se pudo actualizar la subcategoría.",
+      );
     } finally {
       setLoading(false);
     }

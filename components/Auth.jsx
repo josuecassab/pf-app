@@ -24,6 +24,7 @@ import {
 import { useAuth } from "../contexts/AuthContext";
 import { useTheme } from "../contexts/ThemeContext";
 import { supabase } from "../lib/supabase";
+import { formatApiError } from "../lib/apiErrors";
 
 function usernameFromGoogleSupabaseUser(user) {
   if (!user) return "user";
@@ -55,9 +56,10 @@ const API_URL = process.env.EXPO_PUBLIC_API_URL;
 /**
  * Ensures per-user txn storage exists on the API. Call and await before
  * `setSession` on sign-in so hooks (e.g. /categories/) do not race ahead.
+ * @returns {Promise<{ ok: boolean; message?: string }>}
  */
 async function ensureUserTxnSchema(accessToken) {
-  if (!API_URL || !accessToken) return;
+  if (!API_URL || !accessToken) return { ok: true };
   try {
     const res = await fetch(`${API_URL}/create_txns_table/`, {
       method: "POST",
@@ -66,14 +68,23 @@ async function ensureUserTxnSchema(accessToken) {
         "Content-Type": "application/json",
       },
     });
+    const body = await res.json().catch(() => ({}));
     if (!res.ok) {
-      await res.json().catch(() => ({}));
-      console.warn("ensureUserTxnSchema", res.status);
-      return;
+      return {
+        ok: false,
+        message:
+          formatApiError(body) ||
+          `No se pudo preparar el almacén de transacciones (${res.status}).`,
+      };
     }
-    await res.json().catch(() => ({}));
+    return { ok: true };
   } catch (err) {
-    console.warn("ensureUserTxnSchema", err);
+    return {
+      ok: false,
+      message:
+        err?.message ??
+        "No se pudo preparar el almacén de transacciones (error de red).",
+    };
   }
 }
 
@@ -317,7 +328,14 @@ export default function Auth() {
         return;
       }
       const accessToken = data.access_token ?? data.token;
-      await ensureUserTxnSchema(accessToken);
+      const schemaResult = await ensureUserTxnSchema(accessToken);
+      if (!schemaResult.ok) {
+        Alert.alert(
+          "Aviso",
+          schemaResult.message ||
+            "No se pudo preparar el almacén de transacciones. Algunas funciones pueden fallar hasta que se resuelva.",
+        );
+      }
       await setSession({
         access_token: accessToken,
         ...(data.refresh_token ? { refresh_token: data.refresh_token } : {}),
@@ -383,7 +401,14 @@ export default function Auth() {
       }
       const u = nextSession.user;
       const username = usernameFromGoogleSupabaseUser(u);
-      await ensureUserTxnSchema(nextSession.access_token);
+      const schemaResult = await ensureUserTxnSchema(nextSession.access_token);
+      if (!schemaResult.ok) {
+        Alert.alert(
+          "Aviso",
+          schemaResult.message ||
+            "No se pudo preparar el almacén de transacciones. Algunas funciones pueden fallar hasta que se resuelva.",
+        );
+      }
       await setSession({
         access_token: nextSession.access_token,
         refresh_token: nextSession.refresh_token,
@@ -472,7 +497,14 @@ export default function Auth() {
       }
       if (data.access_token ?? data.token) {
         const accessToken = data.access_token ?? data.token;
-        await ensureUserTxnSchema(accessToken);
+        const schemaResult = await ensureUserTxnSchema(accessToken);
+        if (!schemaResult.ok) {
+          Alert.alert(
+            "Aviso",
+            schemaResult.message ||
+              "No se pudo preparar el almacén de transacciones. Algunas funciones pueden fallar hasta que se resuelva.",
+          );
+        }
         await setSession({
           access_token: accessToken,
           ...(data.refresh_token ? { refresh_token: data.refresh_token } : {}),

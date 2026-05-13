@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "../contexts/AuthContext";
+import { formatApiError } from "../lib/apiErrors";
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL;
 
@@ -15,13 +16,11 @@ export function useSubcategories() {
       const response = await fetch(`${API_URL}/subcategories/`, {
         headers: getAuthHeaders(),
       });
-      const data = await response.json();
+      const data = await response.json().catch(() => ({}));
       if (!response.ok) {
-        const msg =
-          data?.detail ??
-          data?.message ??
-          `Request failed (${response.status})`;
-        throw new Error(typeof msg === "string" ? msg : JSON.stringify(msg));
+        throw new Error(
+          formatApiError(data) || `Request failed (${response.status})`,
+        );
       }
       return Array.isArray(data) ? data : [];
     },

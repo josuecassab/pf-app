@@ -22,6 +22,7 @@ import SwipeableCategoryItem from "../components/SwipeableCategoryItem";
 import { useAuth } from "../contexts/AuthContext";
 import { useTheme } from "../contexts/ThemeContext";
 import { useCategories } from "../hooks/useCategories";
+import { useSubcategories } from "../hooks/useSubcategories";
 import { authJsonHeaders } from "../lib/apiHeaders";
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL;
@@ -35,6 +36,7 @@ export default function ManageCategoriesScreen() {
   const { tenantId, getAuthHeaders } = useAuth();
   const { theme } = useTheme();
   const { data } = useCategories();
+  const { data: subcategories } = useSubcategories();
 
   const [searchQuery, setSearchQuery] = useState("");
   const [visibleInputCat, setVisibleInputCat] = useState(false);
@@ -43,6 +45,16 @@ export default function ManageCategoriesScreen() {
   const [addingSubcategoryForId, setAddingSubcategoryForId] = useState(null);
   const [updatingCategory, setUpdatingCategory] = useState(null);
   const [inputSubcategory, setInputSubcategory] = useState("");
+
+  const subcategoriesMap = useMemo(() => {
+    const subcategoriesMap = {};
+    for (const subcategory of subcategories ?? []) {
+      let val = subcategoriesMap[subcategory.category_id] ?? [];
+      val.push(subcategory);
+      subcategoriesMap[subcategory.category_id] = val;
+    }
+    return subcategoriesMap;
+  }, [subcategories]);
 
   const displayCategories = useMemo(() => {
     const list = data ?? [];
@@ -80,7 +92,7 @@ export default function ManageCategoriesScreen() {
   const addSubcategory = async (categoryId) => {
     if (inputSubcategory.trim() === "") return;
     try {
-      const res = await fetch(`${API_URL}/categories/insert_subcategory/`, {
+      const res = await fetch(`${API_URL}/subcategories/insert_subcategory/`, {
         method: "POST",
         headers: authJsonHeaders(getAuthHeaders),
         body: JSON.stringify({
@@ -98,7 +110,7 @@ export default function ManageCategoriesScreen() {
         return;
       }
 
-      await queryClient.invalidateQueries({ queryKey: ["categories"] });
+      await queryClient.invalidateQueries({ queryKey: ["subcategories"] });
       setInputSubcategory("");
       setAddingSubcategoryForId(null);
     } catch (error) {
@@ -136,7 +148,7 @@ export default function ManageCategoriesScreen() {
   const deleteSubcategory = async (categoryValue) => {
     try {
       const res = await fetch(
-        `${API_URL}/categories/delete_subcategory/?id=${categoryValue}`,
+        `${API_URL}/subcategories/delete_subcategory/?id=${categoryValue}`,
         {
           method: "DELETE",
           headers: getAuthHeaders(),
@@ -152,7 +164,7 @@ export default function ManageCategoriesScreen() {
         return;
       }
 
-      await queryClient.invalidateQueries({ queryKey: ["categories"] });
+      await queryClient.invalidateQueries({ queryKey: ["subcategories"] });
     } catch (error) {
       console.error("Error deleting subcategory:", error);
       Alert.alert("Error eliminando la subcategoría", error.message);
@@ -180,6 +192,10 @@ export default function ManageCategoriesScreen() {
       await queryClient.invalidateQueries({ queryKey: ["categories"] });
     } catch (error) {
       console.error("Error actualizando categoría:", error);
+      Alert.alert(
+        "Error actualizando categoría",
+        error?.message ?? "Error de conexión.",
+      );
     } finally {
       setUpdatingCategory(null);
     }
@@ -189,7 +205,7 @@ export default function ManageCategoriesScreen() {
     setUpdatingCategory(value);
     try {
       const res = await fetch(
-        `${API_URL}/categories/update_subcategory/?value=${value}&label=${newLabel}`,
+        `${API_URL}/subcategories/update_subcategory/?value=${value}&label=${newLabel}`,
         {
           method: "PUT",
           headers: getAuthHeaders(),
@@ -203,9 +219,13 @@ export default function ManageCategoriesScreen() {
         );
         return;
       }
-      await queryClient.invalidateQueries({ queryKey: ["categories"] });
+      await queryClient.invalidateQueries({ queryKey: ["subcategories"] });
     } catch (error) {
       console.error("Error actualizando Subcategoría:", error);
+      Alert.alert(
+        "Error actualizando Subcategoría",
+        error?.message ?? "Error de conexión.",
+      );
     } finally {
       setUpdatingCategory(null);
     }
@@ -336,7 +356,7 @@ export default function ManageCategoriesScreen() {
                 />
                 {expandedCategories.has(cat.value) && (
                   <>
-                    {cat.sub_categorias.map((sub) => (
+                    {subcategoriesMap[cat.value]?.map((sub) => (
                       <View key={sub.value} style={styles.subCategoryContainer}>
                         <SwipeableCategoryItem
                           parentId={cat.value}

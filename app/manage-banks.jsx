@@ -22,13 +22,7 @@ import { useAuth } from "../contexts/AuthContext";
 import { useTheme } from "../contexts/ThemeContext";
 import { useBanks } from "../hooks/useBanks";
 import { setPendingBankSelection } from "../lib/pendingBankSelection";
-
-function formatApiError(data) {
-  if (data == null || typeof data !== "object") return String(data ?? "");
-  const msg = data.detail ?? data.message;
-  if (msg == null) return JSON.stringify(data);
-  return typeof msg === "string" ? msg : JSON.stringify(msg);
-}
+import { formatApiError } from "../lib/apiErrors";
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL;
 const EMPTY_BANK_LIST = [];
@@ -115,6 +109,10 @@ export default function ManageBanksScreen() {
       await queryClient.invalidateQueries({ queryKey: ["banks"] });
     } catch (error) {
       console.error("Error actualizando el banco:", error);
+      Alert.alert(
+        "Error actualizando el banco",
+        error?.message ?? "Error de conexión.",
+      );
     } finally {
       setUpdatingBank(null);
     }

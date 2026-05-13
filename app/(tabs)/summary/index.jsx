@@ -89,6 +89,7 @@ export default function Summary() {
 
   const {
     data: categoryGroups = [],
+    error: categoryGroupsError,
     createGroup,
     updateGroup,
     deleteGroup,
@@ -386,6 +387,11 @@ export default function Summary() {
         {error && (
           <Text style={[styles.error, { color: theme.colors.error }]}>
             An error has occurred: {error.message}
+          </Text>
+        )}
+        {categoryGroupsError && (
+          <Text style={[styles.error, { color: theme.colors.error }]}>
+            No se pudieron cargar los grupos: {categoryGroupsError.message}
           </Text>
         )}
         {!isPending && !error && (

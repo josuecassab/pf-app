@@ -10,11 +10,13 @@ import {
   StyleSheet,
   Text,
   View,
+  Alert,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useAuth } from "../../contexts/AuthContext";
 import { useTheme } from "../../contexts/ThemeContext";
 import { authJsonHeaders } from "../../lib/apiHeaders";
+import { formatApiError } from "../../lib/apiErrors";
 import { setPendingTxnTablePostEffects } from "../../lib/pendingTxnTableModal";
 import { parseQueryKeyParam } from "../../lib/queryKeyParams";
 
@@ -70,8 +72,14 @@ export default function TxnModalEditDate() {
           body: JSON.stringify({ ids, date: formatted }),
         },
       );
-      await res.json().catch(() => ({}));
-      if (!res.ok) return;
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        Alert.alert(
+          "Error",
+          formatApiError(body) || `Error ${res.status}`,
+        );
+        return;
+      }
 
       const idSet = new Set(ids.map((x) => String(x)));
       queryClient.setQueryData(queryKey, (oldData) => {
@@ -96,6 +104,10 @@ export default function TxnModalEditDate() {
       router.back();
     } catch (error) {
       console.error("Failed to update transactions:", error);
+      Alert.alert(
+        "Error",
+        error?.message ?? "No se pudo actualizar la fecha.",
+      );
     } finally {
       setLoading(false);
     }

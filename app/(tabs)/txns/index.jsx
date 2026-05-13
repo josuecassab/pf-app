@@ -5,6 +5,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import TxnTableWithSelectionToolbar from "../../../components/TxnTableWithSelectionToolbar";
 import { useAuth } from "../../../contexts/AuthContext";
 import { useTheme } from "../../../contexts/ThemeContext";
+import { formatApiError } from "../../../lib/apiErrors";
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL;
 const TABLE = "txns";
@@ -25,11 +26,17 @@ export default function Txns() {
     refetch,
   } = useInfiniteQuery({
     queryKey,
-    queryFn: ({ pageParam }) =>
-      fetch(
+    queryFn: async ({ pageParam }) => {
+      const res = await fetch(
         `${API_URL}/latests_txns/?page=${pageParam.page}&limit=${pageParam.limit}`,
         { headers: getAuthHeaders() },
-      ).then((res) => res.json()),
+      );
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(formatApiError(data) || `Error ${res.status}`);
+      }
+      return data;
+    },
     enabled: !!tenantId,
     initialPageParam: { page: 0, limit: 100 },
     getNextPageParam: (lastPage, allPages, lastPageParam) => {

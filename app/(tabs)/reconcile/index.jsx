@@ -2,8 +2,8 @@ import Ionicons from "@expo/vector-icons/Ionicons";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import * as DocumentPicker from "expo-document-picker";
 import { router } from "expo-router";
-import { useCallback, useEffect, useMemo, useState } from "react";
 import { PDFDocument } from "pdf-lib";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -23,6 +23,7 @@ import { useAuth } from "../../../contexts/AuthContext";
 import { usePurchasesContext } from "../../../contexts/PurchasesContext";
 import { useTheme } from "../../../contexts/ThemeContext";
 import { useBanks } from "../../../hooks/useBanks";
+import { formatApiError } from "../../../lib/apiErrors";
 import { hasActiveEntitlement } from "../../../lib/revenuecatEntitlements";
 import { reconcileStyles } from "../reconcileStyles";
 
@@ -147,6 +148,11 @@ export default function Reconcile() {
       const payload = await res.json();
       if (!res.ok) {
         console.error("list_statements failed:", res.status, payload);
+        Alert.alert(
+          "Error",
+          formatApiError(payload) ||
+            `No se pudieron listar los extractos (${res.status})`,
+        );
         setStatements([]);
         setSelectedStatement(null);
         return;
@@ -189,6 +195,10 @@ export default function Reconcile() {
       });
     } catch (error) {
       console.error("Error fetching statements:", error);
+      Alert.alert(
+        "Error",
+        error?.message ?? "No se pudieron cargar los extractos.",
+      );
     }
   }, [tenantId, getAuthHeaders]);
 
@@ -205,14 +215,27 @@ export default function Reconcile() {
     Banco: reconcileStyles.colBanco,
   };
 
-  const { isPending, error, data, isFetching } = useQuery({
+  const { error, data, isFetching } = useQuery({
     queryKey: ["statements", tenantId, selectedStatement?.label],
     queryFn: async () => {
       const response = await fetch(
-        `${API_URL}/statements/?table=${selectedStatement.label}`,
+        `${API_URL}/statements/?table=${encodeURIComponent(selectedStatement.label)}`,
         { headers: getAuthHeaders() },
       );
-      return await response.json();
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(
+          formatApiError(payload) ||
+            `No se pudo cargar el extracto (${response.status})`,
+        );
+      }
+      if (Array.isArray(payload)) return payload;
+      if (payload && typeof payload === "object") {
+        if (Array.isArray(payload.data)) return payload.data;
+        if (Array.isArray(payload.rows)) return payload.rows;
+        if (Array.isArray(payload.results)) return payload.results;
+      }
+      return [];
     },
     enabled: !!tenantId && !!selectedStatement?.label,
   });
@@ -361,6 +384,10 @@ export default function Reconcile() {
       }
     } catch (error) {
       console.error("Error picking document:", error);
+      Alert.alert(
+        "Error",
+        error?.message ?? "No se pudo seleccionar el archivo.",
+      );
     }
   };
 
@@ -786,32 +813,44 @@ export default function Reconcile() {
           </View>
         </View>
       </View>
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={true}
-        style={[
-          reconcileStyles.scrollView,
-          {
-            borderColor: theme.colors.border,
-            backgroundColor: theme.colors.card,
-          },
-        ]}
-      >
-        <FlatList
+      {error ? (
+        <Text
+          style={{
+            color: theme.colors.error,
+            padding: 16,
+            textAlign: "center",
+          }}
+        >
+          {error.message}
+        </Text>
+      ) : (
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={true}
           style={[
-            reconcileStyles.flatList,
+            reconcileStyles.scrollView,
             {
               borderColor: theme.colors.border,
               backgroundColor: theme.colors.card,
             },
           ]}
-          keyExtractor={(item, index) => index}
-          data={data}
-          ListHeaderComponent={renderHeader}
-          renderItem={({ item }) => renderTxns(item)}
-          stickyHeaderIndices={[0]}
-        />
-      </ScrollView>
+        >
+          <FlatList
+            style={[
+              reconcileStyles.flatList,
+              {
+                borderColor: theme.colors.border,
+                backgroundColor: theme.colors.card,
+              },
+            ]}
+            keyExtractor={(item, index) => index}
+            data={data}
+            ListHeaderComponent={renderHeader}
+            renderItem={({ item }) => renderTxns(item)}
+            stickyHeaderIndices={[0]}
+          />
+        </ScrollView>
+      )}
     </SafeAreaView>
   );
 }

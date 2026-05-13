@@ -9,6 +9,7 @@ import {
   StyleSheet,
   Text,
   View,
+  Alert,
 } from "react-native";
 import { Dropdown } from "react-native-element-dropdown";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -16,6 +17,7 @@ import { useAuth } from "../../contexts/AuthContext";
 import { useTheme } from "../../contexts/ThemeContext";
 import { useCategories } from "../../hooks/useCategories";
 import { authJsonHeaders } from "../../lib/apiHeaders";
+import { formatApiError } from "../../lib/apiErrors";
 import { setPendingTxnTablePostEffects } from "../../lib/pendingTxnTableModal";
 import { parseQueryKeyParam } from "../../lib/queryKeyParams";
 
@@ -70,8 +72,14 @@ export default function TxnModalSelectCategory() {
           body: JSON.stringify({ ids, value: selectedCategory?.value }),
         },
       );
-      await res.json().catch(() => ({}));
-      if (!res.ok) return;
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        Alert.alert(
+          "Error",
+          formatApiError(body) || `Error ${res.status}`,
+        );
+        return;
+      }
 
       const clearingCategory = selectedCategory?.value == null;
       const categoryLabel = clearingCategory ? null : selectedCategory?.label;
@@ -105,6 +113,10 @@ export default function TxnModalSelectCategory() {
       router.back();
     } catch (error) {
       console.error("Failed to update transactions:", error);
+      Alert.alert(
+        "Error",
+        error?.message ?? "No se pudo actualizar la categoría.",
+      );
     } finally {
       setLoading(false);
     }

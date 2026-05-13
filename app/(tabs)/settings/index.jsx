@@ -16,6 +16,7 @@ import { usePurchasesContext } from "../../../contexts/PurchasesContext";
 import { useTheme } from "../../../contexts/ThemeContext";
 import { REVENUECAT_PRODUCT_IDS } from "../../../lib/revenuecatConstants";
 import { hasActiveEntitlement } from "../../../lib/revenuecatEntitlements";
+import { formatApiError } from "../../../lib/apiErrors";
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL;
 
@@ -38,13 +39,27 @@ export default function Settings() {
 
   async function signOut() {
     try {
-      await fetch(`${API_URL}/auth/sign_out`, {
+      const res = await fetch(`${API_URL}/auth/sign_out`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           ...getAuthHeaders(),
         },
       });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        Alert.alert(
+          "Aviso",
+          formatApiError(body) ||
+            "No se pudo notificar el cierre de sesión al servidor. Se cerró la sesión en este dispositivo.",
+        );
+      }
+    } catch (e) {
+      Alert.alert(
+        "Aviso",
+        e?.message ??
+          "No se pudo contactar al servidor. Se cerró la sesión en este dispositivo.",
+      );
     } finally {
       await clearSession();
     }

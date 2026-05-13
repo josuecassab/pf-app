@@ -94,7 +94,7 @@ export default function ReconcileResults() {
     isPending: isMatchedTxnsPending,
     refetch: refetchMatchedTxns,
   } = useInfiniteQuery({
-    queryKey: ["matched_txns", tenantId, `${statementLabel}_joined`],
+    queryKey: ["matched_txns", `${statementLabel}_joined`],
     queryFn: async ({ pageParam }) => {
       const res = await fetch(
         `${API_URL}/reconcile_matched_txns/?table_name=${pageParam.table_name}&page=${pageParam.page}&limit=${pageParam.limit}`,
@@ -141,7 +141,7 @@ export default function ReconcileResults() {
     isPending: isUnmatchedTxnsPending,
     refetch: refetchUnmatchedTxns,
   } = useInfiniteQuery({
-    queryKey: ["unmatched_txns", tenantId, statementLabel],
+    queryKey: ["unmatched_txns", statementLabel],
     queryFn: async ({ pageParam }) => {
       const res = await fetch(
         `${API_URL}/reconcile_unmatched_txns/?table_name=${statementLabel}&page=${pageParam.page}&limit=${pageParam.limit}`,
