@@ -11,12 +11,12 @@ import {
 } from "react-native";
 import { PAYWALL_RESULT } from "react-native-purchases-ui";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useAuth } from "../../../contexts/AuthContext";
-import { usePurchasesContext } from "../../../contexts/PurchasesContext";
-import { useTheme } from "../../../contexts/ThemeContext";
-import { REVENUECAT_PRODUCT_IDS } from "../../../lib/revenuecatConstants";
-import { hasActiveEntitlement } from "../../../lib/revenuecatEntitlements";
-import { formatApiError } from "../../../lib/apiErrors";
+import { useAuth } from "../../contexts/AuthContext";
+import { usePurchasesContext } from "../../contexts/PurchasesContext";
+import { useTheme } from "../../contexts/ThemeContext";
+import { REVENUECAT_PRODUCT_IDS } from "../../lib/revenuecatConstants";
+import { hasActiveEntitlement } from "../../lib/revenuecatEntitlements";
+import { formatApiError } from "../../lib/apiErrors";
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL;
 
@@ -177,7 +177,7 @@ export default function Settings() {
 
   return (
     <SafeAreaView
-      edges={["bottom", "left", "right"]}
+      edges={["top", "bottom", "left", "right"]}
       style={[styles.container, { backgroundColor: theme.colors.background }]}
     >
       <View style={styles.content}>

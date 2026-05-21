@@ -30,6 +30,9 @@ function paramOne(raw) {
 }
 
 export default function TxnTable({
+  categoriesById = {},
+  subcategoriesById = {},
+  banksById = {},
   txns,
   allTxns,
   error,
@@ -565,7 +568,7 @@ export default function TxnTable({
       ]}
     >
       <Text style={[styles.cellText, { color: theme.colors.text }]}>
-        {category?.toLowerCase()}
+        {categoriesById.get(category)?.toLowerCase()}
       </Text>
     </View>
   );
@@ -582,7 +585,7 @@ export default function TxnTable({
       ]}
     >
       <Text style={[styles.cellText, { color: theme.colors.text }]}>
-        {subCategory?.toLowerCase()}
+        {subcategoriesById.get(subCategory)?.toLowerCase()}
       </Text>
     </View>
   );
@@ -603,7 +606,7 @@ export default function TxnTable({
         numberOfLines={1}
         ellipsizeMode="tail"
       >
-        {value && value.toLowerCase()}
+        {banksById.get(value)?.toLowerCase()}
       </Text>
     </View>
   );
@@ -634,7 +637,7 @@ export default function TxnTable({
     return (
       <View style={sharedStyle}>
         <MaterialIcons
-          name="delete-outline"
+          name="radio-button-unchecked"
           size={24}
           color={theme.colors.text}
         />
@@ -673,9 +676,9 @@ export default function TxnTable({
       {renderDateCell(item.date)}
       {renderDescriptionCell(item.description)}
       {renderAmountCell(item.amount)}
-      {renderCategoryCell(item.category)}
-      {renderSubCategoryCell(item.subcategory)}
-      {renderBankCell(item.bank)}
+      {renderCategoryCell(item.category_id)}
+      {renderSubCategoryCell(item.subcategory_id)}
+      {renderBankCell(item.bank_id)}
       {showEditColumn && renderEditCell(item.reconciled)}
     </View>
   );

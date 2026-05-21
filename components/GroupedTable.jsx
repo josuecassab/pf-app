@@ -1,8 +1,6 @@
-import AntDesign from "@expo/vector-icons/AntDesign";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   FlatList,
-  Pressable,
   RefreshControl,
   ScrollView,
   StyleSheet,
@@ -12,8 +10,7 @@ import {
 } from "react-native";
 import { useTheme } from "../contexts/ThemeContext";
 
-const LEFT_COL_WIDTH = 160;
-const ROW_HEIGHT = 40;
+const ROW_HEIGHT = 35;
 const HEADER_HEIGHT = 40;
 
 const styles = StyleSheet.create({
@@ -21,8 +18,8 @@ const styles = StyleSheet.create({
   headerHeight: { height: HEADER_HEIGHT },
 });
 
-const formatNumber = (num) => {
-  return parseFloat(num.toFixed(2)).toLocaleString("es-ES");
+const formatNumber = (num, decimals = 2) => {
+  return parseFloat(num.toFixed(decimals)).toLocaleString("es-ES");
 };
 
 export default function GroupedTable({
@@ -30,11 +27,8 @@ export default function GroupedTable({
   activeColumns = [],
   onRefresh,
   refreshing = false,
-  categoryGroups = [],
-  selectedGroupTab = "all",
-  onSelectGroupTab,
-  onAddGroupPress,
-  onGroupLongPress,
+  categoriesById = {},
+  subcategoriesById = {},
 }) {
   const { theme } = useTheme();
   const leftRef = useRef(null);
@@ -139,13 +133,12 @@ export default function GroupedTable({
   }, []);
 
   const renderHeaderCell = useCallback(
-    (label, width = 160, key) => (
+    (label, key) => (
       <View
         key={key}
         style={[
           groupedTableStyles.headerCell,
           {
-            width,
             backgroundColor: theme.colors.surface,
             borderColor: theme.colors.border,
           },
@@ -163,21 +156,23 @@ export default function GroupedTable({
   );
 
   const renderFooterCell = useCallback(
-    (label, width = 160, key) => (
+    (label, key) => (
       <View
         key={key}
         style={[
           groupedTableStyles.footerCell,
           {
-            width,
             backgroundColor: theme.colors.surface,
             borderColor: theme.colors.border,
           },
-          styles.headerHeight,
         ]}
       >
         <Text
-          style={[groupedTableStyles.headerText, { color: theme.colors.text }]}
+          style={[
+            groupedTableStyles.rightFooterText,
+            { color: theme.colors.text },
+          ]}
+          numberOfLines={1}
         >
           {label}
         </Text>
@@ -188,7 +183,7 @@ export default function GroupedTable({
 
   const renderLeftColumnItem = useCallback(
     ({ item }) => {
-      const isExpanded = expandedCategories.has(item.category);
+      const isExpanded = expandedCategories.has(item.category_id);
 
       return (
         <View>
@@ -196,7 +191,6 @@ export default function GroupedTable({
             style={[
               groupedTableStyles.leftCell,
               {
-                width: LEFT_COL_WIDTH,
                 borderColor: theme.colors.border,
                 backgroundColor: isExpanded
                   ? theme.colors.card
@@ -204,7 +198,7 @@ export default function GroupedTable({
               },
               styles.rowHeight,
             ]}
-            onPress={() => toggleCategory(item.category)}
+            onPress={() => toggleCategory(item.category_id)}
           >
             <Text
               style={[
@@ -215,7 +209,7 @@ export default function GroupedTable({
               numberOfLines={1}
             >
               {isExpanded ? "▼ " : "▶ "}
-              {item.category}
+              {categoriesById.get(item.category_id)?.toLowerCase()}
             </Text>
           </TouchableOpacity>
           {isExpanded &&
@@ -225,7 +219,6 @@ export default function GroupedTable({
                 style={[
                   groupedTableStyles.leftSubCell,
                   {
-                    width: LEFT_COL_WIDTH,
                     borderColor: theme.colors.border,
                     backgroundColor: theme.colors.background,
                   },
@@ -239,7 +232,9 @@ export default function GroupedTable({
                   ]}
                   numberOfLines={1}
                 >
-                  {subItem?.subcategory || "Sin subcategoría"}
+                  {subcategoriesById
+                    .get(subItem?.subcategory_id)
+                    ?.toLowerCase() || "Sin subcategoría"}
                 </Text>
               </View>
             ))}
@@ -251,10 +246,8 @@ export default function GroupedTable({
 
   const renderRightColumnsItem = useCallback(
     ({ item }) => {
-      const isExpanded = expandedCategories.has(item.category);
-      const cellWidth = "w-32";
+      const isExpanded = expandedCategories.has(item.category_id);
 
-      const cellWidthNum = 128; // w-32 = 128px
       return (
         <View>
           <View style={[groupedTableStyles.row, styles.rowHeight]}>
@@ -264,7 +257,6 @@ export default function GroupedTable({
                 style={[
                   groupedTableStyles.rightCell,
                   {
-                    width: cellWidthNum,
                     borderColor: theme.colors.border,
                     backgroundColor: isExpanded
                       ? theme.colors.card
@@ -297,7 +289,6 @@ export default function GroupedTable({
                     style={[
                       groupedTableStyles.rightCell,
                       {
-                        width: cellWidthNum,
                         borderColor: theme.colors.border,
                         backgroundColor: theme.colors.background,
                       },
@@ -346,7 +337,6 @@ export default function GroupedTable({
         style={[
           groupedTableStyles.leftHeader,
           {
-            width: LEFT_COL_WIDTH,
             backgroundColor: theme.colors.surface,
             borderColor: theme.colors.border,
           },
@@ -372,12 +362,9 @@ export default function GroupedTable({
   }, [handleSort, sortConfig.key, sortConfig.direction, theme]);
 
   const renderRightHeader = useCallback(() => {
-    const headerCellWidth = 128; // w-32 = 128px
     return (
-      <View style={groupedTableStyles.row}>
-        {activeColumns.map((m, index) =>
-          renderHeaderCell(m, headerCellWidth, index),
-        )}
+      <View style={[groupedTableStyles.row]}>
+        {activeColumns.map((m, index) => renderHeaderCell(m, index))}
       </View>
     );
   }, [renderHeaderCell, activeColumns]);
@@ -388,7 +375,6 @@ export default function GroupedTable({
         style={[
           groupedTableStyles.leftFooter,
           {
-            width: LEFT_COL_WIDTH,
             backgroundColor: theme.colors.surface,
             borderColor: theme.colors.border,
           },
@@ -408,17 +394,14 @@ export default function GroupedTable({
   }, [theme]);
 
   const renderRightFooter = useCallback(() => {
-    const headerCellWidth = 128; // w-32 = 128px
     return (
-      <View style={groupedTableStyles.row}>
+      <View style={[groupedTableStyles.row, { height: HEADER_HEIGHT }]}>
         {monthlyTotals.map((total, index) =>
-          renderFooterCell(formatNumber(total), headerCellWidth, index),
+          renderFooterCell(formatNumber(total, 0), index),
         )}
       </View>
     );
   }, [monthlyTotals, renderFooterCell]);
-
-  const showGroupTabs = typeof onSelectGroupTab === "function";
 
   return (
     <View
@@ -427,95 +410,6 @@ export default function GroupedTable({
         { backgroundColor: theme.colors.background },
       ]}
     >
-      {showGroupTabs && (
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          style={groupedTableStyles.tabBarScroll}
-          contentContainerStyle={groupedTableStyles.tabBarContent}
-        >
-          <Pressable
-            onPress={() => onSelectGroupTab("all")}
-            style={({ pressed }) => [
-              groupedTableStyles.tabPill,
-              {
-                backgroundColor:
-                  selectedGroupTab === "all"
-                    ? theme.colors.inputBackground
-                    : theme.colors.surface,
-                borderColor: theme.colors.border,
-              },
-              pressed && groupedTableStyles.tabPillPressed,
-            ]}
-          >
-            <Text
-              style={[
-                groupedTableStyles.tabPillText,
-                {
-                  color: theme.colors.text,
-                  fontWeight: selectedGroupTab === "all" ? "700" : "500",
-                },
-              ]}
-              numberOfLines={1}
-            >
-              Todas
-            </Text>
-          </Pressable>
-          {categoryGroups.map((g) => (
-            <Pressable
-              key={String(g.id)}
-              onPress={() => onSelectGroupTab(Number(g.id))}
-              onLongPress={
-                onGroupLongPress ? () => onGroupLongPress(g) : undefined
-              }
-              style={({ pressed }) => [
-                groupedTableStyles.tabPill,
-                {
-                  backgroundColor:
-                    Number(selectedGroupTab) === Number(g.id)
-                      ? theme.colors.inputBackground
-                      : theme.colors.surface,
-                  borderColor: theme.colors.border,
-                },
-                pressed && groupedTableStyles.tabPillPressed,
-              ]}
-            >
-              <Text
-                style={[
-                  groupedTableStyles.tabPillText,
-                  {
-                    color: theme.colors.text,
-                    fontWeight:
-                      Number(selectedGroupTab) === Number(g.id)
-                        ? "700"
-                        : "500",
-                  },
-                ]}
-                numberOfLines={1}
-              >
-                {g.name}
-              </Text>
-            </Pressable>
-          ))}
-          {typeof onAddGroupPress === "function" && (
-            <Pressable
-              onPress={onAddGroupPress}
-              accessibilityRole="button"
-              accessibilityLabel="Crear grupo de categorías"
-              style={({ pressed }) => [
-                groupedTableStyles.tabAdd,
-                {
-                  backgroundColor: theme.colors.surface,
-                  borderColor: theme.colors.border,
-                },
-                pressed && groupedTableStyles.tabPillPressed,
-              ]}
-            >
-              <AntDesign name="plus" size={20} color={theme.colors.primary} />
-            </Pressable>
-          )}
-        </ScrollView>
-      )}
       <View
         style={[
           groupedTableStyles.tableContainer,
@@ -531,7 +425,7 @@ export default function GroupedTable({
           <FlatList
             ref={leftRef}
             data={sortedData}
-            keyExtractor={(item) => item.category}
+            keyExtractor={(item) => item.category_id}
             renderItem={renderLeftColumnItem}
             ListHeaderComponent={renderLeftHeader}
             ListFooterComponent={renderLeftFooter}
@@ -569,7 +463,7 @@ export default function GroupedTable({
               <FlatList
                 ref={rightRef}
                 data={sortedData}
-                keyExtractor={(item) => item.category}
+                keyExtractor={(item) => item.category_id}
                 renderItem={renderRightColumnsItem}
                 ListHeaderComponent={renderRightHeader}
                 ListFooterComponent={renderRightFooter}
@@ -607,40 +501,9 @@ const groupedTableStyles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  tabBarScroll: {
+  containerInScrollView: {
+    flex: 0,
     flexGrow: 0,
-    marginBottom: 10,
-    maxHeight: 44,
-  },
-  tabBarContent: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    paddingHorizontal: 2,
-    paddingVertical: 2,
-  },
-  tabPill: {
-    borderWidth: 1,
-    borderRadius: 20,
-    paddingVertical: 8,
-    paddingHorizontal: 14,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  tabPillPressed: {
-    opacity: 0.75,
-  },
-  tabPillText: {
-    fontSize: 14,
-    maxWidth: 160,
-  },
-  tabAdd: {
-    borderWidth: 1,
-    borderRadius: 20,
-    width: 40,
-    height: 40,
-    justifyContent: "center",
-    alignItems: "center",
   },
   tableContainer: {
     flex: 1,
@@ -648,6 +511,10 @@ const groupedTableStyles = StyleSheet.create({
     borderWidth: 1,
     borderRadius: 8,
     overflow: "hidden",
+  },
+  tableContainerInScrollView: {
+    flex: 0,
+    flexGrow: 0,
   },
   leftColumn: {
     zIndex: 10,
@@ -668,6 +535,7 @@ const groupedTableStyles = StyleSheet.create({
     flexDirection: "row",
   },
   headerCell: {
+    width: 120,
     borderRightWidth: 1,
     borderBottomWidth: 1,
     justifyContent: "center",
@@ -678,40 +546,45 @@ const groupedTableStyles = StyleSheet.create({
     textAlign: "right",
   },
   footerCell: {
+    width: 120,
     borderWidth: 1,
     justifyContent: "center",
-    padding: 12,
+    padding: 8,
   },
   leftCell: {
+    width: 120,
     borderRightWidth: 1,
     borderBottomWidth: 1,
     justifyContent: "center",
-    padding: 12,
+    padding: 8,
   },
   leftCellText: {},
   leftCellTextExpanded: {
     fontWeight: "600",
   },
   leftSubCell: {
+    width: 120,
     borderRightWidth: 1,
     borderBottomWidth: 1,
     justifyContent: "center",
-    padding: 12,
+    padding: 8,
     paddingLeft: 24,
   },
   leftSubCellText: {
     fontSize: 14,
   },
   rightCell: {
+    width: 120,
     borderRightWidth: 1,
     borderBottomWidth: 1,
     justifyContent: "center",
-    padding: 12,
+    padding: 8,
   },
   rightCellText: {
     textAlign: "right",
   },
   leftHeader: {
+    width: 120,
     borderRightWidth: 1,
     borderBottomWidth: 1,
     justifyContent: "center",
@@ -721,6 +594,7 @@ const groupedTableStyles = StyleSheet.create({
     fontWeight: "bold",
   },
   leftFooter: {
+    width: 120,
     borderRightWidth: 2,
     borderBottomWidth: 1,
     justifyContent: "center",
@@ -728,5 +602,16 @@ const groupedTableStyles = StyleSheet.create({
   },
   leftFooterText: {
     fontWeight: "bold",
+  },
+  rightFooter: {
+    width: 120,
+    justifyContent: "center",
+  },
+  rightFooterText: {
+    textAlign: "right",
+    fontWeight: "bold",
+  },
+  rightHeader: {
+    width: 120,
   },
 });

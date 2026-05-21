@@ -10,6 +10,7 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import CloseButton from "../../components/CloseButton";
 import { useTheme } from "../../contexts/ThemeContext";
 import { useTxnFilterModalSubmit } from "../../hooks/useTxnFilterModalSubmit";
 import { parseJsonParam } from "../../lib/txnFilterModalParams";
@@ -87,23 +88,9 @@ export default function TxnModalFilterDate() {
             ]}
           >
             <View style={styles.header}>
-              <Pressable
-                onPress={closeModal}
-                hitSlop={12}
-                style={({ pressed }) => [
-                  styles.headerButton,
-                  pressed && styles.headerButtonPressed,
-                ]}
-              >
-                <Text
-                  style={[
-                    styles.headerButtonText,
-                    { color: theme.colors.primary },
-                  ]}
-                >
-                  Cerrar
-                </Text>
-              </Pressable>
+              <View style={styles.headerSide}>
+                <CloseButton onPress={closeModal} />
+              </View>
               <Text
                 style={[styles.title, { color: theme.colors.text }]}
                 numberOfLines={1}
@@ -180,6 +167,11 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     paddingVertical: 12,
     paddingHorizontal: 4,
+  },
+  headerSide: {
+    minWidth: 64,
+    alignItems: "flex-start",
+    justifyContent: "center",
   },
   headerButton: {
     minWidth: 64,

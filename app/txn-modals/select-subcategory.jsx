@@ -1,4 +1,3 @@
-import AntDesign from "@expo/vector-icons/AntDesign";
 import { useQueryClient } from "@tanstack/react-query";
 import { router, useLocalSearchParams } from "expo-router";
 import { useCallback, useMemo, useState } from "react";
@@ -13,6 +12,7 @@ import {
 } from "react-native";
 import { Dropdown } from "react-native-element-dropdown";
 import { SafeAreaView } from "react-native-safe-area-context";
+import CloseButton, { CLOSE_BUTTON_SIZE } from "../../components/CloseButton";
 import { useAuth } from "../../contexts/AuthContext";
 import { useTheme } from "../../contexts/ThemeContext";
 import { useSubcategories } from "../../hooks/useSubcategories";
@@ -149,19 +149,11 @@ export default function TxnModalSelectSubcategory() {
         style={[styles.flex, { backgroundColor: theme.colors.background }]}
       >
         <View style={styles.modalHeader}>
-          <Pressable onPress={closeModal} style={styles.iconButton}>
-            {({ pressed }) => (
-              <AntDesign
-                name="close"
-                size={24}
-                color={pressed ? theme.colors.textSecondary : theme.colors.text}
-              />
-            )}
-          </Pressable>
+          <CloseButton onPress={closeModal} />
           <Text style={[styles.modalTitle, { color: theme.colors.text }]}>
             Subcategoría
           </Text>
-          <View style={styles.iconButton} />
+          <View style={{ width: CLOSE_BUTTON_SIZE }} />
         </View>
         <View style={styles.content}>
           <Text style={[styles.description, { color: theme.colors.text }]}>
@@ -236,10 +228,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     paddingHorizontal: 16,
     paddingVertical: 8,
-  },
-  iconButton: {
-    padding: 8,
-    minWidth: 40,
   },
   modalTitle: {
     fontSize: 20,

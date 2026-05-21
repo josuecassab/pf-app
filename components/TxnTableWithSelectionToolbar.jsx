@@ -1,3 +1,4 @@
+import { useQueryClient } from "@tanstack/react-query";
 import { router, useFocusEffect } from "expo-router";
 import { useCallback, useMemo, useState } from "react";
 import {
@@ -8,23 +9,34 @@ import {
   Text,
   View,
 } from "react-native";
+import { useAuth } from "../contexts/AuthContext";
 import { useTheme } from "../contexts/ThemeContext";
+import { formatApiError } from "../lib/apiErrors";
+import { authJsonHeaders } from "../lib/apiHeaders";
 import { consumePendingTxnTablePostEffects } from "../lib/pendingTxnTableModal";
 import { stringifyQueryKeyForParams } from "../lib/queryKeyParams";
+import Button from "./Button";
 import TxnTable from "./TxnTable";
 
+const API_URL = process.env.EXPO_PUBLIC_API_URL;
 export default function TxnTableWithSelectionToolbar({
   style,
   tableStyle,
   queryKey,
   tableName = "txns",
   txns = [],
+  categoriesById = {},
+  subcategoriesById = {},
+  banksById = {},
   ...tableProps
 }) {
   const { theme } = useTheme();
+  const { getAuthHeaders } = useAuth();
+  const queryClient = useQueryClient();
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedTxnIds, setSelectedTxnIds] = useState({});
   const [displayTxns, setDisplayTxns] = useState(txns);
+  const [deleting, setDeleting] = useState(false);
 
   const selectedCount = useMemo(
     () => Object.keys(selectedTxnIds).filter((id) => selectedTxnIds[id]).length,
@@ -152,6 +164,79 @@ export default function TxnTableWithSelectionToolbar({
     });
   }, [selectedTxnIds, queryKey, tableName, txnsById]);
 
+  const handleDeleteTxns = useCallback(() => {
+    const idsArray = Object.keys(selectedTxnIds).filter(
+      (id) => selectedTxnIds[id],
+    );
+    const ids = idsArray.map((id) => {
+      const n = Number(id);
+      return !Number.isNaN(n) && String(n) === id ? n : id;
+    });
+    if (ids.length === 0 || queryKey == null) return;
+
+    const count = ids.length;
+    Alert.alert(
+      "Eliminar transacciones",
+      count === 1
+        ? "¿Eliminar la transacción seleccionada? Esta acción no se puede deshacer."
+        : `¿Eliminar las ${count} transacciones seleccionadas? Esta acción no se puede deshacer.`,
+      [
+        { text: "Cancelar", style: "cancel" },
+        {
+          text: "Eliminar",
+          style: "destructive",
+          onPress: async () => {
+            setDeleting(true);
+            try {
+              const res = await fetch(`${API_URL}/delete_txn/`, {
+                method: "DELETE",
+                headers: authJsonHeaders(getAuthHeaders),
+                body: JSON.stringify({ ids }),
+              });
+              const body = await res.json().catch(() => ({}));
+              if (!res.ok) {
+                Alert.alert(
+                  "Error",
+                  formatApiError(body) || `Error ${res.status}`,
+                );
+                return;
+              }
+
+              const idSet = new Set(ids.map((x) => String(x)));
+              queryClient.setQueryData(queryKey, (oldData) => {
+                if (!oldData?.pages) return oldData;
+                return {
+                  ...oldData,
+                  pages: oldData.pages.map((page) =>
+                    Array.isArray(page)
+                      ? page.filter((txn) => !idSet.has(String(txn.id)))
+                      : page,
+                  ),
+                };
+              });
+
+              clearBulkSelection();
+            } catch (error) {
+              console.error("Failed to delete transactions:", error);
+              Alert.alert(
+                "Error",
+                error?.message ?? "No se pudieron eliminar las transacciones.",
+              );
+            } finally {
+              setDeleting(false);
+            }
+          },
+        },
+      ],
+    );
+  }, [
+    selectedTxnIds,
+    queryKey,
+    getAuthHeaders,
+    queryClient,
+    clearBulkSelection,
+  ]);
+
   useFocusEffect(
     useCallback(() => {
       const fx = consumePendingTxnTablePostEffects();
@@ -164,10 +249,7 @@ export default function TxnTableWithSelectionToolbar({
   return (
     <View style={[styles.root, style]}>
       <View
-        style={[
-          styles.toolbar,
-          !selectionMode && styles.toolbarEditAlignEnd,
-        ]}
+        style={[styles.toolbar, !selectionMode && styles.toolbarEditAlignEnd]}
       >
         {selectionMode ? (
           <>
@@ -255,25 +337,32 @@ export default function TxnTableWithSelectionToolbar({
                     Cambiar fecha ({selectedCount})
                   </Text>
                 </Pressable>
+                <Pressable
+                  onPress={handleDeleteTxns}
+                  disabled={deleting}
+                  style={({ pressed }) => [
+                    styles.button,
+                    {
+                      backgroundColor: theme.colors.surface,
+                      borderColor: theme.colors.border,
+                      opacity: pressed || deleting ? 0.75 : 1,
+                    },
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.buttonText,
+                      { color: theme.colors.error, fontWeight: "600" },
+                    ]}
+                  >
+                    Eliminar txns ({selectedCount})
+                  </Text>
+                </Pressable>
               </ScrollView>
             ) : null}
           </>
         ) : (
-          <Pressable
-            onPress={() => setSelectionMode(true)}
-            style={({ pressed }) => [
-              styles.button,
-              {
-                backgroundColor: theme.colors.surface,
-                borderColor: theme.colors.border,
-                opacity: pressed ? 0.75 : 1,
-              },
-            ]}
-          >
-            <Text style={[styles.buttonText, { color: theme.colors.text }]}>
-              Editar
-            </Text>
-          </Pressable>
+          <Button title="Editar" onPress={() => setSelectionMode(true)} />
         )}
       </View>
       <TxnTable
@@ -286,6 +375,9 @@ export default function TxnTableWithSelectionToolbar({
         onDisplayTxnsChange={handleDisplayTxnsChange}
         onToggleTxnSelected={toggleTxnSelected}
         onToggleSelectAllVisible={toggleSelectAllVisible}
+        categoriesById={categoriesById}
+        subcategoriesById={subcategoriesById}
+        banksById={banksById}
         {...tableProps}
       />
     </View>

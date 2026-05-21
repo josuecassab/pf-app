@@ -18,12 +18,12 @@ import {
 } from "react-native";
 import { Dropdown } from "react-native-element-dropdown";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useAuth } from "../../../contexts/AuthContext";
-import { useTheme } from "../../../contexts/ThemeContext";
-import { useBanks } from "../../../hooks/useBanks";
-import { useCategories } from "../../../hooks/useCategories";
-import { useSubcategories } from "../../../hooks/useSubcategories";
-import { authJsonHeaders } from "../../../lib/apiHeaders";
+import { useAuth } from "../../contexts/AuthContext";
+import { useTheme } from "../../contexts/ThemeContext";
+import { useBanks } from "../../hooks/useBanks";
+import { useCategories } from "../../hooks/useCategories";
+import { useSubcategories } from "../../hooks/useSubcategories";
+import { authJsonHeaders } from "../../lib/apiHeaders";
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL;
 /** Stable empty list for Dropdown `data` — inline `[]` breaks react-native-element-dropdown (new ref each render → max update depth). */
@@ -122,9 +122,11 @@ export default function Index() {
   const { tenantId, getAuthHeaders } = useAuth();
   const { theme } = useTheme();
   const amountSeparators = useMemo(() => getAmountFormattingConfig(), []);
-  const { data: categoriesData } = useCategories();
-  const { data: banksData } = useBanks();
-  const { data: subcategoriesData } = useSubcategories();
+  const { data: categoriesData, isLoading: isLoadingCategories } =
+    useCategories();
+  const { data: banksData, isLoading: isLoadingBanks } = useBanks();
+  const { data: subcategoriesData, isLoading: isLoadingSubcategories } =
+    useSubcategories();
   const bankList = Array.isArray(banksData) ? banksData : EMPTY_BANK_LIST;
   const subcategoryList = Array.isArray(subcategoriesData)
     ? subcategoriesData
@@ -264,7 +266,7 @@ export default function Index() {
 
   return (
     <SafeAreaView
-      edges={["bottom", "left", "right"]}
+      edges={["top", "bottom", "left", "right"]}
       style={{ flex: 1, backgroundColor: theme.colors.background }}
     >
       <KeyboardAvoidingView
@@ -426,7 +428,9 @@ export default function Index() {
                 maxHeight={220}
                 labelField="label"
                 valueField="value"
-                placeholder="Seleccionar categoria"
+                placeholder={
+                  isLoadingCategories ? "Cargando..." : "Seleccionar categoria"
+                }
                 searchPlaceholder="Buscar..."
                 value={selectedCategory?.value}
                 onChange={(item) => {
@@ -475,7 +479,11 @@ export default function Index() {
                 maxHeight={220}
                 labelField="label"
                 valueField="value"
-                placeholder="Seleccionar subcategoria"
+                placeholder={
+                  isLoadingSubcategories
+                    ? "Cargando..."
+                    : "Seleccionar subcategoria"
+                }
                 searchPlaceholder="Buscar..."
                 value={selectedSubcategory?.value}
                 onChange={(item) => {
@@ -544,7 +552,9 @@ export default function Index() {
                 data={bankList}
                 labelField="label"
                 valueField="value"
-                placeholder="Seleccionar banco"
+                placeholder={
+                  isLoadingBanks ? "Cargando..." : "Seleccionar banco"
+                }
                 searchPlaceholder="Buscar..."
                 value={selectedBank?.value}
                 onChange={(item) => {

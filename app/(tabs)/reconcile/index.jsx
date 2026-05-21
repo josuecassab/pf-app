@@ -89,6 +89,25 @@ function isPdfPickedFile(file) {
   return mime === "application/pdf" || name.endsWith(".pdf");
 }
 
+const EXCEL_MIME_TYPES = new Set([
+  "application/vnd.ms-excel",
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  "application/vnd.ms-excel.sheet.macroenabled.12",
+]);
+
+function isPdfOrExcelPickedFile(file) {
+  if (!file) return false;
+  if (isPdfPickedFile(file)) return true;
+  const mime = (file.mimeType ?? "").toLowerCase();
+  if (EXCEL_MIME_TYPES.has(mime)) return true;
+  const name = (file.name ?? "").toLowerCase();
+  return (
+    name.endsWith(".xls") ||
+    name.endsWith(".xlsx") ||
+    name.endsWith(".xlsm")
+  );
+}
+
 async function pdfIsPasswordProtected(arrayBuffer) {
   try {
     const doc = await PDFDocument.load(arrayBuffer, {
@@ -366,15 +385,25 @@ export default function Reconcile() {
   const pickDocument = async () => {
     try {
       const result = await DocumentPicker.getDocumentAsync({
-        type: "*/*", // Allow all file types
+        type: [
+          "application/pdf",
+          "application/vnd.ms-excel",
+          "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        ],
         copyToCacheDirectory: true,
-        multiple: false, // Set to true to allow selecting multiple files
+        multiple: false,
       });
 
       // Check if the user canceled the action
       if (!result.canceled) {
-        // Success: The result contains an 'assets' array
         const pickedFile = result.assets[0];
+        if (!isPdfOrExcelPickedFile(pickedFile)) {
+          Alert.alert(
+            "Archivo no válido",
+            "Selecciona un archivo PDF o Excel (.pdf, .xls, .xlsx).",
+          );
+          return;
+        }
         setFile(pickedFile);
         setPdfPassword("");
         setPdfPasswordRequired(false);
