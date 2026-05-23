@@ -1,0 +1,24 @@
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="sg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#3B82F6"/>
+      <stop offset="100%" stop-color="#1D4ED8"/>
+    </linearGradient>
+    <clipPath id="shieldClip">
+      <path d="M512 90 L837 214 L837 584 Q837 808 512 934 Q187 808 187 584 L187 214 Z"/>
+    </clipPath>
+  </defs>
+  <rect width="1024" height="1024" fill="#000000"/>
+  <path d="M512 90 L837 214 L837 584 Q837 808 512 934 Q187 808 187 584 L187 214 Z" fill="url(#sg)"/>
+  <path d="M512 136 L793 248 L793 584 Q793 782 512 892 Q231 782 231 584 L231 248 Z"
+    fill="none" stroke="#93C5FD" stroke-width="5" opacity="0.4"/>
+  <g clip-path="url(#shieldClip)">
+    <rect x="306" y="626" width="88" height="92" rx="14" fill="white" opacity="0.45"/>
+    <rect x="414" y="514" width="88" height="204" rx="14" fill="white" opacity="0.65"/>
+    <rect x="522" y="402" width="88" height="316" rx="14" fill="white" opacity="0.80"/>
+    <rect x="630" y="290" width="88" height="428" rx="14" fill="white" opacity="0.95"/>
+    <polyline points="348,616 456,504 564,392 672,280"
+      fill="none" stroke="#BAE6FD" stroke-width="14" stroke-linecap="round" stroke-linejoin="round"/>
+    <circle cx="672" cy="280" r="20" fill="#BAE6FD"/>
+  </g>
+</svg>

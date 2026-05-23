@@ -4,13 +4,17 @@
     "slug": "ZeroGasto",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/zerogasto.png",
+    "icon": "./assets/images/zerogasto_black.png",
     "scheme": "zerogasto",
     "userInterfaceStyle": "dark",
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.josuecassab.zerogasto",
-      "appleTeamId": "D95BATD6PK"
+      "appleTeamId": "D95BATD6PK",
+      "icon": {
+        "dark": "./assets/images/zerogasto_black.png",
+        "light": "./assets/images/zerogasto_white.png"
+      }
     },
     "android": {
       "adaptiveIcon": {
