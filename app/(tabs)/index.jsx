@@ -1,6 +1,7 @@
 import Feather from "@expo/vector-icons/Feather";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import SegmentedControl from "@react-native-segmented-control/segmented-control";
+import { useQueryClient } from "@tanstack/react-query";
 import { router } from "expo-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
@@ -120,6 +121,8 @@ export default function Index() {
   const [isSending, setIsSending] = useState(false);
   const [selectedBank, setSelectedBank] = useState(null);
   const { tenantId, getAuthHeaders } = useAuth();
+  const queryClient = useQueryClient();
+  const txnsQueryKey = useMemo(() => ["txns", tenantId], [tenantId]);
   const { theme } = useTheme();
   const amountSeparators = useMemo(() => getAmountFormattingConfig(), []);
   const { data: categoriesData, isLoading: isLoadingCategories } =
@@ -255,6 +258,38 @@ export default function Index() {
         );
         return;
       }
+
+      if (data?.id != null) {
+        queryClient.setQueryData(txnsQueryKey, (oldData) => {
+          const newTxn = {
+            id: data.id,
+            date: data.date,
+            description: data.description ?? null,
+            amount: data.amount,
+            category_id: data.category_id,
+            subcategory_id: data.subcategory_id ?? null,
+            bank_id: data.bank_id,
+            reconciled: data.reconciled ?? false,
+          };
+          if (!oldData?.pages) {
+            return {
+              pageParams: [{ page: 0, limit: 100 }],
+              pages: [[newTxn]],
+            };
+          }
+          const pages = [...oldData.pages];
+          const first = pages[0];
+          if (Array.isArray(first)) {
+            const exists = first.some((t) => String(t.id) === String(newTxn.id));
+            pages[0] = exists ? first : [newTxn, ...first];
+          } else {
+            pages[0] = [newTxn];
+          }
+          return { ...oldData, pages };
+        });
+      }
+
+      setValue("");
     } catch (error) {
       console.error("Error submitting transaction:", error);
       Alert.alert("Error enviando la transacción", error.message);

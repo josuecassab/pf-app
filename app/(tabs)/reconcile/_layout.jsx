@@ -22,6 +22,14 @@ export default function ReconcileLayout() {
         name="reconcile-duplicate-rows"
         options={{ title: "Duplicados" }}
       />
+      <Stack.Screen
+        name="reconcile-unmatched-txns"
+        options={{ title: "No conciliadas" }}
+      />
+      <Stack.Screen
+        name="reconcile-matched-txns"
+        options={{ title: "Conciliadas" }}
+      />
     </Stack>
   );
 }

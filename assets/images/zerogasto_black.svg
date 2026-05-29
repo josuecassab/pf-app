@@ -1,24 +1,45 @@
 <svg width="1024" height="1024" viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
   <defs>
-    <linearGradient id="sg" x1="0%" y1="0%" x2="100%" y2="100%">
+    <linearGradient id="bodyGrad" x1="0%" y1="0%" x2="100%" y2="100%">
       <stop offset="0%" stop-color="#3B82F6"/>
       <stop offset="100%" stop-color="#1D4ED8"/>
     </linearGradient>
-    <clipPath id="shieldClip">
-      <path d="M512 90 L837 214 L837 584 Q837 808 512 934 Q187 808 187 584 L187 214 Z"/>
+    <linearGradient id="doorGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#2563EB"/>
+      <stop offset="100%" stop-color="#1E40AF"/>
+    </linearGradient>
+    <clipPath id="doorClip">
+      <rect x="298" y="238" width="438" height="498" rx="27"/>
     </clipPath>
   </defs>
   <rect width="1024" height="1024" fill="#000000"/>
-  <path d="M512 90 L837 214 L837 584 Q837 808 512 934 Q187 808 187 584 L187 214 Z" fill="url(#sg)"/>
-  <path d="M512 136 L793 248 L793 584 Q793 782 512 892 Q231 782 231 584 L231 248 Z"
-    fill="none" stroke="#93C5FD" stroke-width="5" opacity="0.4"/>
-  <g clip-path="url(#shieldClip)">
-    <rect x="306" y="626" width="88" height="92" rx="14" fill="white" opacity="0.45"/>
-    <rect x="414" y="514" width="88" height="204" rx="14" fill="white" opacity="0.65"/>
-    <rect x="522" y="402" width="88" height="316" rx="14" fill="white" opacity="0.80"/>
-    <rect x="630" y="290" width="88" height="428" rx="14" fill="white" opacity="0.95"/>
-    <polyline points="348,616 456,504 564,392 672,280"
-      fill="none" stroke="#BAE6FD" stroke-width="14" stroke-linecap="round" stroke-linejoin="round"/>
-    <circle cx="672" cy="280" r="20" fill="#BAE6FD"/>
+  <rect x="195" y="180" width="634" height="634" rx="48" fill="url(#bodyGrad)"/>
+  <rect x="216" y="201" width="592" height="592" rx="36" fill="none" stroke="#60A5FA" stroke-width="3" opacity="0.4"/>
+  <rect x="298" y="238" width="438" height="498" rx="27" fill="url(#doorGrad)"/>
+  <rect x="313" y="253" width="408" height="468" rx="21" fill="none" stroke="#60A5FA" stroke-width="2" opacity="0.35"/>
+  <rect x="265" y="304" width="42" height="24" rx="8" fill="#1E40AF"/>
+  <rect x="265" y="521" width="42" height="24" rx="8" fill="#1E40AF"/>
+  <rect x="760" y="460" width="39" height="76" rx="12" fill="#1E3A8A"/>
+  <rect x="757" y="478" width="45" height="36" rx="9" fill="#1D4ED8" stroke="#60A5FA" stroke-width="2" opacity="0.5"/>
+  <circle cx="517" cy="346" r="66" fill="#1E40AF" stroke="#60A5FA" stroke-width="3" opacity="0.6"/>
+  <circle cx="517" cy="346" r="51" fill="#1D4ED8"/>
+  <circle cx="517" cy="346" r="15" fill="#3B82F6"/>
+  <line x1="517" y1="285" x2="517" y2="297" stroke="#93C5FD" stroke-width="3.5" stroke-linecap="round"/>
+  <line x1="517" y1="395" x2="517" y2="407" stroke="#93C5FD" stroke-width="3.5" stroke-linecap="round"/>
+  <line x1="456" y1="346" x2="468" y2="346" stroke="#93C5FD" stroke-width="3.5" stroke-linecap="round"/>
+  <line x1="566" y1="346" x2="578" y2="346" stroke="#93C5FD" stroke-width="3.5" stroke-linecap="round"/>
+  <line x1="517" y1="346" x2="517" y2="301" stroke="#BAE6FD" stroke-width="3.5" stroke-linecap="round"/>
+  <g clip-path="url(#doorClip)">
+    <rect x="356" y="650" width="64" height="66"  rx="10" fill="white" opacity="0.30"/>
+    <rect x="442" y="540" width="64" height="176" rx="10" fill="white" opacity="0.50"/>
+    <rect x="528" y="430" width="64" height="286" rx="10" fill="white" opacity="0.70"/>
+    <rect x="614" y="320" width="64" height="396" rx="10" fill="white" opacity="0.90"/>
+    <polyline points="386,645 472,535 558,425 644,315"
+      fill="none" stroke="#BAE6FD" stroke-width="13" stroke-linecap="round" stroke-linejoin="round"/>
+    <circle cx="644" cy="315" r="18" fill="#BAE6FD"/>
   </g>
+  <circle cx="517" cy="540" r="15" fill="#1E3A8A"/>
+  <rect x="511" y="551" width="12" height="21" rx="5" fill="#1E3A8A"/>
+  <rect x="301" y="802" width="54" height="42" rx="9" fill="#1E40AF"/>
+  <rect x="663" y="802" width="54" height="42" rx="9" fill="#1E40AF"/>
 </svg>

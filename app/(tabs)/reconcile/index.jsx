@@ -102,9 +102,7 @@ function isPdfOrExcelPickedFile(file) {
   if (EXCEL_MIME_TYPES.has(mime)) return true;
   const name = (file.name ?? "").toLowerCase();
   return (
-    name.endsWith(".xls") ||
-    name.endsWith(".xlsx") ||
-    name.endsWith(".xlsm")
+    name.endsWith(".xls") || name.endsWith(".xlsx") || name.endsWith(".xlsm")
   );
 }
 
@@ -134,6 +132,69 @@ async function pickedFileToArrayBuffer(file) {
   return await res.arrayBuffer();
 }
 
+function WizardStep({ step, title, subtitle, isComplete, theme, children }) {
+  return (
+    <View
+      style={[
+        reconcileStyles.wizardStep,
+        {
+          borderColor: theme.colors.border,
+          backgroundColor: theme.colors.card,
+        },
+      ]}
+    >
+      <View style={reconcileStyles.wizardStepHeader}>
+        <View
+          style={[
+            reconcileStyles.wizardStepBadge,
+            {
+              backgroundColor: isComplete
+                ? theme.colors.primary
+                : theme.colors.inputBackground,
+            },
+          ]}
+        >
+          {isComplete ? (
+            <Ionicons name="checkmark" size={16} color="#fff" />
+          ) : (
+            <Text
+              style={[
+                reconcileStyles.wizardStepBadgeText,
+                { color: theme.colors.text },
+              ]}
+            >
+              {step}
+            </Text>
+          )}
+        </View>
+        <View style={reconcileStyles.wizardStepTitles}>
+          <Text
+            style={[
+              reconcileStyles.wizardStepTitle,
+              { color: theme.colors.text },
+            ]}
+          >
+            {title}
+          </Text>
+          {subtitle ? (
+            <Text
+              style={[
+                reconcileStyles.wizardStepSubtitle,
+                { color: theme.colors.textSecondary },
+              ]}
+            >
+              {subtitle}
+            </Text>
+          ) : null}
+        </View>
+      </View>
+      {children ? (
+        <View style={reconcileStyles.wizardStepBody}>{children}</View>
+      ) : null}
+    </View>
+  );
+}
+
 export default function Reconcile() {
   const { theme } = useTheme();
   const { tenantId, getAuthHeaders } = useAuth();
@@ -149,6 +210,7 @@ export default function Reconcile() {
   const [selectedStatement, setSelectedStatement] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
   const [conciliarGateBusy, setConciliarGateBusy] = useState(false);
+  const [previewExpanded, setPreviewExpanded] = useState(false);
 
   const selectedBank = useMemo(() => {
     if (!bankList.length) return null;
@@ -225,6 +287,10 @@ export default function Reconcile() {
     fetchStatements();
   }, [fetchStatements]);
 
+  useEffect(() => {
+    setPreviewExpanded(false);
+  }, [selectedStatement?.value]);
+
   // Table rendering — column widths from StyleSheet (same pattern as TxnTable)
   const headerColumnStyle = {
     Fecha: reconcileStyles.colDate,
@@ -259,9 +325,19 @@ export default function Reconcile() {
     enabled: !!tenantId && !!selectedStatement?.label,
   });
 
+  const statementRowCount = data?.length ?? 0;
+  const step1Complete = statements.length > 0;
+  const step2Complete = Boolean(selectedStatement?.label);
+  const canConciliar =
+    step2Complete && Boolean(selectedBank?.label) && !conciliarGateBusy;
+
   const handleUpload = async () => {
     if (!file) {
-      return alert("Select a file first");
+      Alert.alert(
+        "Archivo requerido",
+        "Selecciona un archivo PDF o Excel primero.",
+      );
+      return;
     }
     setIsLoading(true);
 
@@ -653,12 +729,22 @@ export default function Reconcile() {
       edges={["bottom", "left", "right"]}
       style={[
         reconcileStyles.container,
-        { backgroundColor: theme.colors.background },
+        { flex: 1, backgroundColor: theme.colors.background },
       ]}
     >
-      <View style={reconcileStyles.headerSection}>
-        <StatusBar barStyle={theme.isDark ? "light-content" : "dark-content"} />
-        <View style={reconcileStyles.section}>
+      <StatusBar barStyle={theme.isDark ? "light-content" : "dark-content"} />
+      <ScrollView
+        style={{ flex: 1 }}
+        contentContainerStyle={reconcileStyles.wizardScrollContent}
+        keyboardShouldPersistTaps="handled"
+      >
+        <WizardStep
+          step={1}
+          title="Subir extracto"
+          subtitle="PDF o Excel (.pdf, .xls, .xlsx)"
+          isComplete={step1Complete}
+          theme={theme}
+        >
           <View style={reconcileStyles.filePickAndUploadRow}>
             <View
               style={[
@@ -670,26 +756,35 @@ export default function Reconcile() {
               ]}
             >
               <Pressable
-                style={({ pressed }) => [
-                  reconcileStyles.filePickBarMain,
-                  pressed && reconcileStyles.filePickBarPressed,
-                ]}
+                style={{ flex: 1, minWidth: 0 }}
                 onPress={pickDocument}
               >
-                <Text
-                  style={
-                    file
-                      ? [styles.selectedTextStyle, { color: theme.colors.text }]
-                      : [
-                          styles.placeholderStyle,
-                          { color: theme.colors.placeholder },
-                        ]
-                  }
-                  numberOfLines={1}
-                  ellipsizeMode="middle"
-                >
-                  {file ? file.name : "Seleccionar extracto"}
-                </Text>
+                {({ pressed }) => (
+                  <View
+                    style={[
+                      reconcileStyles.filePickBarMain,
+                      pressed && reconcileStyles.filePickBarPressed,
+                    ]}
+                  >
+                    <Text
+                      style={
+                        file
+                          ? [
+                              styles.selectedTextStyle,
+                              { color: theme.colors.text },
+                            ]
+                          : [
+                              styles.placeholderStyle,
+                              { color: theme.colors.placeholder },
+                            ]
+                      }
+                      numberOfLines={1}
+                      ellipsizeMode="middle"
+                    >
+                      {file ? file.name : "Seleccionar archivo"}
+                    </Text>
+                  </View>
+                )}
               </Pressable>
               {file ? (
                 <Pressable
@@ -715,26 +810,24 @@ export default function Reconcile() {
               ) : null}
             </View>
 
-            {file && (
+            {file ? (
               <Pressable
+                disabled={isLoading}
                 style={({ pressed }) => [
                   reconcileStyles.uploadButton,
-                  {
-                    backgroundColor: theme.colors.primary,
-                  },
-                  pressed && reconcileStyles.uploadButtonPressed,
+                  { backgroundColor: theme.colors.primary },
+                  pressed && !isLoading && reconcileStyles.uploadButtonPressed,
+                  isLoading && { opacity: 0.7 },
                 ]}
                 onPress={handleUpload}
               >
-                <Text style={reconcileStyles.uploadButtonText}>
-                  {isLoading ? (
-                    <ActivityIndicator size="small" color="#fff" />
-                  ) : (
-                    "Cargar"
-                  )}
-                </Text>
+                {isLoading ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <Text style={reconcileStyles.uploadButtonText}>Cargar</Text>
+                )}
               </Pressable>
-            )}
+            ) : null}
           </View>
 
           {pdfPasswordRequired ? (
@@ -767,119 +860,207 @@ export default function Reconcile() {
               />
             </View>
           ) : null}
+        </WizardStep>
 
-          <View style={reconcileStyles.statementRow}>
-            <Text
-              style={[reconcileStyles.fieldLabel, { color: theme.colors.text }]}
-            >
-              Extracto
-            </Text>
-            <View style={reconcileStyles.statementActionsRow}>
-              <View style={reconcileStyles.statementDropdownFlex}>
-                <Dropdown
-                  style={[
-                    styles.dropdown,
-                    reconcileStyles.bankDropdown,
-                    { backgroundColor: theme.colors.inputBackground },
-                  ]}
-                  placeholderStyle={[
-                    styles.placeholderStyle,
-                    { color: theme.colors.placeholder },
-                  ]}
-                  selectedTextStyle={[
-                    styles.selectedTextStyle,
-                    { color: theme.colors.text },
-                  ]}
-                  inputSearchStyle={[
-                    styles.inputSearchStyle,
-                    { color: theme.colors.text },
-                  ]}
-                  iconStyle={styles.iconStyle}
-                  containerStyle={{
-                    backgroundColor: theme.colors.inputBackground,
-                    borderColor: theme.colors.border,
-                    borderRadius: 8,
-                  }}
-                  itemContainerStyle={{
-                    borderBottomColor: theme.colors.borderLight,
-                  }}
-                  itemTextStyle={{ color: theme.colors.text }}
-                  activeColor={theme.colors.border}
-                  selectedTextProps={DROPDOWN_SELECTED_TEXT_PROPS}
-                  data={statements}
-                  maxHeight={300}
-                  labelField="label"
-                  valueField="value"
-                  placeholder="Seleccionar extracto"
-                  value={selectedStatement?.value}
-                  onChange={(item) => {
-                    setSelectedStatement({
-                      label: item.label,
-                      value: item.value,
-                    });
-                  }}
-                />
-              </View>
-              <Pressable
-                onPress={handleConciliarPress}
-                disabled={conciliarGateBusy}
-                style={({ pressed }) => [
-                  reconcileStyles.uploadButton,
-                  { backgroundColor: theme.colors.primary },
-                  pressed && reconcileStyles.uploadButtonPressed,
-                  conciliarGateBusy && { opacity: 0.7 },
-                ]}
-              >
-                <Text style={reconcileStyles.uploadButtonText}>
-                  {conciliarGateBusy ? (
-                    <ActivityIndicator size="small" color="#fff" />
-                  ) : (
-                    "Conciliar"
-                  )}
-                </Text>
-              </Pressable>
-            </View>
-          </View>
-        </View>
-      </View>
-      {error ? (
-        <Text
-          style={{
-            color: theme.colors.error,
-            padding: 16,
-            textAlign: "center",
-          }}
+        <WizardStep
+          step={2}
+          title="Elegir extracto"
+          subtitle="Selecciona el estado de cuenta a conciliar"
+          isComplete={step2Complete}
+          theme={theme}
         >
-          {error.message}
-        </Text>
-      ) : (
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={true}
-          style={[
-            reconcileStyles.scrollView,
-            {
-              borderColor: theme.colors.border,
-              backgroundColor: theme.colors.card,
-            },
+          {statements.length === 0 ? (
+            <Text
+              style={[
+                reconcileStyles.wizardEmptyHint,
+                { color: theme.colors.textSecondary },
+              ]}
+            >
+              Sube un extracto en el paso 1 para continuar.
+            </Text>
+          ) : (
+            <>
+              <Dropdown
+                style={[
+                  styles.dropdown,
+                  reconcileStyles.bankDropdown,
+                  { backgroundColor: theme.colors.inputBackground },
+                ]}
+                placeholderStyle={[
+                  styles.placeholderStyle,
+                  { color: theme.colors.placeholder },
+                ]}
+                selectedTextStyle={[
+                  styles.selectedTextStyle,
+                  { color: theme.colors.text },
+                ]}
+                inputSearchStyle={[
+                  styles.inputSearchStyle,
+                  { color: theme.colors.text },
+                ]}
+                iconStyle={styles.iconStyle}
+                containerStyle={{
+                  backgroundColor: theme.colors.inputBackground,
+                  borderColor: theme.colors.border,
+                  borderRadius: 8,
+                }}
+                itemContainerStyle={{
+                  borderBottomColor: theme.colors.borderLight,
+                }}
+                itemTextStyle={{ color: theme.colors.text }}
+                activeColor={theme.colors.border}
+                selectedTextProps={DROPDOWN_SELECTED_TEXT_PROPS}
+                data={statements}
+                maxHeight={300}
+                labelField="label"
+                valueField="value"
+                placeholder="Seleccionar extracto"
+                value={selectedStatement?.value}
+                onChange={(item) => {
+                  setSelectedStatement({
+                    label: item.label,
+                    value: item.value,
+                  });
+                }}
+              />
+              {selectedBank?.label ? (
+                <View
+                  style={[
+                    reconcileStyles.bankChip,
+                    {
+                      borderColor: theme.colors.border,
+                      backgroundColor: theme.colors.inputBackground,
+                    },
+                  ]}
+                >
+                  <Text
+                    style={[
+                      reconcileStyles.bankChipText,
+                      { color: theme.colors.text },
+                    ]}
+                  >
+                    Banco: {selectedBank.label}
+                  </Text>
+                </View>
+              ) : null}
+            </>
+          )}
+        </WizardStep>
+
+        {step2Complete ? (
+          <WizardStep
+            step={3}
+            title="Revisar"
+            subtitle="Comprueba los movimientos del extracto"
+            isComplete={false}
+            theme={theme}
+          >
+            {error ? (
+              <Text style={{ color: theme.colors.error, textAlign: "center" }}>
+                {error.message}
+              </Text>
+            ) : (
+              <>
+                <Pressable
+                  style={({ pressed }) => [
+                    reconcileStyles.previewToggle,
+                    pressed && { opacity: 0.7 },
+                  ]}
+                  onPress={() => setPreviewExpanded((prev) => !prev)}
+                  accessibilityRole="button"
+                  accessibilityState={{ expanded: previewExpanded }}
+                >
+                  <Text
+                    style={[
+                      reconcileStyles.previewToggleText,
+                      { color: theme.colors.text },
+                    ]}
+                  >
+                    {isFetching
+                      ? "Cargando movimientos…"
+                      : statementRowCount === 0
+                        ? "Sin movimientos"
+                        : previewExpanded
+                          ? `Ocultar ${statementRowCount} movimiento${statementRowCount === 1 ? "" : "s"}`
+                          : `Ver ${statementRowCount} movimiento${statementRowCount === 1 ? "" : "s"}`}
+                  </Text>
+                  {!isFetching && statementRowCount > 0 ? (
+                    <Ionicons
+                      name={previewExpanded ? "chevron-up" : "chevron-down"}
+                      size={20}
+                      color={theme.colors.textSecondary}
+                    />
+                  ) : isFetching ? (
+                    <ActivityIndicator
+                      size="small"
+                      color={theme.colors.primary}
+                    />
+                  ) : null}
+                </Pressable>
+
+                {previewExpanded && !isFetching && statementRowCount > 0 ? (
+                  <View style={reconcileStyles.previewTableWrap}>
+                    <ScrollView
+                      horizontal
+                      showsHorizontalScrollIndicator
+                      nestedScrollEnabled
+                      style={[
+                        reconcileStyles.scrollView,
+                        {
+                          borderColor: theme.colors.border,
+                          backgroundColor: theme.colors.card,
+                        },
+                      ]}
+                    >
+                      <FlatList
+                        style={[
+                          reconcileStyles.flatList,
+                          {
+                            maxHeight: 320,
+                            borderColor: theme.colors.border,
+                            backgroundColor: theme.colors.card,
+                          },
+                        ]}
+                        keyExtractor={(item, index) => String(index)}
+                        data={data}
+                        ListHeaderComponent={renderHeader}
+                        renderItem={({ item }) => renderTxns(item)}
+                        stickyHeaderIndices={[0]}
+                        ListFooterComponent={renderFooter}
+                        nestedScrollEnabled
+                      />
+                    </ScrollView>
+                  </View>
+                ) : null}
+              </>
+            )}
+          </WizardStep>
+        ) : null}
+      </ScrollView>
+
+      <View
+        style={[
+          reconcileStyles.footerCta,
+          { borderTopColor: theme.colors.border },
+        ]}
+      >
+        <Pressable
+          disabled={!canConciliar}
+          onPress={handleConciliarPress}
+          style={({ pressed }) => [
+            reconcileStyles.footerCtaButton,
+            { backgroundColor: theme.colors.primary },
+            pressed && canConciliar && reconcileStyles.uploadButtonPressed,
+            !canConciliar && reconcileStyles.footerCtaButtonDisabled,
           ]}
         >
-          <FlatList
-            style={[
-              reconcileStyles.flatList,
-              {
-                borderColor: theme.colors.border,
-                backgroundColor: theme.colors.card,
-              },
-            ]}
-            keyExtractor={(item, index) => index}
-            data={data}
-            ListHeaderComponent={renderHeader}
-            renderItem={({ item }) => renderTxns(item)}
-            stickyHeaderIndices={[0]}
-          />
-        </ScrollView>
-      )}
+          {conciliarGateBusy ? (
+            <ActivityIndicator size="small" color="#fff" />
+          ) : (
+            <Text style={reconcileStyles.uploadButtonText}>Conciliar</Text>
+          )}
+        </Pressable>
+      </View>
     </SafeAreaView>
   );
 }

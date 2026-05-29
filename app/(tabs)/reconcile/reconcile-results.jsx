@@ -1,9 +1,14 @@
+import Ionicons from "@expo/vector-icons/Ionicons";
 import {
   useFocusEffect,
   useNavigation,
   useRoute,
 } from "@react-navigation/native";
-import { useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  useInfiniteQuery,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 import { router } from "expo-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
@@ -15,14 +20,141 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import TxnTable from "../../../components/TxnTable";
-import TxnTableWithSelectionToolbar from "../../../components/TxnTableWithSelectionToolbar";
 import { useAuth } from "../../../contexts/AuthContext";
 import { useTheme } from "../../../contexts/ThemeContext";
 import { reconcileStyles } from "../reconcileStyles";
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL;
-const TXNS_TABLE = "txns";
+
+function formatCount(count, hasMore) {
+  if (count == null) return "…";
+  return `${count}${hasMore ? "+" : ""}`;
+}
+
+function BlockerBanner({
+  title,
+  message,
+  actionLabel,
+  onAction,
+  icon,
+  theme,
+  tone = "error",
+}) {
+  const isError = tone === "error";
+  const accent = isError ? theme.colors.error : "#d97706";
+  const backgroundColor = isError
+    ? theme.isDark
+      ? "rgba(239, 68, 68, 0.12)"
+      : "rgba(239, 68, 68, 0.08)"
+    : theme.isDark
+      ? "rgba(217, 119, 6, 0.12)"
+      : "rgba(217, 119, 6, 0.08)";
+
+  return (
+    <View
+      style={[
+        reconcileStyles.blockerBanner,
+        { borderColor: accent, backgroundColor },
+      ]}
+    >
+      <View style={reconcileStyles.blockerBannerRow}>
+        <Ionicons name={icon} size={20} color={accent} />
+        <View style={reconcileStyles.blockerBannerContent}>
+          <Text style={[reconcileStyles.blockerBannerTitle, { color: accent }]}>
+            {title}
+          </Text>
+          <Text
+            style={[
+              reconcileStyles.blockerBannerMessage,
+              { color: theme.colors.text },
+            ]}
+          >
+            {message}
+          </Text>
+          {actionLabel && onAction ? (
+            <Pressable
+              onPress={onAction}
+              style={({ pressed }) => [
+                reconcileStyles.blockerBannerAction,
+                pressed && { opacity: 0.7 },
+              ]}
+            >
+              <Text
+                style={[
+                  reconcileStyles.blockerBannerActionText,
+                  { color: accent },
+                ]}
+              >
+                {actionLabel}
+              </Text>
+            </Pressable>
+          ) : null}
+        </View>
+      </View>
+    </View>
+  );
+}
+
+function SummaryStatChip({ label, tone, onPress, theme }) {
+  const toneStyles = {
+    success: {
+      border: theme.colors.success,
+      background: theme.isDark
+        ? "rgba(16, 185, 129, 0.12)"
+        : "rgba(16, 185, 129, 0.08)",
+      text: theme.colors.success,
+    },
+    warning: {
+      border: "#d97706",
+      background: theme.isDark
+        ? "rgba(217, 119, 6, 0.12)"
+        : "rgba(217, 119, 6, 0.08)",
+      text: "#d97706",
+    },
+    error: {
+      border: theme.colors.error,
+      background: theme.isDark
+        ? "rgba(239, 68, 68, 0.12)"
+        : "rgba(239, 68, 68, 0.08)",
+      text: theme.colors.error,
+    },
+    neutral: {
+      border: theme.colors.border,
+      background: theme.colors.inputBackground,
+      text: theme.colors.text,
+    },
+  };
+  const colors = toneStyles[tone] ?? toneStyles.neutral;
+
+  const chip = (
+    <View
+      style={[
+        reconcileStyles.summaryStatChip,
+        {
+          borderColor: colors.border,
+          backgroundColor: colors.background,
+        },
+      ]}
+    >
+      <Text
+        style={[reconcileStyles.summaryStatChipText, { color: colors.text }]}
+      >
+        {label}
+      </Text>
+    </View>
+  );
+
+  if (!onPress) return chip;
+
+  return (
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => pressed && { opacity: 0.75 }}
+    >
+      {chip}
+    </Pressable>
+  );
+}
 
 export default function ReconcileResults() {
   const { theme } = useTheme();
@@ -33,34 +165,58 @@ export default function ReconcileResults() {
   const route = useRoute();
   const statementLabel = route.params?.statementLabel;
   const bankLabel = route.params?.bankLabel;
-  /** When set, compare API reported duplicate row groups — show navigation to detail screen. */
-  const [duplicateRowsNav, setDuplicateRowsNav] = useState(null);
+  const joinedTableName = `${statementLabel}_joined`;
 
-  const refreshDuplicateRowsInfo = useCallback(async () => {
-    if (!statementLabel || !tenantId) {
-      setDuplicateRowsNav(null);
-      return;
-    }
-    const compareParams = new URLSearchParams({
-      table_name: `${statementLabel}_joined`,
-    });
-    const compareRes = await fetch(
-      `${API_URL}/compare_statement_tables/?${compareParams.toString()}`,
-      { method: "GET", headers: getAuthHeaders() },
-    );
-    const compareBody = await compareRes.json().catch(() => ({}));
-    if (!compareRes.ok || !Array.isArray(compareBody?.duplicates)) {
-      setDuplicateRowsNav(null);
-      return;
-    }
-    if (compareBody.duplicates.length === 0) {
-      setDuplicateRowsNav(null);
-      return;
-    }
-    const tableName = compareBody.table_name ?? `${statementLabel}_joined`;
-    const dupIds = compareBody.duplicates.map((d) => d.id);
-    setDuplicateRowsNav({ table: tableName, ids: dupIds });
-  }, [statementLabel, tenantId, getAuthHeaders]);
+  const {
+    data: duplicateRowsNav,
+    refetch: refetchDuplicateRowsInfo,
+    isPending: isDuplicatesPending,
+  } = useQuery({
+    queryKey: ["reconcile_compare", tenantId, joinedTableName],
+    queryFn: async () => {
+      const compareParams = new URLSearchParams({
+        table_name: joinedTableName,
+      });
+      const compareRes = await fetch(
+        `${API_URL}/compare_statement_tables/?${compareParams.toString()}`,
+        { method: "GET", headers: getAuthHeaders() },
+      );
+      const compareBody = await compareRes.json().catch(() => ({}));
+      if (!compareRes.ok || !Array.isArray(compareBody?.duplicates)) {
+        return null;
+      }
+      if (compareBody.duplicates.length === 0) {
+        return null;
+      }
+      return {
+        table: compareBody.table_name ?? joinedTableName,
+        ids: compareBody.duplicates.map((d) => d.id),
+      };
+    },
+    enabled: !!statementLabel && !!tenantId,
+  });
+
+  const {
+    data: uncategorizedCount,
+    isPending: isUncategorizedPending,
+    refetch: refetchUncategorizedCount,
+  } = useQuery({
+    queryKey: ["reconcile_uncategorized", tenantId, joinedTableName],
+    queryFn: async () => {
+      const res = await fetch(
+        `${API_URL}/get_uncategorized_count/?table_name=${encodeURIComponent(joinedTableName)}`,
+        { method: "GET", headers: getAuthHeaders() },
+      );
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(
+          body?.detail ?? body?.message ?? `Server error ${res.status}`,
+        );
+      }
+      return body.count ?? 0;
+    },
+    enabled: !!statementLabel && !!tenantId,
+  });
 
   useEffect(() => {
     if (!statementLabel || !bankLabel) {
@@ -70,8 +226,9 @@ export default function ReconcileResults() {
 
   useFocusEffect(
     useCallback(() => {
-      refreshDuplicateRowsInfo();
-    }, [refreshDuplicateRowsInfo]),
+      refetchDuplicateRowsInfo();
+      refetchUncategorizedCount();
+    }, [refetchDuplicateRowsInfo, refetchUncategorizedCount]),
   );
 
   const goToDuplicateRows = useCallback(() => {
@@ -81,16 +238,30 @@ export default function ReconcileResults() {
       params: {
         table: duplicateRowsNav.table,
         ids: JSON.stringify(duplicateRowsNav.ids),
+        statementLabel,
+        bankLabel,
       },
     });
-  }, [duplicateRowsNav]);
+  }, [duplicateRowsNav, statementLabel, bankLabel]);
+
+  const goToUnmatchedTxns = useCallback(() => {
+    router.push({
+      pathname: "/reconcile/reconcile-unmatched-txns",
+      params: { statementLabel },
+    });
+  }, [statementLabel]);
+
+  const goToMatchedTxns = useCallback(() => {
+    router.push({
+      pathname: "/reconcile/reconcile-matched-txns",
+      params: { statementLabel },
+    });
+  }, [statementLabel]);
 
   const {
     data: matchedTxns,
     error: matchedTxnsError,
-    fetchNextPage: fetchNextMatchedTxnsPage,
     hasNextPage: hasNextMatchedTxnsPage,
-    isFetchingNextPage: isFetchingNextMatchedTxnsPage,
     isPending: isMatchedTxnsPending,
     refetch: refetchMatchedTxns,
   } = useInfiniteQuery({
@@ -135,9 +306,7 @@ export default function ReconcileResults() {
   const {
     data: unmatchedTxns,
     error: unmatchedTxnsError,
-    fetchNextPage: fetchNextUnmatchedTxnsPage,
     hasNextPage: hasNextUnmatchedTxnsPage,
-    isFetchingNextPage: isFetchingNextUnmatchedTxnsPage,
     isPending: isUnmatchedTxnsPending,
     refetch: refetchUnmatchedTxns,
   } = useInfiniteQuery({
@@ -179,6 +348,40 @@ export default function ReconcileResults() {
     [unmatchedTxns],
   );
 
+  const duplicateCount = duplicateRowsNav?.ids?.length ?? 0;
+  const hasDuplicateBlocker = duplicateCount > 0;
+  const hasUncategorizedBlocker = (uncategorizedCount ?? 0) > 0;
+  const unmatchedCount = flattenedUnmatchedTxns.length;
+  const hasUnmatchedWarning = !isUnmatchedTxnsPending && unmatchedCount > 0;
+  const canComplete =
+    !hasDuplicateBlocker && !hasUncategorizedBlocker && !isUncategorizedPending;
+
+  const completeBlockerReason = useMemo(() => {
+    const parts = [];
+    if (hasDuplicateBlocker) {
+      parts.push(
+        `resuelve ${duplicateCount} grupo${duplicateCount === 1 ? "" : "s"} de duplicados`,
+      );
+    }
+    if (hasUncategorizedBlocker) {
+      const n = uncategorizedCount ?? 0;
+      parts.push(`categoriza ${n} transacción${n === 1 ? "" : "es"}`);
+    }
+    if (parts.length === 0) return null;
+    return `Para completar: ${parts.join(" y ")}.`;
+  }, [
+    duplicateCount,
+    hasDuplicateBlocker,
+    hasUncategorizedBlocker,
+    uncategorizedCount,
+  ]);
+
+  const summaryLoading =
+    isMatchedTxnsPending ||
+    isUnmatchedTxnsPending ||
+    isUncategorizedPending ||
+    isDuplicatesPending;
+
   const runReconcile = async () => {
     setIsReconciling(true);
     try {
@@ -218,7 +421,8 @@ export default function ReconcileResults() {
       });
       refetchMatchedTxns();
       refetchUnmatchedTxns();
-      await refreshDuplicateRowsInfo();
+      refetchDuplicateRowsInfo();
+      refetchUncategorizedCount();
       Alert.alert("Éxito", "Conciliación actualizada.");
     } catch (error) {
       console.error("Error reconciling:", error);
@@ -229,6 +433,15 @@ export default function ReconcileResults() {
   };
 
   const completeReconcile = async () => {
+    if (!canComplete) {
+      Alert.alert(
+        "No se puede completar",
+        completeBlockerReason ??
+          "Resuelve los problemas pendientes antes de completar la conciliación.",
+      );
+      return;
+    }
+
     try {
       const compareParams = new URLSearchParams({
         table_name: `${statementLabel}_joined`,
@@ -262,6 +475,8 @@ export default function ReconcileResults() {
           params: {
             table: tableName,
             ids: JSON.stringify(dupIds),
+            statementLabel,
+            bankLabel,
           },
         });
         return;
@@ -280,10 +495,10 @@ export default function ReconcileResults() {
         return;
       }
       if (response.count > 0) {
-        Alert.alert(
-          "Alerta",
-          "Hay transacciones no categorizadas: porfavor categorice las transacciones antes de completar la conciliación",
-        );
+        router.push({
+          pathname: "/reconcile/reconcile-matched-txns",
+          params: { statementLabel },
+        });
         return;
       }
 
@@ -347,98 +562,154 @@ export default function ReconcileResults() {
         keyboardShouldPersistTaps="handled"
       >
         <View
-          style={{
-            flexDirection: "row",
-            flexWrap: "wrap",
-            alignItems: "center",
-            gap: 8,
-          }}
+          style={[
+            reconcileStyles.summaryCard,
+            {
+              borderColor: theme.colors.border,
+              backgroundColor: theme.colors.card,
+            },
+          ]}
         >
+          <Text
+            style={[reconcileStyles.summaryMeta, { color: theme.colors.text }]}
+          >
+            {statementLabel} · {bankLabel}
+          </Text>
+          <View style={reconcileStyles.summaryStatsRow}>
+            <SummaryStatChip
+              theme={theme}
+              tone="success"
+              label={
+                summaryLoading
+                  ? "Conciliadas: …"
+                  : `Conciliadas: ${formatCount(flattenedMatchedTxns.length, hasNextMatchedTxnsPage)}`
+              }
+              onPress={
+                matchedTxnsError || isMatchedTxnsPending
+                  ? undefined
+                  : goToMatchedTxns
+              }
+            />
+            <SummaryStatChip
+              theme={theme}
+              tone={hasUnmatchedWarning ? "warning" : "neutral"}
+              label={
+                isUnmatchedTxnsPending
+                  ? "Sin conciliar: …"
+                  : `Sin conciliar: ${formatCount(unmatchedCount, hasNextUnmatchedTxnsPage)}`
+              }
+              onPress={
+                unmatchedTxnsError || isUnmatchedTxnsPending
+                  ? undefined
+                  : goToUnmatchedTxns
+              }
+            />
+            <SummaryStatChip
+              theme={theme}
+              tone={hasDuplicateBlocker ? "error" : "neutral"}
+              label={
+                isDuplicatesPending
+                  ? "Duplicados: …"
+                  : `Duplicados: ${duplicateCount}`
+              }
+              onPress={hasDuplicateBlocker ? goToDuplicateRows : undefined}
+            />
+            <SummaryStatChip
+              theme={theme}
+              tone={hasUncategorizedBlocker ? "warning" : "neutral"}
+              label={
+                isUncategorizedPending
+                  ? "Sin categorizar: …"
+                  : `Sin categorizar: ${uncategorizedCount ?? 0}`
+              }
+              onPress={isUncategorizedPending ? undefined : goToMatchedTxns}
+            />
+          </View>
+        </View>
+
+        {hasDuplicateBlocker ? (
+          <BlockerBanner
+            theme={theme}
+            tone="error"
+            icon="copy-outline"
+            title="Filas duplicadas"
+            message={`Hay ${duplicateCount} grupo${duplicateCount === 1 ? "" : "s"} de filas duplicadas. Revísalas y corrígelas antes de completar la conciliación.`}
+            actionLabel="Ver duplicados"
+            onAction={goToDuplicateRows}
+          />
+        ) : null}
+
+        {hasUncategorizedBlocker ? (
+          <BlockerBanner
+            theme={theme}
+            tone="warning"
+            icon="pricetag-outline"
+            title="Transacciones sin categorizar"
+            message={`Hay ${uncategorizedCount} transacción${uncategorizedCount === 1 ? "" : "es"} sin categorizar en la tabla de conciliadas. Asigna categoría antes de completar.`}
+            actionLabel="Ver conciliadas"
+            onAction={goToMatchedTxns}
+          />
+        ) : null}
+
+        {hasUnmatchedWarning ? (
+          <BlockerBanner
+            theme={theme}
+            tone="warning"
+            icon="alert-circle-outline"
+            title="Movimientos sin conciliar"
+            message={`Quedan ${formatCount(unmatchedCount, hasNextUnmatchedTxnsPage)} movimiento${unmatchedCount === 1 ? "" : "s"} del extracto sin emparejar. Puedes revisarlos antes de completar.`}
+            actionLabel="Ver sin conciliar"
+            onAction={goToUnmatchedTxns}
+          />
+        ) : null}
+
+        <View style={reconcileStyles.actionsRow}>
           <Pressable
             disabled={isReconciling}
             style={({ pressed }) => [
-              reconcileStyles.completeButton,
+              reconcileStyles.secondaryButton,
               {
-                backgroundColor: theme.colors.primary,
+                borderColor: theme.colors.primary,
                 opacity: isReconciling ? 0.7 : 1,
               },
-              pressed &&
-                !isReconciling &&
-                reconcileStyles.completeButtonPressed,
+              pressed && !isReconciling && { opacity: 0.8 },
             ]}
             onPress={runReconcile}
           >
             {isReconciling ? (
-              <ActivityIndicator color="#fff" size="small" />
+              <ActivityIndicator color={theme.colors.primary} size="small" />
             ) : (
-              <Text style={reconcileStyles.uploadButtonText}>Reconciliar</Text>
+              <Text style={{ color: theme.colors.primary, fontWeight: "600" }}>
+                Actualizar conciliación
+              </Text>
             )}
           </Pressable>
           <Pressable
+            disabled={!canComplete}
             style={({ pressed }) => [
               reconcileStyles.completeButton,
-              { backgroundColor: theme.colors.primary },
-              pressed && reconcileStyles.completeButtonPressed,
+              {
+                backgroundColor: theme.colors.primary,
+                opacity: !canComplete ? 0.5 : 1,
+              },
+              pressed && canComplete && reconcileStyles.completeButtonPressed,
             ]}
             onPress={completeReconcile}
           >
             <Text style={reconcileStyles.uploadButtonText}>Completar</Text>
           </Pressable>
-          {duplicateRowsNav != null && (
-            <Pressable
-              style={({ pressed }) => [
-                reconcileStyles.completeButton,
-                {
-                  backgroundColor: theme.colors.error ?? theme.colors.primary,
-                },
-                pressed && reconcileStyles.completeButtonPressed,
-              ]}
-              onPress={goToDuplicateRows}
-            >
-              <Text style={reconcileStyles.uploadButtonText}>
-                Ver filas duplicadas
-              </Text>
-            </Pressable>
-          )}
         </View>
 
-        <View style={reconcileStyles.unmatchedSection}>
+        {!canComplete && completeBlockerReason ? (
           <Text
-            style={[reconcileStyles.sectionTitle, { color: theme.colors.text }]}
+            style={[
+              reconcileStyles.completeHint,
+              { color: theme.colors.textSecondary },
+            ]}
           >
-            Transacciones no concilidadas
+            {completeBlockerReason}
           </Text>
-          <TxnTable
-            table={statementLabel}
-            txns={flattenedUnmatchedTxns}
-            error={unmatchedTxnsError}
-            fetchNextPage={fetchNextUnmatchedTxnsPage}
-            hasNextPage={hasNextUnmatchedTxnsPage}
-            isFetchingNextPage={isFetchingNextUnmatchedTxnsPage}
-            isPending={isUnmatchedTxnsPending}
-            queryKey={["unmatched_txns", statementLabel]}
-            refetch={refetchUnmatchedTxns}
-          />
-        </View>
-
-        <View>
-          <Text
-            style={[reconcileStyles.sectionTitle, { color: theme.colors.text }]}
-          >
-            Transacciones concilidadas
-          </Text>
-          <TxnTableWithSelectionToolbar
-            queryKey={["matched_txns", `${statementLabel}_joined`]}
-            tableName={`${statementLabel}_joined`}
-            txns={flattenedMatchedTxns}
-            error={matchedTxnsError}
-            fetchNextPage={fetchNextMatchedTxnsPage}
-            hasNextPage={hasNextMatchedTxnsPage}
-            isFetchingNextPage={isFetchingNextMatchedTxnsPage}
-            isPending={isMatchedTxnsPending}
-            refetch={refetchMatchedTxns}
-          />
-        </View>
+        ) : null}
       </ScrollView>
     </SafeAreaView>
   );

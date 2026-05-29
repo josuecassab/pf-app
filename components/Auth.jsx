@@ -16,6 +16,7 @@ import {
   Platform,
   Pressable,
   StyleSheet,
+  useWindowDimensions,
   Text,
   TextInput,
   TouchableWithoutFeedback,
@@ -25,6 +26,7 @@ import { useAuth } from "../contexts/AuthContext";
 import { useTheme } from "../contexts/ThemeContext";
 import { supabase } from "../lib/supabase";
 import { formatApiError } from "../lib/apiErrors";
+import ZerogastoWordmark from "../assets/images/zerogasto_wordmark.svg";
 
 function usernameFromGoogleSupabaseUser(user) {
   if (!user) return "user";
@@ -52,6 +54,7 @@ const redirectTo = Linking.createURL("");
 console.log(redirectTo);
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL;
+const WORDMARK_ASPECT = 680 / 220;
 
 /**
  * Ensures per-user txn storage exists on the API. Call and await before
@@ -91,6 +94,9 @@ async function ensureUserTxnSchema(accessToken) {
 export default function Auth() {
   const { theme } = useTheme();
   const { setSession } = useAuth();
+  const { width: windowWidth } = useWindowDimensions();
+  const wordmarkWidth = Math.min(windowWidth - 32, 420);
+  const wordmarkHeight = wordmarkWidth / WORDMARK_ASPECT;
   const [mode, setMode] = useState("signIn"); // "signIn" | "signUp" | "resetPassword" | "changePassword"
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -551,9 +557,13 @@ export default function Auth() {
           { backgroundColor: theme.colors.background },
         ]}
       >
-        <Text style={[styles.title, { color: theme.colors.text }]}>
-          ZeroGasto
-        </Text>
+        <View style={styles.titleContainer}>
+          <ZerogastoWordmark
+            accessibilityLabel="ZeroGasto"
+            height={wordmarkHeight}
+            width={wordmarkWidth}
+          />
+        </View>
 
         {showGooglePrimary ? (
           <View style={styles.oauthPrimaryBlock}>
@@ -940,11 +950,7 @@ const styles = StyleSheet.create({
   },
   titleContainer: {
     marginVertical: 40,
-  },
-  title: {
-    fontSize: 48,
-    fontWeight: "600",
-    textAlign: "center",
+    alignItems: "center",
   },
   formContainer: {
     flex: 1,

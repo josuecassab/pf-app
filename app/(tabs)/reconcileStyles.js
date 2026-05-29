@@ -169,4 +169,188 @@ export const reconcileStyles = StyleSheet.create({
   footer: {
     paddingVertical: 16,
   },
+  wizardScrollContent: {
+    gap: 12,
+    paddingBottom: 8,
+  },
+  wizardStep: {
+    borderWidth: 1,
+    borderRadius: 12,
+    padding: 16,
+    gap: 12,
+  },
+  wizardStepHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
+  wizardStepBadge: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  wizardStepBadgeText: {
+    fontSize: 14,
+    fontWeight: "700",
+  },
+  wizardStepTitles: {
+    flex: 1,
+    minWidth: 0,
+    gap: 2,
+  },
+  wizardStepTitle: {
+    fontSize: 16,
+    fontWeight: "700",
+  },
+  wizardStepSubtitle: {
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  wizardStepBody: {
+    gap: 8,
+  },
+  bankChip: {
+    alignSelf: "flex-start",
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 16,
+    borderWidth: 1,
+  },
+  bankChipText: {
+    fontSize: 13,
+    fontWeight: "600",
+  },
+  previewToggle: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingVertical: 4,
+    gap: 8,
+  },
+  previewToggleText: {
+    flex: 1,
+    fontSize: 15,
+    fontWeight: "600",
+  },
+  previewTableWrap: {
+    maxHeight: 320,
+    marginTop: 4,
+  },
+  wizardEmptyHint: {
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  footerCta: {
+    paddingTop: 12,
+    paddingBottom: 4,
+    borderTopWidth: StyleSheet.hairlineWidth,
+  },
+  footerCtaButton: {
+    width: "100%",
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+    flexDirection: "row",
+    gap: 8,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.2,
+    shadowRadius: 1.41,
+    elevation: 2,
+  },
+  footerCtaButtonDisabled: {
+    opacity: 0.5,
+  },
+  summaryCard: {
+    borderWidth: 1,
+    borderRadius: 12,
+    padding: 16,
+    gap: 12,
+  },
+  summaryMeta: {
+    fontSize: 15,
+    fontWeight: "600",
+  },
+  summaryStatsRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  summaryStatChip: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    borderWidth: 1,
+  },
+  summaryStatChipText: {
+    fontSize: 13,
+    fontWeight: "600",
+  },
+  blockerBanner: {
+    borderRadius: 10,
+    borderWidth: 1,
+    padding: 12,
+    gap: 10,
+  },
+  blockerBannerRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 10,
+  },
+  blockerBannerContent: {
+    flex: 1,
+    minWidth: 0,
+    gap: 6,
+  },
+  blockerBannerTitle: {
+    fontSize: 14,
+    fontWeight: "700",
+  },
+  blockerBannerMessage: {
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  blockerBannerAction: {
+    alignSelf: "flex-start",
+    paddingVertical: 2,
+  },
+  blockerBannerActionText: {
+    fontSize: 13,
+    fontWeight: "600",
+  },
+  actionsRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    alignItems: "center",
+    gap: 8,
+  },
+  secondaryButton: {
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+  },
+  destructiveActionButton: {
+    width: "100%",
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    borderRadius: 12,
+    borderWidth: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    flexDirection: "row",
+    gap: 8,
+  },
+  destructiveActionButtonText: {
+    fontWeight: "600",
+    fontSize: 16,
+  },
+  completeHint: {
+    fontSize: 13,
+    lineHeight: 18,
+  },
 });
