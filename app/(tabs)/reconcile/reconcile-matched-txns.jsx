@@ -1,7 +1,7 @@
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { useLocalSearchParams } from "expo-router";
 import { useMemo } from "react";
-import { ScrollView, Text } from "react-native";
+import { Text } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import TxnTableWithSelectionToolbar from "../../../components/TxnTableWithSelectionToolbar";
 import { useAuth } from "../../../contexts/AuthContext";
@@ -127,33 +127,33 @@ export default function ReconcileMatchedTxns() {
       ]}
       edges={["bottom"]}
     >
-      <ScrollView
+      {/* <ScrollView
         style={{ flex: 1 }}
         contentContainerStyle={{ gap: 12, paddingBottom: 24 }}
         nestedScrollEnabled
         keyboardShouldPersistTaps="handled"
+      > */}
+      <Text
+        style={[reconcileStyles.sectionTitle, { color: theme.colors.text }]}
       >
-        <Text
-          style={[reconcileStyles.sectionTitle, { color: theme.colors.text }]}
-        >
-          Transacciones conciliadas ({flattenedMatchedTxns.length}
-          {hasNextMatchedTxnsPage ? "+" : ""})
-        </Text>
-        <TxnTableWithSelectionToolbar
-          queryKey={["matched_txns", joinedTableName]}
-          tableName={joinedTableName}
-          txns={flattenedMatchedTxns}
-          error={matchedTxnsError}
-          fetchNextPage={fetchNextMatchedTxnsPage}
-          hasNextPage={hasNextMatchedTxnsPage}
-          isFetchingNextPage={isFetchingNextMatchedTxnsPage}
-          isPending={isMatchedTxnsPending}
-          refetch={refetchMatchedTxns}
-          categoriesById={categoriesById}
-          subcategoriesById={subcategoriesById}
-          banksById={banksById}
-        />
-      </ScrollView>
+        Transacciones conciliadas ({flattenedMatchedTxns.length}
+        {hasNextMatchedTxnsPage ? "+" : ""})
+      </Text>
+      <TxnTableWithSelectionToolbar
+        queryKey={["matched_txns", joinedTableName]}
+        tableName={joinedTableName}
+        txns={flattenedMatchedTxns}
+        error={matchedTxnsError}
+        fetchNextPage={fetchNextMatchedTxnsPage}
+        hasNextPage={hasNextMatchedTxnsPage}
+        isFetchingNextPage={isFetchingNextMatchedTxnsPage}
+        isPending={isMatchedTxnsPending}
+        refetch={refetchMatchedTxns}
+        categoriesById={categoriesById}
+        subcategoriesById={subcategoriesById}
+        banksById={banksById}
+      />
+      {/* </ScrollView> */}
     </SafeAreaView>
   );
 }

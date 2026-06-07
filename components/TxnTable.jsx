@@ -20,6 +20,7 @@ import {
 } from "react-native";
 import { useTheme } from "../contexts/ThemeContext";
 import { formatSpanishNumber } from "../lib/formatSpanishNumber";
+import { stringifyQueryKeyForParams } from "../lib/queryKeyParams";
 import { getTxnFilterModalPathname } from "../lib/txnFilterModalRoutes";
 import { applyTxnFilters } from "../lib/txnTableFilters";
 
@@ -112,6 +113,35 @@ export default function TxnTable({
     }
     router.setParams({ txnFilterApplyJson: undefined });
   }, [tableName, routeParams.txnFilterApplyJson]);
+
+  const handleCategoryPress = useCallback(
+    (id) => {
+      router.push({
+        pathname: "/txn-modals/select-category",
+        params: {
+          table: String(tableName),
+          queryKeyJson: stringifyQueryKeyForParams(queryKey),
+          ids: JSON.stringify([id]),
+        },
+      });
+    },
+    [tableName, queryKey],
+  );
+
+  const handleSubCategoryPress = useCallback(
+    (id, categoryId) => {
+      router.push({
+        pathname: "/txn-modals/select-subcategory",
+        params: {
+          table: String(tableName),
+          queryKeyJson: stringifyQueryKeyForParams(queryKey),
+          ids: JSON.stringify([id]),
+          ...(categoryId != null ? { category_id: String(categoryId) } : {}),
+        },
+      });
+    },
+    [tableName, queryKey],
+  );
 
   const openHeaderFilter = useCallback(
     (label) => {
@@ -556,38 +586,44 @@ export default function TxnTable({
     </View>
   );
 
-  const renderCategoryCell = (category) => (
-    <View
-      style={[
+  const renderCategoryCell = (id, categoryId) => (
+    <Pressable
+      onPress={() => handleCategoryPress(id)}
+      style={({ pressed }) => [
         styles.cell,
         styles.colCategory,
         {
           borderColor: theme.colors.border,
-          backgroundColor: theme.colors.background,
+          backgroundColor: pressed
+            ? theme.colors.inputBackground
+            : theme.colors.background,
         },
       ]}
     >
       <Text style={[styles.cellText, { color: theme.colors.text }]}>
-        {categoriesById.get(category)?.toLowerCase()}
+        {categoriesById.get(categoryId)?.toLowerCase()}
       </Text>
-    </View>
+    </Pressable>
   );
 
-  const renderSubCategoryCell = (subCategory) => (
-    <View
-      style={[
+  const renderSubCategoryCell = (id, subCategoryId, categoryId) => (
+    <Pressable
+      onPress={() => handleSubCategoryPress(id, categoryId)}
+      style={({ pressed }) => [
         styles.cell,
         styles.colSubcategory,
         {
           borderColor: theme.colors.border,
-          backgroundColor: theme.colors.background,
+          backgroundColor: pressed
+            ? theme.colors.inputBackground
+            : theme.colors.background,
         },
       ]}
     >
       <Text style={[styles.cellText, { color: theme.colors.text }]}>
-        {subcategoriesById.get(subCategory)?.toLowerCase()}
+        {subcategoriesById.get(subCategoryId)?.toLowerCase()}
       </Text>
-    </View>
+    </Pressable>
   );
 
   const renderBankCell = (value) => (
@@ -676,8 +712,8 @@ export default function TxnTable({
       {renderDateCell(item.date)}
       {renderDescriptionCell(item.description)}
       {renderAmountCell(item.amount)}
-      {renderCategoryCell(item.category_id)}
-      {renderSubCategoryCell(item.subcategory_id)}
+      {renderCategoryCell(item.id, item.category_id)}
+      {renderSubCategoryCell(item.id, item.subcategory_id, item.category_id)}
       {renderBankCell(item.bank_id)}
       {showEditColumn && renderEditCell(item.reconciled)}
     </View>

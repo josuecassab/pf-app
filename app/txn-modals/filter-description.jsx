@@ -1,10 +1,12 @@
 import {
+  Keyboard,
   KeyboardAvoidingView,
   Platform,
   Pressable,
   StyleSheet,
   Text,
   TextInput,
+  TouchableWithoutFeedback,
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -34,61 +36,63 @@ export default function TxnModalFilterDescription() {
           style={{ flex: 1 }}
           keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 20}
         >
-          <View
-            style={[
-              styles.embeddedRoot,
-              { flex: 1, backgroundColor: theme.colors.modalBackground },
-            ]}
-          >
-            <View style={styles.header}>
-              <View style={styles.headerSide}>
-                <CloseButton onPress={closeModal} />
-              </View>
-              <Text
-                style={[styles.title, { color: theme.colors.text }]}
-                numberOfLines={1}
-              >
-                {HEADER}
-              </Text>
-              <Pressable
-                onPress={() => submit(HEADER, null)}
-                hitSlop={12}
-                style={({ pressed }) => [
-                  styles.headerButton,
-                  pressed && styles.headerButtonPressed,
-                ]}
-              >
+          <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+            <View
+              style={[
+                styles.embeddedRoot,
+                { flex: 1, backgroundColor: theme.colors.modalBackground },
+              ]}
+            >
+              <View style={styles.header}>
+                <View style={styles.headerSide}>
+                  <CloseButton onPress={closeModal} />
+                </View>
                 <Text
-                  style={[
-                    styles.headerButtonText,
-                    { color: theme.colors.primary },
+                  style={[styles.title, { color: theme.colors.text }]}
+                  numberOfLines={1}
+                >
+                  {HEADER}
+                </Text>
+                <Pressable
+                  onPress={() => submit(HEADER, null)}
+                  hitSlop={12}
+                  style={({ pressed }) => [
+                    styles.headerButton,
+                    pressed && styles.headerButtonPressed,
                   ]}
                 >
-                  Listo
-                </Text>
-              </Pressable>
-            </View>
-            <View style={[styles.body, styles.bodyFlex]}>
-              <View style={styles.textContainer}>
-                <TextInput
-                  style={[
-                    styles.textInput,
-                    {
-                      backgroundColor: theme.colors.inputBackground,
-                      color: theme.colors.text,
-                      borderColor: theme.colors.border,
-                    },
-                  ]}
-                  value={filterDescription ?? ""}
-                  onChangeText={setFilterDescription}
-                  placeholder="Filtrar por texto en descripción"
-                  placeholderTextColor={theme.colors.placeholder}
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                />
+                  <Text
+                    style={[
+                      styles.headerButtonText,
+                      { color: theme.colors.primary },
+                    ]}
+                  >
+                    Listo
+                  </Text>
+                </Pressable>
+              </View>
+              <View style={[styles.body, styles.bodyFlex]}>
+                <View style={styles.textContainer}>
+                  <TextInput
+                    style={[
+                      styles.textInput,
+                      {
+                        backgroundColor: theme.colors.inputBackground,
+                        color: theme.colors.text,
+                        borderColor: theme.colors.border,
+                      },
+                    ]}
+                    value={filterDescription ?? ""}
+                    onChangeText={setFilterDescription}
+                    placeholder="Filtrar por texto en descripción"
+                    placeholderTextColor={theme.colors.placeholder}
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                  />
+                </View>
               </View>
             </View>
-          </View>
+          </TouchableWithoutFeedback>
         </KeyboardAvoidingView>
       </View>
     </SafeAreaView>

@@ -1,9 +1,11 @@
 import {
+  Keyboard,
   KeyboardAvoidingView,
   Platform,
   Pressable,
   StyleSheet,
   Text,
+  TouchableWithoutFeedback,
   View,
 } from "react-native";
 import CurrencyInput from "react-native-currency-input";
@@ -34,63 +36,65 @@ export default function TxnModalFilterAmount() {
           style={{ flex: 1 }}
           keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 20}
         >
-          <View
-            style={[
-              styles.embeddedRoot,
-              { flex: 1, backgroundColor: theme.colors.modalBackground },
-            ]}
-          >
-            <View style={styles.header}>
-              <View style={styles.headerSide}>
-                <CloseButton onPress={closeModal} />
-              </View>
-              <Text
-                style={[styles.title, { color: theme.colors.text }]}
-                numberOfLines={1}
-              >
-                {HEADER}
-              </Text>
-              <Pressable
-                onPress={() => submit(HEADER, null)}
-                hitSlop={12}
-                style={({ pressed }) => [
-                  styles.headerButton,
-                  pressed && styles.headerButtonPressed,
-                ]}
-              >
+          <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+            <View
+              style={[
+                styles.embeddedRoot,
+                { flex: 1, backgroundColor: theme.colors.modalBackground },
+              ]}
+            >
+              <View style={styles.header}>
+                <View style={styles.headerSide}>
+                  <CloseButton onPress={closeModal} />
+                </View>
                 <Text
-                  style={[
-                    styles.headerButtonText,
-                    { color: theme.colors.primary },
+                  style={[styles.title, { color: theme.colors.text }]}
+                  numberOfLines={1}
+                >
+                  {HEADER}
+                </Text>
+                <Pressable
+                  onPress={() => submit(HEADER, null)}
+                  hitSlop={12}
+                  style={({ pressed }) => [
+                    styles.headerButton,
+                    pressed && styles.headerButtonPressed,
                   ]}
                 >
-                  Listo
-                </Text>
-              </Pressable>
-            </View>
-            <View style={[styles.body, styles.bodyFlex]}>
-              <View style={styles.currencyContainer}>
-                <CurrencyInput
-                  style={[
-                    styles.currencyInput,
-                    {
-                      backgroundColor: theme.colors.inputBackground,
-                      color: theme.colors.text,
-                      borderColor: theme.colors.border,
-                    },
-                  ]}
-                  value={filterValue ?? null}
-                  onChangeValue={setFilterValue}
-                  delimiter="."
-                  separator=","
-                  precision={2}
-                  keyboardType="number-pad"
-                  placeholder="Filtrar por valor"
-                  placeholderTextColor={theme.colors.placeholder}
-                />
+                  <Text
+                    style={[
+                      styles.headerButtonText,
+                      { color: theme.colors.primary },
+                    ]}
+                  >
+                    Listo
+                  </Text>
+                </Pressable>
+              </View>
+              <View style={[styles.body, styles.bodyFlex]}>
+                <View style={styles.currencyContainer}>
+                  <CurrencyInput
+                    style={[
+                      styles.currencyInput,
+                      {
+                        backgroundColor: theme.colors.inputBackground,
+                        color: theme.colors.text,
+                        borderColor: theme.colors.border,
+                      },
+                    ]}
+                    value={filterValue ?? null}
+                    onChangeValue={setFilterValue}
+                    delimiter="."
+                    separator=","
+                    precision={2}
+                    keyboardType="number-pad"
+                    placeholder="Filtrar por valor"
+                    placeholderTextColor={theme.colors.placeholder}
+                  />
+                </View>
               </View>
             </View>
-          </View>
+          </TouchableWithoutFeedback>
         </KeyboardAvoidingView>
       </View>
     </SafeAreaView>
