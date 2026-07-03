@@ -44,6 +44,7 @@ module.exports = {
         },
       ],
       "./plugins/withIosProjectVersion.js",
+      "./plugins/withPodfileModularHeaders.js",
     ],
   },
 };

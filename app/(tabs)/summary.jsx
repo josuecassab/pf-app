@@ -68,6 +68,14 @@ function filterRowsByGroup(rows, selectedGroupTab, categoryGroups) {
 
 const CHART_REF_LINE_STORAGE_KEY = "@summary_chart_negative_reference_by_group";
 const CHART_REF_LINE_LEGACY_STORAGE_KEY = "@summary_chart_negative_reference";
+const DEFAULT_GROUP_TAB_STORAGE_KEY = "@summary_default_group_tab";
+
+function parseStoredGroupTab(raw) {
+  if (raw == null) return null;
+  if (raw === "all") return "all";
+  const n = Number(raw);
+  return Number.isFinite(n) ? n : null;
+}
 
 function parseReferenceLineInput(text) {
   const cleaned = String(text ?? "")
@@ -152,6 +160,7 @@ export default function Summary() {
   const [showYears, setShowYears] = useState(false);
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   const [selectedGroupTab, setSelectedGroupTab] = useState("all");
+  const [defaultGroupTab, setDefaultGroupTab] = useState(null);
   const [groupModalVisible, setGroupModalVisible] = useState(false);
   const [editingGroupId, setEditingGroupId] = useState(null);
   const [newGroupName, setNewGroupName] = useState("");
@@ -191,6 +200,22 @@ export default function Summary() {
       }
     };
     loadReferenceLines();
+  }, []);
+
+  useEffect(() => {
+    const loadDefaultGroupTab = async () => {
+      try {
+        const raw = await AsyncStorage.getItem(DEFAULT_GROUP_TAB_STORAGE_KEY);
+        const value = parseStoredGroupTab(raw);
+        if (value != null) {
+          setDefaultGroupTab(value);
+          setSelectedGroupTab(value);
+        }
+      } catch (e) {
+        console.error("Error loading default summary group:", e);
+      }
+    };
+    loadDefaultGroupTab();
   }, []);
 
   const {
@@ -392,6 +417,32 @@ export default function Summary() {
     setSelectedGroupTab,
   ]);
 
+  const setGroupAsDefault = useCallback(async (group) => {
+    const gid = group?.id;
+    if (gid == null) return;
+    const n = Number(gid);
+    const value = Number.isFinite(n) ? n : gid;
+    setDefaultGroupTab(value);
+    setSelectedGroupTab(value);
+    try {
+      await AsyncStorage.setItem(DEFAULT_GROUP_TAB_STORAGE_KEY, String(value));
+    } catch (e) {
+      Alert.alert(
+        "Error al guardar",
+        e.message ?? "No se pudo guardar el grupo predeterminado.",
+      );
+    }
+  }, []);
+
+  const clearDefaultGroupTab = useCallback(async () => {
+    setDefaultGroupTab(null);
+    try {
+      await AsyncStorage.removeItem(DEFAULT_GROUP_TAB_STORAGE_KEY);
+    } catch (e) {
+      console.error("Error clearing default summary group:", e);
+    }
+  }, []);
+
   const handleDeleteGroup = useCallback(
     (group) => {
       const { id, name: groupName } = group;
@@ -409,6 +460,9 @@ export default function Summary() {
                   if (Number(selectedGroupTab) === Number(id)) {
                     setSelectedGroupTab("all");
                   }
+                  if (Number(defaultGroupTab) === Number(id)) {
+                    clearDefaultGroupTab();
+                  }
                 },
                 onError: (e) =>
                   Alert.alert("Error al eliminar", e.message ?? String(e)),
@@ -418,13 +472,23 @@ export default function Summary() {
         ],
       );
     },
-    [deleteGroup, selectedGroupTab],
+    [deleteGroup, selectedGroupTab, defaultGroupTab, clearDefaultGroupTab],
   );
 
   const handleGroupLongPress = useCallback(
     (group) => {
+      const isDefault = Number(defaultGroupTab) === Number(group?.id);
       Alert.alert(String(group?.name ?? "Grupo"), undefined, [
         { text: "Cancelar", style: "cancel" },
+        isDefault
+          ? {
+              text: "Quitar como predeterminado",
+              onPress: clearDefaultGroupTab,
+            }
+          : {
+              text: "Fijar como predeterminado",
+              onPress: () => setGroupAsDefault(group),
+            },
         {
           text: "Editar",
           onPress: () => openEditGroupModal(group),
@@ -436,7 +500,13 @@ export default function Summary() {
         },
       ]);
     },
-    [openEditGroupModal, handleDeleteGroup],
+    [
+      openEditGroupModal,
+      handleDeleteGroup,
+      defaultGroupTab,
+      setGroupAsDefault,
+      clearDefaultGroupTab,
+    ],
   );
 
   const filterData = useCallback((searchText) => {
@@ -648,21 +718,31 @@ export default function Summary() {
                     pressed && styles.groupTabPillPressed,
                   ]}
                 >
-                  <Text
-                    style={[
-                      styles.groupTabPillText,
-                      {
-                        color: theme.colors.text,
-                        fontWeight:
-                          Number(selectedGroupTab) === Number(g.id)
-                            ? "700"
-                            : "500",
-                      },
-                    ]}
-                    numberOfLines={1}
-                  >
-                    {g.name}
-                  </Text>
+                  <View style={styles.groupTabPillContent}>
+                    {Number(defaultGroupTab) === Number(g.id) ? (
+                      <AntDesign
+                        name="star"
+                        size={11}
+                        color={theme.colors.primary}
+                        style={styles.groupTabDefaultStar}
+                      />
+                    ) : null}
+                    <Text
+                      style={[
+                        styles.groupTabPillText,
+                        {
+                          color: theme.colors.text,
+                          fontWeight:
+                            Number(selectedGroupTab) === Number(g.id)
+                              ? "700"
+                              : "500",
+                        },
+                      ]}
+                      numberOfLines={1}
+                    >
+                      {g.name}
+                    </Text>
+                  </View>
                 </Pressable>
               ))}
               <Pressable
@@ -1190,6 +1270,14 @@ const styles = StyleSheet.create({
   groupTabPillText: {
     fontSize: 14,
     maxWidth: 160,
+  },
+  groupTabPillContent: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+  },
+  groupTabDefaultStar: {
+    marginRight: 1,
   },
   groupTabAdd: {
     borderWidth: 1,
