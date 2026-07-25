@@ -2,6 +2,7 @@ import Feather from "@expo/vector-icons/Feather";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import SegmentedControl from "@react-native-segmented-control/segmented-control";
 import { useQueryClient } from "@tanstack/react-query";
+import * as Localization from "expo-localization";
 import { router } from "expo-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
@@ -59,7 +60,7 @@ function inferSeparatorsFromIntl(languageTag) {
   return { decimal, group };
 }
 
-/** Locale used for separators (no expo-localization native module required). */
+/** Locale used for separators when falling back to Intl-based inference. */
 function resolveNumberFormatLocaleTag() {
   try {
     return Intl.NumberFormat().resolvedOptions().locale;
@@ -68,7 +69,24 @@ function resolveNumberFormatLocaleTag() {
   }
 }
 
+/**
+ * expo-localization reads decimal/grouping separators straight from the OS
+ * locale (NSLocale on iOS), which correctly reflects the device's Region /
+ * Number Format setting. Intl.NumberFormat's default locale does not always
+ * track that setting, so it's only used as a fallback (e.g. on web).
+ */
 function getAmountFormattingConfig() {
+  try {
+    const [locale] = Localization.getLocales();
+    if (locale?.decimalSeparator && locale?.digitGroupingSeparator) {
+      return {
+        decimal: locale.decimalSeparator,
+        group: locale.digitGroupingSeparator,
+      };
+    }
+  } catch {
+    // fall through to Intl-based inference
+  }
   return inferSeparatorsFromIntl(resolveNumberFormatLocaleTag());
 }
 

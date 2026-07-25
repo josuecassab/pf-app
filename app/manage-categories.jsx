@@ -2,7 +2,7 @@ import AntDesign from "@expo/vector-icons/AntDesign";
 import Feather from "@expo/vector-icons/Feather";
 import { useQueryClient } from "@tanstack/react-query";
 import { router } from "expo-router";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import {
   Alert,
   KeyboardAvoidingView,
@@ -45,6 +45,25 @@ export default function ManageCategoriesScreen() {
   const [addingSubcategoryForId, setAddingSubcategoryForId] = useState(null);
   const [updatingCategory, setUpdatingCategory] = useState(null);
   const [inputSubcategory, setInputSubcategory] = useState("");
+
+  const scrollViewRef = useRef(null);
+  const subcategoryInputRef = useRef(null);
+
+  const scrollToSubcategoryInput = useCallback(() => {
+    requestAnimationFrame(() => {
+      if (!subcategoryInputRef.current || !scrollViewRef.current) return;
+      subcategoryInputRef.current.measureLayout(
+        scrollViewRef.current,
+        (x, y) => {
+          scrollViewRef.current?.scrollTo({
+            y: Math.max(y - 100, 0),
+            animated: true,
+          });
+        },
+        () => {},
+      );
+    });
+  }, []);
 
   const subcategoriesMap = useMemo(() => {
     const subcategoriesMap = {};
@@ -343,7 +362,10 @@ export default function ManageCategoriesScreen() {
           </View>
         )}
         <GestureHandlerRootView style={styles.flex}>
-          <GHScrollView>
+          <GHScrollView
+            ref={scrollViewRef}
+            keyboardShouldPersistTaps="handled"
+          >
             {displayCategories.map((cat) => (
               <View key={cat.value}>
                 <SwipeableCategoryItem
@@ -372,6 +394,7 @@ export default function ManageCategoriesScreen() {
                         style={styles.subCategoryInputRow}
                       >
                         <TextInput
+                          ref={subcategoryInputRef}
                           style={[
                             styles.subCategoryInput,
                             {
@@ -385,6 +408,7 @@ export default function ManageCategoriesScreen() {
                           value={inputSubcategory}
                           onChangeText={setInputSubcategory}
                           autoFocus
+                          onFocus={scrollToSubcategoryInput}
                         />
                         <Pressable
                           onPress={() => addSubcategory(cat.value)}

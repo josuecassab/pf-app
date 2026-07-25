@@ -6,6 +6,7 @@ import {
   useEffect,
   useLayoutEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 import {
@@ -215,12 +216,46 @@ export default function TxnTable({
     ],
   );
 
+  const filterPayloadKey = useMemo(
+    () => JSON.stringify(filterPayload),
+    [filterPayload],
+  );
+
+  const filterSessionRef = useRef({
+    filterPayloadKey: null,
+    prevFilteredTxnIds: new Set(),
+    pinnedTxnIds: new Set(),
+  });
+
   const displayTxns = useMemo(() => {
-    if (headerFiltersOwned) {
-      return applyTxnFilters(txns, filterPayload);
+    if (!headerFiltersOwned) return txns;
+
+    const session = filterSessionRef.current;
+    if (session.filterPayloadKey !== filterPayloadKey) {
+      session.filterPayloadKey = filterPayloadKey;
+      session.prevFilteredTxnIds = new Set();
+      session.pinnedTxnIds = new Set();
     }
-    return txns;
-  }, [headerFiltersOwned, txns, filterPayload]);
+
+    const filtered = applyTxnFilters(txns, filterPayload);
+    const nextFilteredIds = new Set(filtered.map((t) => String(t.id)));
+
+    for (const id of session.prevFilteredTxnIds) {
+      if (!nextFilteredIds.has(id)) {
+        session.pinnedTxnIds.add(id);
+      }
+    }
+    session.prevFilteredTxnIds = nextFilteredIds;
+
+    if (session.pinnedTxnIds.size === 0) return filtered;
+
+    const filteredIdSet = new Set(filtered.map((t) => String(t.id)));
+    return txns.filter(
+      (t) =>
+        filteredIdSet.has(String(t.id)) ||
+        session.pinnedTxnIds.has(String(t.id)),
+    );
+  }, [headerFiltersOwned, txns, filterPayload, filterPayloadKey]);
 
   useLayoutEffect(() => {
     onDisplayTxnsChange?.(displayTxns);

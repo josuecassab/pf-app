@@ -34,6 +34,7 @@ module.exports = {
       "@react-native-community/datetimepicker",
       "expo-font",
       "expo-image",
+      "expo-localization",
       "expo-web-browser",
       [
         "@react-native-google-signin/google-signin",
