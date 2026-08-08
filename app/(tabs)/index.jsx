@@ -4,19 +4,19 @@ import SegmentedControl from "@react-native-segmented-control/segmented-control"
 import { useQueryClient } from "@tanstack/react-query";
 import * as Localization from "expo-localization";
 import { router } from "expo-router";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import {
-  ActivityIndicator,
-  Alert,
-  Keyboard,
-  KeyboardAvoidingView,
-  Platform,
-  Pressable,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableWithoutFeedback,
-  View,
+    ActivityIndicator,
+    Alert,
+    Keyboard,
+    KeyboardAvoidingView,
+    Platform,
+    Pressable,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableWithoutFeedback,
+    View,
 } from "react-native";
 import { Dropdown } from "react-native-element-dropdown";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -24,6 +24,7 @@ import { useAuth } from "../../contexts/AuthContext";
 import { useTheme } from "../../contexts/ThemeContext";
 import { useBanks } from "../../hooks/useBanks";
 import { useCategories } from "../../hooks/useCategories";
+import { usePersistedBankSelection } from "../../hooks/usePersistedBankSelection";
 import { useSubcategories } from "../../hooks/useSubcategories";
 import { authJsonHeaders } from "../../lib/apiHeaders";
 
@@ -137,7 +138,6 @@ export default function Index() {
   const [txtType, setTxnType] = useState(1);
   const [value, setValue] = useState("");
   const [isSending, setIsSending] = useState(false);
-  const [selectedBank, setSelectedBank] = useState(null);
   const { tenantId, getAuthHeaders } = useAuth();
   const queryClient = useQueryClient();
   const txnsQueryKey = useMemo(() => ["txns", tenantId], [tenantId]);
@@ -152,10 +152,10 @@ export default function Index() {
   const subcategoryList = Array.isArray(subcategoriesData)
     ? subcategoriesData
     : EMPTY_SUBCATEGORIES_LIST;
-
-  useEffect(() => {
-    setSelectedBank(bankList[0] ?? null);
-  }, [bankList]);
+  const { selectedBank, selectBank } = usePersistedBankSelection(
+    bankList,
+    tenantId,
+  );
 
   const subcategoriesMap = useMemo(() => {
     const subcategoriesMap = {};
@@ -610,9 +610,7 @@ export default function Index() {
                 }
                 searchPlaceholder="Buscar..."
                 value={selectedBank?.value}
-                onChange={(item) => {
-                  setSelectedBank(item);
-                }}
+                onChange={selectBank}
               />
             </View>
             <View style={styles.containerStyle}>

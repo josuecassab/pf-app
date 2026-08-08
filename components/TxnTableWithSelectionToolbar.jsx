@@ -164,6 +164,23 @@ export default function TxnTableWithSelectionToolbar({
     });
   }, [selectedTxnIds, queryKey, tableName, txnsById]);
 
+  const handleChangeBank = useCallback(() => {
+    const idsArray = Object.keys(selectedTxnIds);
+    const ids = idsArray.map((id) => {
+      const n = Number(id);
+      return !Number.isNaN(n) && String(n) === id ? n : id;
+    });
+    if (ids.length === 0) return;
+    router.push({
+      pathname: "/txn-modals/select-bank",
+      params: {
+        table: String(tableName),
+        queryKeyJson: stringifyQueryKeyForParams(queryKey),
+        ids: JSON.stringify(ids),
+      },
+    });
+  }, [selectedTxnIds, queryKey, tableName]);
+
   const handleDeleteTxns = useCallback(() => {
     const idsArray = Object.keys(selectedTxnIds).filter(
       (id) => selectedTxnIds[id],
@@ -335,6 +352,26 @@ export default function TxnTableWithSelectionToolbar({
                     ]}
                   >
                     Cambiar fecha ({selectedCount})
+                  </Text>
+                </Pressable>
+                <Pressable
+                  onPress={handleChangeBank}
+                  style={({ pressed }) => [
+                    styles.button,
+                    {
+                      backgroundColor: theme.colors.surface,
+                      borderColor: theme.colors.border,
+                      opacity: pressed ? 0.75 : 1,
+                    },
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.buttonText,
+                      { color: theme.colors.primary, fontWeight: "600" },
+                    ]}
+                  >
+                    Cambiar banco ({selectedCount})
                   </Text>
                 </Pressable>
                 <Pressable

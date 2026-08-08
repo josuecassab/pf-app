@@ -13,6 +13,22 @@ import { useTheme } from "../contexts/ThemeContext";
 const ROW_HEIGHT = 35;
 const HEADER_HEIGHT = 40;
 
+const COLUMNS = [
+  { key: 0, label: "Enero" },
+  { key: 1, label: "Febrero" },
+  { key: 2, label: "Marzo" },
+  { key: 3, label: "Abril" },
+  { key: 4, label: "Mayo" },
+  { key: 5, label: "Junio" },
+  { key: 6, label: "Julio" },
+  { key: 7, label: "Agosto" },
+  { key: 8, label: "Septiembre" },
+  { key: 9, label: "Octubre" },
+  { key: 10, label: "Noviembre" },
+  { key: 11, label: "Diciembre" },
+  { key: "total", label: "Total" },
+];
+
 const styles = StyleSheet.create({
   rowHeight: { height: ROW_HEIGHT },
   headerHeight: { height: HEADER_HEIGHT },
@@ -24,7 +40,6 @@ const formatNumber = (num, decimals = 2) => {
 
 export default function GroupedTable({
   data = [],
-  activeColumns = [],
   onRefresh,
   refreshing = false,
   categoriesById = {},
@@ -49,10 +64,10 @@ export default function GroupedTable({
   }, [data]);
 
   const monthlyTotals = useMemo(() => {
-    return activeColumns.map((month) =>
-      sortedData.reduce((sum, item) => sum + item[month], 0),
+    return COLUMNS.map(({ key }) =>
+      sortedData.reduce((sum, item) => sum + (item[key] || 0), 0),
     );
-  }, [sortedData, activeColumns]);
+  }, [sortedData]);
 
   const toggleCategory = useCallback((category) => {
     setExpandedCategories((prev) => {
@@ -251,9 +266,9 @@ export default function GroupedTable({
       return (
         <View>
           <View style={[groupedTableStyles.row, styles.rowHeight]}>
-            {activeColumns.map((month) => (
+            {COLUMNS.map(({ key }) => (
               <View
-                key={month}
+                key={key}
                 style={[
                   groupedTableStyles.rightCell,
                   {
@@ -272,7 +287,7 @@ export default function GroupedTable({
                   ]}
                   numberOfLines={1}
                 >
-                  {formatNumber(item[month])}
+                  {formatNumber(item[key] || 0)}
                 </Text>
               </View>
             ))}
@@ -283,9 +298,9 @@ export default function GroupedTable({
                 key={index}
                 style={[groupedTableStyles.row, styles.rowHeight]}
               >
-                {activeColumns.map((month) => (
+                {COLUMNS.map(({ key }) => (
                   <View
-                    key={month}
+                    key={key}
                     style={[
                       groupedTableStyles.rightCell,
                       {
@@ -302,7 +317,7 @@ export default function GroupedTable({
                       ]}
                       numberOfLines={1}
                     >
-                      {formatNumber(subItem[month])}
+                      {formatNumber(subItem[key] || 0)}
                     </Text>
                   </View>
                 ))}
@@ -311,7 +326,7 @@ export default function GroupedTable({
         </View>
       );
     },
-    [expandedCategories, activeColumns, theme],
+    [expandedCategories, theme],
   );
 
   const handleSort = useCallback(
@@ -364,10 +379,10 @@ export default function GroupedTable({
   const renderRightHeader = useCallback(() => {
     return (
       <View style={[groupedTableStyles.row]}>
-        {activeColumns.map((m, index) => renderHeaderCell(m, index))}
+        {COLUMNS.map(({ key, label }) => renderHeaderCell(label, key))}
       </View>
     );
-  }, [renderHeaderCell, activeColumns]);
+  }, [renderHeaderCell]);
 
   const renderLeftFooter = useCallback(() => {
     return (

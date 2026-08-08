@@ -10,34 +10,21 @@ import {
 import { BarChart } from "react-native-gifted-charts";
 import { useTheme } from "../contexts/ThemeContext";
 
-const chartMonths = [
-  "enero",
-  "febrero",
-  "marzo",
-  "abril",
-  "mayo",
-  "junio",
-  "julio",
-  "agosto",
-  "septiembre",
-  "octubre",
-  "noviembre",
-  "diciembre",
-];
+const chartMonths = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11];
 
 const monthChartLabel = {
-  enero: "ene",
-  febrero: "feb",
-  marzo: "mar",
-  abril: "abr",
-  mayo: "may",
-  junio: "jun",
-  julio: "jul",
-  agosto: "ago",
-  septiembre: "sep",
-  octubre: "oct",
-  noviembre: "nov",
-  diciembre: "dic",
+  0: "ene",
+  1: "feb",
+  2: "mar",
+  3: "abr",
+  4: "may",
+  5: "jun",
+  6: "jul",
+  7: "ago",
+  8: "sep",
+  9: "oct",
+  10: "nov",
+  11: "dic",
 };
 
 /** Default spending threshold on all-negative monthly bar charts (absolute scale). */
@@ -166,21 +153,24 @@ export default function SummaryMonthlyBarChart({
   refreshing = false,
   negativeReferenceLine = SUMMARY_CHART_NEGATIVE_REFERENCE_DEFAULT,
   showReferenceLine = true,
+  /** Overrides theme primary for bar fill when set. */
+  barColor,
   /** When true, renders only the chart card (no outer scroll / pull-to-refresh). */
   embedded = false,
 }) {
   const { theme } = useTheme();
   const { width: windowWidth } = useWindowDimensions();
+  const resolvedBarColor = barColor || theme.colors.primary;
 
   const chartModel = useMemo(
     () =>
       buildChartModel(
         data,
-        theme.colors.primary,
+        resolvedBarColor,
         negativeReferenceLine,
         showReferenceLine,
       ),
-    [data, theme.colors.primary, negativeReferenceLine, showReferenceLine],
+    [data, resolvedBarColor, negativeReferenceLine, showReferenceLine],
   );
 
   const chartWidth = Math.max(windowWidth - 48, 280);

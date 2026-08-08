@@ -1,4 +1,3 @@
-import { useInfiniteQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
 import { StyleSheet, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -8,14 +7,13 @@ import { useTheme } from "../../contexts/ThemeContext";
 import { useBanks } from "../../hooks/useBanks";
 import { useCategories } from "../../hooks/useCategories";
 import { useSubcategories } from "../../hooks/useSubcategories";
-import { formatApiError } from "../../lib/apiErrors";
+import { useTxns } from "../../hooks/useTxns";
 
-const API_URL = process.env.EXPO_PUBLIC_API_URL;
 const TABLE = "txns";
 
 export default function Txns() {
   const { theme } = useTheme();
-  const { tenantId, getAuthHeaders } = useAuth();
+  const { tenantId } = useAuth();
   const { data: categoriesData } = useCategories();
   const { data: subcategoriesData } = useSubcategories();
   const { data: banksData } = useBanks();
@@ -54,38 +52,7 @@ export default function Txns() {
     isFetchingNextPage,
     isPending,
     refetch,
-  } = useInfiniteQuery({
-    queryKey,
-    queryFn: async ({ pageParam }) => {
-      const res = await fetch(
-        `${API_URL}/latests_txns/?page=${pageParam.page}&limit=${pageParam.limit}`,
-        { headers: getAuthHeaders() },
-      );
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        throw new Error(formatApiError(data) || `Error ${res.status}`);
-      }
-      return data;
-    },
-    enabled: !!tenantId,
-    initialPageParam: { page: 0, limit: 100 },
-    getNextPageParam: (lastPage, allPages, lastPageParam) => {
-      if (
-        !lastPage ||
-        !Array.isArray(lastPage) ||
-        lastPage.length < lastPageParam.limit
-      ) {
-        return undefined;
-      }
-      return {
-        table_name: lastPageParam.table_name,
-        page: lastPageParam.page + 1,
-        limit: lastPageParam.limit,
-      };
-    },
-    refetchOnWindowFocus: false,
-    refetchOnReconnect: false,
-  });
+  } = useTxns();
 
   const txns = useMemo(() => {
     return data?.pages?.flatMap((page) => page) ?? [];

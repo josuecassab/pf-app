@@ -33,7 +33,6 @@ export default function Settings() {
     presentPaywallIfNeeded,
     presentCustomerCenter,
     restorePurchases,
-    customerInfo,
   } = usePurchasesContext();
   const [purchaseBusy, setPurchaseBusy] = useState(false);
 
@@ -228,17 +227,6 @@ export default function Settings() {
               >
                 {proSubtitle}
               </Text>
-              {isNativePurchasesPlatform &&
-              sdkReady &&
-              customerInfo?.originalAppUserId ? (
-                <Text
-                  style={[styles.monoHint, { color: theme.colors.border }]}
-                  numberOfLines={1}
-                  ellipsizeMode="middle"
-                >
-                  RC user: {customerInfo.originalAppUserId}
-                </Text>
-              ) : null}
             </View>
             {isProActive ? (
               <Text style={[styles.badge, { color: theme.colors.primary }]}>
@@ -396,15 +384,6 @@ const styles = StyleSheet.create({
   subLabel: {
     fontSize: 13,
     marginTop: 4,
-  },
-  monoHint: {
-    fontSize: 11,
-    marginTop: 6,
-    fontFamily: Platform.select({
-      ios: "Menlo",
-      android: "monospace",
-      default: undefined,
-    }),
   },
   productHint: {
     fontSize: 12,

@@ -1,7 +1,6 @@
 import AntDesign from "@expo/vector-icons/AntDesign";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import SegmentedControl from "@react-native-segmented-control/segmented-control";
-import { useQuery } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
@@ -9,7 +8,6 @@ import {
   Keyboard,
   Modal,
   Pressable,
-  RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
@@ -22,29 +20,29 @@ import GroupedTable from "../../components/GroupedTable";
 import SummaryMonthlyBarChart, {
   SUMMARY_CHART_NEGATIVE_REFERENCE_DEFAULT,
 } from "../../components/SummaryMonthlyBarChart";
-import { useAuth } from "../../contexts/AuthContext";
 import { useTheme } from "../../contexts/ThemeContext";
 import { useCategories } from "../../hooks/useCategories";
 import { useCategoryGroups } from "../../hooks/useCategoryGroups";
 import { useSubcategories } from "../../hooks/useSubcategories";
+import { useTxns } from "../../hooks/useTxns";
 
-const months = [
-  "enero",
-  "febrero",
-  "marzo",
-  "abril",
-  "mayo",
-  "junio",
-  "julio",
-  "agosto",
-  "septiembre",
-  "octubre",
-  "noviembre",
-  "diciembre",
-  "total",
-];
+const months = {
+  "0": "Enero",
+  "1": "Febrero",
+  "2": "Marzo",
+  "3": "Abril",
+  "4": "Mayo",
+  "5": "Junio",
+  "6": "Julio",
+  "7": "Agosto",
+  "8": "Septiembre",
+  "9": "Octubre",
+  "10": "Noviembre",
+  "11": "Diciembre",
+  "total": "Total",
+};
 
-const calendarMonths = months.filter((m) => m !== "total");
+const calendarMonths = Object.keys(months).filter((m) => m !== "total");
 
 const years = [2026, 2025, 2024, 2023, 2022, 2021];
 
@@ -52,6 +50,16 @@ function formatSummaryAmount(num) {
   const n = Number(num);
   if (!Number.isFinite(n)) return "—";
   return parseFloat(n.toFixed(2)).toLocaleString("es-ES");
+}
+
+/** Calendar year/month from YYYY-MM-DD without timezone shift (Date parses those as UTC). */
+function txnCalendarParts(dateStr) {
+  const match = String(dateStr ?? "").match(/^(\d{4})-(\d{2})/);
+  if (!match) return null;
+  const year = Number(match[1]);
+  const month = Number(match[2]) - 1;
+  if (!Number.isFinite(year) || month < 0 || month > 11) return null;
+  return { year, month };
 }
 
 function filterRowsByGroup(rows, selectedGroupTab, categoryGroups) {
@@ -68,7 +76,21 @@ function filterRowsByGroup(rows, selectedGroupTab, categoryGroups) {
 
 const CHART_REF_LINE_STORAGE_KEY = "@summary_chart_negative_reference_by_group";
 const CHART_REF_LINE_LEGACY_STORAGE_KEY = "@summary_chart_negative_reference";
+const CHART_BAR_COLOR_STORAGE_KEY = "@summary_chart_bar_color_by_group";
 const DEFAULT_GROUP_TAB_STORAGE_KEY = "@summary_default_group_tab";
+
+const CHART_BAR_COLOR_OPTIONS = [
+  "#0a84ff",
+  "#30d158",
+  "#ff9f0a",
+  "#ff453a",
+  "#bf5af2",
+  "#64d2ff",
+  "#ffd60a",
+  "#ac8e68",
+];
+
+const HEX_COLOR_RE = /^#([0-9a-fA-F]{6})$/;
 
 function parseStoredGroupTab(raw) {
   if (raw == null) return null;
@@ -114,6 +136,30 @@ function referenceLineForGroup(storedByGroup, groupTab) {
   return SUMMARY_CHART_NEGATIVE_REFERENCE_DEFAULT;
 }
 
+function parseStoredBarColors(raw) {
+  if (raw == null) return {};
+  try {
+    const parsed = JSON.parse(raw);
+    if (typeof parsed !== "object" || parsed == null || Array.isArray(parsed)) {
+      return {};
+    }
+    const next = {};
+    for (const [key, value] of Object.entries(parsed)) {
+      const color = String(value ?? "").trim();
+      if (HEX_COLOR_RE.test(color)) next[String(key)] = color.toLowerCase();
+    }
+    return next;
+  } catch {
+    return {};
+  }
+}
+
+function barColorForGroup(storedByGroup, groupTab, fallback) {
+  const stored = storedByGroup[refLineGroupKey(groupTab)];
+  if (typeof stored === "string" && HEX_COLOR_RE.test(stored)) return stored;
+  return fallback;
+}
+
 /** Category label on a group member from GET /groups/ (shape varies by API). */
 function groupCategoryLabel(c) {
   if (c == null) return "";
@@ -154,8 +200,6 @@ function initialCategoryIdsForGroupModal(group) {
 
 export default function Summary() {
   const { theme } = useTheme();
-  const { tenantId, getAuthHeaders } = useAuth();
-  const API_URL = process.env.EXPO_PUBLIC_API_URL;
   const [text, setText] = useState("");
   const [showYears, setShowYears] = useState(false);
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
@@ -166,8 +210,10 @@ export default function Summary() {
   const [newGroupName, setNewGroupName] = useState("");
   const [newGroupCategories, setNewGroupCategories] = useState(() => new Set());
   const [referenceLinesByGroup, setReferenceLinesByGroup] = useState({});
-  const [refLineModalVisible, setRefLineModalVisible] = useState(false);
+  const [barColorsByGroup, setBarColorsByGroup] = useState({});
+  const [chartSettingsVisible, setChartSettingsVisible] = useState(false);
   const [refLineDraft, setRefLineDraft] = useState("");
+  const [barColorDraft, setBarColorDraft] = useState("");
   const [summaryViewIndex, setSummaryViewIndex] = useState(0);
 
   useEffect(() => {
@@ -203,6 +249,20 @@ export default function Summary() {
   }, []);
 
   useEffect(() => {
+    const loadBarColors = async () => {
+      try {
+        const storedByGroup = parseStoredBarColors(
+          await AsyncStorage.getItem(CHART_BAR_COLOR_STORAGE_KEY),
+        );
+        setBarColorsByGroup(storedByGroup);
+      } catch (e) {
+        console.error("Error loading chart bar colors:", e);
+      }
+    };
+    loadBarColors();
+  }, []);
+
+  useEffect(() => {
     const loadDefaultGroupTab = async () => {
       try {
         const raw = await AsyncStorage.getItem(DEFAULT_GROUP_TAB_STORAGE_KEY);
@@ -234,6 +294,16 @@ export default function Summary() {
     [referenceLinesByGroup, selectedGroupTab],
   );
 
+  const activeBarColor = useMemo(
+    () =>
+      barColorForGroup(
+        barColorsByGroup,
+        selectedGroupTab,
+        theme.colors.primary,
+      ),
+    [barColorsByGroup, selectedGroupTab, theme.colors.primary],
+  );
+
   const refLineGroupLabel = useMemo(() => {
     if (selectedGroupTab === "all") return "Todas las categorías";
     const g = categoryGroups.find(
@@ -242,37 +312,129 @@ export default function Summary() {
     return g?.name ? String(g.name) : "Grupo";
   }, [selectedGroupTab, categoryGroups]);
 
-  const { isPending, error, data, refetch, isRefetching } = useQuery({
-    queryKey: ["grouped_txns", tenantId, selectedYear],
-    queryFn: async () => {
-      const response = await fetch(
-        `${API_URL}/grouped_txns/?year=${selectedYear}`,
-        { headers: getAuthHeaders() },
-      );
-      if (!response.ok) {
-        const t = await response.text();
-        throw new Error(t || response.statusText);
-      }
-      return await response.json();
-    },
-    enabled: !!tenantId,
-  });
+  const {
+    data,
+    error,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+    isPending,
+  } = useTxns();
 
-  const chartData = useMemo(
-    () => filterRowsByGroup(data, selectedGroupTab, categoryGroups),
-    [data, selectedGroupTab, categoryGroups],
+  const txns = useMemo(
+    () => data?.pages?.flatMap((page) => page) ?? [],
+    [data],
   );
 
-  const tableData = useMemo(() => {
-    let rows = chartData;
-    if (!text.trim()) return rows;
-    const q = text.toLowerCase();
-    return rows.filter((item) =>
-      String(item.category_id ?? "")
-        .toLowerCase()
-        .includes(q),
-    );
-  }, [chartData, text]);
+  useEffect(() => {
+    if (!hasNextPage || isFetchingNextPage || isPending) return;
+    const oldestDate = data?.pages?.at(-1)?.at(-1)?.date;
+    if (!oldestDate) return;
+    if (oldestDate > `${selectedYear - 1}-12-31`) {
+      fetchNextPage();
+    }
+  }, [
+    data,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+    isPending,
+    selectedYear,
+  ]);
+
+  const groupedRows = useMemo(() => {
+    const catTotalMap = new Map();
+    for (const item of txns) {
+      const parts = txnCalendarParts(item.date);
+      if (!parts || parts.year !== selectedYear) continue;
+
+      if (!catTotalMap.has(item.category_id)) {
+        catTotalMap.set(item.category_id, {
+          0: 0,
+          1: 0,
+          2: 0,
+          3: 0,
+          4: 0,
+          5: 0,
+          6: 0,
+          7: 0,
+          8: 0,
+          9: 0,
+          10: 0,
+          11: 0,
+          total: 0,
+          subcategories: new Map(),
+        });
+      }
+      const month = parts.month;
+      const categoryTotals = catTotalMap.get(item.category_id);
+      const amount = Number(item.amount) || 0;
+      categoryTotals[month] += amount;
+      categoryTotals.total += amount;
+
+      const subMap = categoryTotals.subcategories;
+      if (!subMap.has(item.subcategory_id)) {
+        subMap.set(item.subcategory_id, {
+          0: 0,
+          1: 0,
+          2: 0,
+          3: 0,
+          4: 0,
+          5: 0,
+          6: 0,
+          7: 0,
+          8: 0,
+          9: 0,
+          10: 0,
+          11: 0,
+          total: 0,
+        });
+      }
+      const subTotals = subMap.get(item.subcategory_id);
+      subTotals[month] += amount;
+      subTotals.total += amount;
+    }
+
+    return Array.from(catTotalMap.entries()).map(([category_id, totals]) => ({
+      category_id,
+      0: totals[0],
+      1: totals[1],
+      2: totals[2],
+      3: totals[3],
+      4: totals[4],
+      5: totals[5],
+      6: totals[6],
+      7: totals[7],
+      8: totals[8],
+      9: totals[9],
+      10: totals[10],
+      11: totals[11],
+      total: totals.total,
+      subcategories: Array.from(totals.subcategories.entries()).map(
+        ([subcategory_id, subTotals]) => ({
+          subcategory_id,
+          0: subTotals[0],
+          1: subTotals[1],
+          2: subTotals[2],
+          3: subTotals[3],
+          4: subTotals[4],
+          5: subTotals[5],
+          6: subTotals[6],
+          7: subTotals[7],
+          8: subTotals[8],
+          9: subTotals[9],
+          10: subTotals[10],
+          11: subTotals[11],
+          total: subTotals.total,
+        }),
+      ),
+    }));
+  }, [txns, selectedYear]);
+
+  const chartData = useMemo(
+    () => filterRowsByGroup(groupedRows, selectedGroupTab, categoryGroups),
+    [groupedRows, selectedGroupTab, categoryGroups],
+  );
 
   const chartStats = useMemo(() => {
     let ytd = 0;
@@ -310,6 +472,17 @@ export default function Summary() {
     }
     return map;
   }, [subcategoriesData]);
+
+  const tableData = useMemo(() => {
+    if (!text.trim()) return chartData;
+    const q = text.toLowerCase();
+    return chartData.filter((item) => {
+      const label = String(
+        categoriesById.get(item.category_id) ?? item.category_id ?? "",
+      ).toLowerCase();
+      return label.includes(q);
+    });
+  }, [chartData, text, categoriesById]);
 
   const rowCategoryOptions = useMemo(() => {
     return (categoriesData ?? [])
@@ -513,54 +686,80 @@ export default function Summary() {
     setText(searchText);
   }, []);
 
-  useEffect(() => {
-    if (!supportsReferenceLine && refLineModalVisible) {
-      setRefLineModalVisible(false);
-      setRefLineDraft("");
-    }
-  }, [supportsReferenceLine, refLineModalVisible]);
+  const openChartSettings = useCallback(() => {
+    setRefLineDraft(
+      supportsReferenceLine ? String(activeReferenceLine) : "",
+    );
+    setBarColorDraft(activeBarColor);
+    setChartSettingsVisible(true);
+  }, [activeReferenceLine, activeBarColor, supportsReferenceLine]);
 
-  const openRefLineModal = useCallback(() => {
-    if (!supportsReferenceLine) return;
-    setRefLineDraft(String(activeReferenceLine));
-    setRefLineModalVisible(true);
-  }, [activeReferenceLine, supportsReferenceLine]);
-
-  const closeRefLineModal = useCallback(() => {
-    setRefLineModalVisible(false);
+  const closeChartSettings = useCallback(() => {
+    setChartSettingsVisible(false);
     setRefLineDraft("");
+    setBarColorDraft("");
   }, []);
 
-  const saveRefLine = useCallback(async () => {
-    const parsed = parseReferenceLineInput(refLineDraft);
-    if (!Number.isFinite(parsed) || parsed <= 0) {
-      Alert.alert(
-        "Valor no válido",
-        "Introduce un importe mayor que cero (por ejemplo 5000000).",
-      );
+  const saveChartSettings = useCallback(async () => {
+    const groupKey = refLineGroupKey(selectedGroupTab);
+    let nextRefLines = referenceLinesByGroup;
+    let nextBarColors = barColorsByGroup;
+
+    if (supportsReferenceLine) {
+      const parsed = parseReferenceLineInput(refLineDraft);
+      if (!Number.isFinite(parsed) || parsed <= 0) {
+        Alert.alert(
+          "Valor no válido",
+          "Introduce un importe mayor que cero (por ejemplo 5000000).",
+        );
+        return;
+      }
+      nextRefLines = { ...referenceLinesByGroup, [groupKey]: parsed };
+    }
+
+    const color = String(barColorDraft ?? "").trim().toLowerCase();
+    if (!HEX_COLOR_RE.test(color)) {
+      Alert.alert("Color no válido", "Selecciona un color de la lista.");
       return;
     }
-    const groupKey = refLineGroupKey(selectedGroupTab);
-    const next = { ...referenceLinesByGroup, [groupKey]: parsed };
-    setReferenceLinesByGroup(next);
+    if (color === theme.colors.primary.toLowerCase()) {
+      nextBarColors = { ...barColorsByGroup };
+      delete nextBarColors[groupKey];
+    } else {
+      nextBarColors = { ...barColorsByGroup, [groupKey]: color };
+    }
+
+    setReferenceLinesByGroup(nextRefLines);
+    setBarColorsByGroup(nextBarColors);
+
     try {
+      if (supportsReferenceLine) {
+        await AsyncStorage.setItem(
+          CHART_REF_LINE_STORAGE_KEY,
+          JSON.stringify(nextRefLines),
+        );
+      }
       await AsyncStorage.setItem(
-        CHART_REF_LINE_STORAGE_KEY,
-        JSON.stringify(next),
+        CHART_BAR_COLOR_STORAGE_KEY,
+        JSON.stringify(nextBarColors),
       );
     } catch (e) {
       Alert.alert(
         "Error al guardar",
-        e.message ?? "No se pudo guardar la línea de referencia.",
+        e.message ?? "No se pudieron guardar los ajustes del gráfico.",
       );
       return;
     }
-    closeRefLineModal();
+    closeChartSettings();
   }, [
     refLineDraft,
-    closeRefLineModal,
+    barColorDraft,
+    closeChartSettings,
     selectedGroupTab,
     referenceLinesByGroup,
+    barColorsByGroup,
+    supportsReferenceLine,
+    theme.colors.primary,
   ]);
 
   const resetRefLine = useCallback(async () => {
@@ -578,6 +777,10 @@ export default function Summary() {
       console.error("Error resetting chart reference line:", e);
     }
   }, [selectedGroupTab, referenceLinesByGroup]);
+
+  const resetBarColor = useCallback(() => {
+    setBarColorDraft(theme.colors.primary);
+  }, [theme.colors.primary]);
 
   return (
     <SafeAreaView
@@ -780,13 +983,6 @@ export default function Summary() {
                   style={styles.chartScroll}
                   contentContainerStyle={styles.chartScrollContent}
                   keyboardShouldPersistTaps="handled"
-                  refreshControl={
-                    <RefreshControl
-                      refreshing={isRefetching}
-                      onRefresh={refetch}
-                      tintColor={theme.colors.primary}
-                    />
-                  }
                 >
                   <View style={styles.dashboardSection}>
                     <View style={styles.chartSectionHeader}>
@@ -798,27 +994,25 @@ export default function Summary() {
                       >
                         Tendencia mensual
                       </Text>
-                      {supportsReferenceLine ? (
-                        <Pressable
-                          onPress={openRefLineModal}
-                          accessibilityRole="button"
-                          accessibilityLabel="Ajustar línea de referencia del gráfico"
-                          style={({ pressed }) => [
-                            styles.chartSettingsButton,
-                            {
-                              backgroundColor: theme.colors.surface,
-                              borderColor: theme.colors.border,
-                            },
-                            pressed && styles.chartSettingsButtonPressed,
-                          ]}
-                        >
-                          <AntDesign
-                            name="setting"
-                            size={20}
-                            color={theme.colors.primary}
-                          />
-                        </Pressable>
-                      ) : null}
+                      <Pressable
+                        onPress={openChartSettings}
+                        accessibilityRole="button"
+                        accessibilityLabel="Ajustes del gráfico"
+                        style={({ pressed }) => [
+                          styles.chartSettingsButton,
+                          {
+                            backgroundColor: theme.colors.surface,
+                            borderColor: theme.colors.border,
+                          },
+                          pressed && styles.chartSettingsButtonPressed,
+                        ]}
+                      >
+                        <AntDesign
+                          name="setting"
+                          size={20}
+                          color={theme.colors.primary}
+                        />
+                      </Pressable>
                     </View>
                     <SummaryMonthlyBarChart
                       embedded
@@ -826,6 +1020,7 @@ export default function Summary() {
                       data={chartData}
                       showReferenceLine={supportsReferenceLine}
                       negativeReferenceLine={activeReferenceLine}
+                      barColor={activeBarColor}
                     />
                     <View style={styles.statsRow}>
                       <View
@@ -915,9 +1110,6 @@ export default function Summary() {
                   ) : null}
                   <GroupedTable
                     data={tableData}
-                    activeColumns={months}
-                    onRefresh={refetch}
-                    refreshing={isRefetching}
                     categoriesById={categoriesById}
                     subcategoriesById={subcategoriesById}
                   />
@@ -928,10 +1120,10 @@ export default function Summary() {
         )}
 
         <Modal
-          visible={refLineModalVisible}
+          visible={chartSettingsVisible}
           animationType="slide"
           presentationStyle="pageSheet"
-          onRequestClose={closeRefLineModal}
+          onRequestClose={closeChartSettings}
         >
           <SafeAreaView
             style={[
@@ -941,52 +1133,112 @@ export default function Summary() {
             edges={["top", "bottom"]}
           >
             <Text style={[styles.modalTitle, { color: theme.colors.text }]}>
-              Línea de referencia
+              Ajustes del gráfico
             </Text>
             <Text
               style={[styles.modalSectionLabel, { color: theme.colors.text }]}
             >
               {refLineGroupLabel}
             </Text>
-            <Text style={[styles.modalHint, { color: theme.colors.text }]}>
-              Umbral de gasto para este grupo en el gráfico cuando todos los
-              meses son negativos. Cada grupo puede tener su propio valor; se
-              guarda en este dispositivo.
+
+            <Text
+              style={[styles.modalSectionLabel, { color: theme.colors.text }]}
+            >
+              Color del gráfico
             </Text>
-            <TextInput
-              style={[
-                styles.modalInput,
-                {
-                  backgroundColor: theme.colors.surface,
-                  borderColor: theme.colors.border,
-                  color: theme.colors.text,
-                },
-              ]}
-              placeholder="Importe (ej. 5000000)"
-              placeholderTextColor={theme.colors.placeholder}
-              value={refLineDraft}
-              onChangeText={setRefLineDraft}
-              keyboardType="numeric"
-              autoCapitalize="none"
-            />
+            <Text style={[styles.modalHint, { color: theme.colors.text }]}>
+              Elige el color de las barras para este grupo. Se guarda en este
+              dispositivo.
+            </Text>
+            <View style={styles.colorSwatchRow}>
+              {CHART_BAR_COLOR_OPTIONS.map((color) => {
+                const selected =
+                  String(barColorDraft).toLowerCase() === color.toLowerCase();
+                return (
+                  <Pressable
+                    key={color}
+                    onPress={() => setBarColorDraft(color)}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Color ${color}`}
+                    accessibilityState={{ selected }}
+                    style={({ pressed }) => [
+                      styles.colorSwatch,
+                      {
+                        backgroundColor: color,
+                        borderColor: selected
+                          ? theme.colors.text
+                          : theme.colors.border,
+                      },
+                      selected && styles.colorSwatchSelected,
+                      pressed && styles.colorSwatchPressed,
+                    ]}
+                  />
+                );
+              })}
+            </View>
             <Pressable
-              onPress={resetRefLine}
+              onPress={resetBarColor}
               style={({ pressed }) => [
                 styles.refLineReset,
                 pressed && styles.modalButtonPressed,
               ]}
             >
               <Text style={{ color: theme.colors.primary }}>
-                Restablecer valor predeterminado (
-                {SUMMARY_CHART_NEGATIVE_REFERENCE_DEFAULT.toLocaleString(
-                  "es-ES",
-                )}
-                )
+                Restablecer color predeterminado
               </Text>
             </Pressable>
+
+            {supportsReferenceLine ? (
+              <>
+                <Text
+                  style={[
+                    styles.modalSectionLabel,
+                    { color: theme.colors.text },
+                  ]}
+                >
+                  Línea de referencia
+                </Text>
+                <Text style={[styles.modalHint, { color: theme.colors.text }]}>
+                  Umbral de gasto para este grupo en el gráfico cuando todos los
+                  meses son negativos. Cada grupo puede tener su propio valor.
+                </Text>
+                <TextInput
+                  style={[
+                    styles.modalInput,
+                    {
+                      backgroundColor: theme.colors.surface,
+                      borderColor: theme.colors.border,
+                      color: theme.colors.text,
+                    },
+                  ]}
+                  placeholder="Importe (ej. 5000000)"
+                  placeholderTextColor={theme.colors.placeholder}
+                  value={refLineDraft}
+                  onChangeText={setRefLineDraft}
+                  keyboardType="numeric"
+                  autoCapitalize="none"
+                />
+                <Pressable
+                  onPress={resetRefLine}
+                  style={({ pressed }) => [
+                    styles.refLineReset,
+                    pressed && styles.modalButtonPressed,
+                  ]}
+                >
+                  <Text style={{ color: theme.colors.primary }}>
+                    Restablecer valor predeterminado (
+                    {SUMMARY_CHART_NEGATIVE_REFERENCE_DEFAULT.toLocaleString(
+                      "es-ES",
+                    )}
+                    )
+                  </Text>
+                </Pressable>
+              </>
+            ) : null}
+
             <View style={styles.modalActions}>
               <Pressable
-                onPress={closeRefLineModal}
+                onPress={closeChartSettings}
                 style={({ pressed }) => [
                   styles.modalButton,
                   {
@@ -999,7 +1251,7 @@ export default function Summary() {
                 <Text style={{ color: theme.colors.text }}>Cancelar</Text>
               </Pressable>
               <Pressable
-                onPress={saveRefLine}
+                onPress={saveChartSettings}
                 style={({ pressed }) => [
                   styles.modalButton,
                   styles.modalButtonPrimary,
@@ -1234,6 +1486,24 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   chartSettingsButtonPressed: {
+    opacity: 0.75,
+  },
+  colorSwatchRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 12,
+    marginBottom: 4,
+  },
+  colorSwatch: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    borderWidth: 2,
+  },
+  colorSwatchSelected: {
+    borderWidth: 3,
+  },
+  colorSwatchPressed: {
     opacity: 0.75,
   },
   refLineReset: {

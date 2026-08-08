@@ -144,6 +144,20 @@ export default function TxnTable({
     [tableName, queryKey],
   );
 
+  const handleBankPress = useCallback(
+    (id) => {
+      router.push({
+        pathname: "/txn-modals/select-bank",
+        params: {
+          table: String(tableName),
+          queryKeyJson: stringifyQueryKeyForParams(queryKey),
+          ids: JSON.stringify([id]),
+        },
+      });
+    },
+    [tableName, queryKey],
+  );
+
   const openHeaderFilter = useCallback(
     (label) => {
       if (!headerFiltersOwned) return;
@@ -661,14 +675,17 @@ export default function TxnTable({
     </Pressable>
   );
 
-  const renderBankCell = (value) => (
-    <View
-      style={[
+  const renderBankCell = (id, bankId) => (
+    <Pressable
+      onPress={() => handleBankPress(id)}
+      style={({ pressed }) => [
         styles.cell,
         styles.colBank,
         {
           borderColor: theme.colors.border,
-          backgroundColor: theme.colors.background,
+          backgroundColor: pressed
+            ? theme.colors.inputBackground
+            : theme.colors.background,
         },
       ]}
     >
@@ -677,9 +694,9 @@ export default function TxnTable({
         numberOfLines={1}
         ellipsizeMode="tail"
       >
-        {banksById.get(value)?.toLowerCase()}
+        {banksById.get(bankId)?.toLowerCase()}
       </Text>
-    </View>
+    </Pressable>
   );
 
   const renderEditCell = (reconciled) => {
@@ -749,7 +766,7 @@ export default function TxnTable({
       {renderAmountCell(item.amount)}
       {renderCategoryCell(item.id, item.category_id)}
       {renderSubCategoryCell(item.id, item.subcategory_id, item.category_id)}
-      {renderBankCell(item.bank_id)}
+      {renderBankCell(item.id, item.bank_id)}
       {showEditColumn && renderEditCell(item.reconciled)}
     </View>
   );
