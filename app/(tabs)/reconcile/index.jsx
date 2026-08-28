@@ -61,13 +61,25 @@ function statementPathFromListItem(item) {
   return null;
 }
 
-/** gs://bucket/<bank_slug>/file.xlsx → matching bank option from list, if known */
+/** Display name after /banks/ + financial-entities join (`name`; `label` is legacy). */
+function bankDisplayName(bank) {
+  return bank?.name ?? bank?.label ?? bank?.fe_code ?? "";
+}
+
+/** gs://bucket/<fe_code>/file.xlsx → matching bank from list, if known */
 function bankFromStatementGcsUri(uri, bankOptions) {
   if (!uri || typeof uri !== "string") return null;
   const match = uri.match(/^gs:\/\/[^/]+\/([^/]+)\//);
   if (!match) return null;
   const slug = match[1];
-  return bankOptions.find((b) => b.value === slug) ?? null;
+  return (
+    bankOptions.find(
+      (b) =>
+        b.fe_code === slug ||
+        b.value === slug ||
+        (b.id != null && String(b.id) === slug),
+    ) ?? null
+  );
 }
 
 const DROPDOWN_SELECTED_TEXT_PROPS = {
@@ -328,8 +340,9 @@ export default function Reconcile() {
   const statementRowCount = data?.length ?? 0;
   const step1Complete = statements.length > 0;
   const step2Complete = Boolean(selectedStatement?.label);
+  const selectedBankName = bankDisplayName(selectedBank);
   const canConciliar =
-    step2Complete && Boolean(selectedBank?.label) && !conciliarGateBusy;
+    step2Complete && Boolean(selectedBankName) && !conciliarGateBusy;
 
   const handleUpload = async () => {
     if (!file) {
@@ -501,7 +514,7 @@ export default function Reconcile() {
       Alert.alert("Error", "Por favor selecciona un extracto primero");
       return;
     }
-    if (!selectedBank?.label) {
+    if (!selectedBankName) {
       Alert.alert(
         "Error",
         "No hay banco asociado a este extracto. Comprueba la lista de bancos o el extracto seleccionado.",
@@ -510,7 +523,7 @@ export default function Reconcile() {
     }
     try {
       const res = await fetch(
-        `${API_URL}/create_statement_joined/?table_name=${encodeURIComponent(selectedStatement.label)}&bank_name=${encodeURIComponent(selectedBank.label)}`,
+        `${API_URL}/create_statement_joined/?table_name=${encodeURIComponent(selectedStatement.label)}`,
         {
           method: "POST",
           headers: getAuthHeaders(),
@@ -535,7 +548,7 @@ export default function Reconcile() {
       });
       navigateToReconcileResults({
         statementLabel: selectedStatement.label,
-        bankLabel: selectedBank.label,
+        bankLabel: selectedBankName,
       });
     } catch (error) {
       console.error("Error reconciling transactions:", error);
@@ -923,7 +936,7 @@ export default function Reconcile() {
                   });
                 }}
               />
-              {selectedBank?.label ? (
+              {selectedBankName ? (
                 <View
                   style={[
                     reconcileStyles.bankChip,
@@ -939,7 +952,7 @@ export default function Reconcile() {
                       { color: theme.colors.text },
                     ]}
                   >
-                    Banco: {selectedBank.label}
+                    Banco: {selectedBankName}
                   </Text>
                 </View>
               ) : null}

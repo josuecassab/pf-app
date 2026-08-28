@@ -6,9 +6,13 @@ import {
   takePendingBankSelection,
 } from "../lib/pendingBankSelection";
 
+function bankId(bank) {
+  return bank?.id ?? bank?.value;
+}
+
 function findBank(list, id) {
   if (id == null) return null;
-  return list.find((b) => String(b.value) === String(id)) ?? null;
+  return list.find((b) => String(bankId(b)) === String(id)) ?? null;
 }
 
 /**
@@ -31,7 +35,7 @@ export function usePersistedBankSelection(bankList, tenantId) {
     if (savedBankId === undefined) return;
     setSelectedBank(
       (prev) =>
-        findBank(bankList, prev?.value) ??
+        findBank(bankList, bankId(prev)) ??
         findBank(bankList, savedBankId) ??
         bankList[0] ??
         null,
@@ -41,9 +45,10 @@ export function usePersistedBankSelection(bankList, tenantId) {
   const selectBank = useCallback(
     (bank) => {
       setSelectedBank(bank);
-      if (bank?.value == null) return;
-      setSavedBankId(bank.value);
-      saveLastSelectedBankId(tenantId, bank.value);
+      const id = bankId(bank);
+      if (id == null) return;
+      setSavedBankId(id);
+      saveLastSelectedBankId(tenantId, id);
     },
     [tenantId],
   );

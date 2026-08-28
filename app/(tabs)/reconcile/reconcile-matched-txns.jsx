@@ -48,7 +48,7 @@ export default function ReconcileMatchedTxns() {
   const banksById = useMemo(() => {
     const map = new Map();
     for (const c of banksData ?? []) {
-      map.set(c.value, c.label);
+      map.set(c.id, c.name);
     }
     return map;
   }, [banksData]);

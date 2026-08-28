@@ -1,5 +1,6 @@
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { PersistQueryClientProvider } from "@tanstack/react-query-persist-client";
 import { Stack } from "expo-router";
+import { useMemo, useState } from "react";
 import { ActivityIndicator, View } from "react-native";
 import "react-native-url-polyfill/auto";
 
@@ -8,8 +9,7 @@ import Auth from "../components/Auth";
 import { AuthProvider, useAuth } from "../contexts/AuthContext";
 import { PurchasesProvider } from "../contexts/PurchasesContext";
 import { ThemeProvider, useTheme } from "../contexts/ThemeContext";
-
-const queryClient = new QueryClient();
+import { createQueryClient, getPersistOptions } from "../lib/queryClient";
 
 function AuthenticatedStack() {
   const { theme } = useTheme();
@@ -49,6 +49,26 @@ function AuthenticatedStack() {
   );
 }
 
+function AuthenticatedApp() {
+  const { tenantId } = useAuth();
+  const [queryClient] = useState(createQueryClient);
+  const persistOptions = useMemo(
+    () => getPersistOptions(tenantId),
+    [tenantId],
+  );
+
+  return (
+    <ThemeProvider>
+      <PersistQueryClientProvider
+        client={queryClient}
+        persistOptions={persistOptions}
+      >
+        <AuthenticatedStack />
+      </PersistQueryClientProvider>
+    </ThemeProvider>
+  );
+}
+
 function RootNavigator() {
   const { session, loading } = useAuth();
 
@@ -70,13 +90,7 @@ function RootNavigator() {
     );
   }
 
-  return (
-    <ThemeProvider>
-      <QueryClientProvider client={queryClient}>
-        <AuthenticatedStack />
-      </QueryClientProvider>
-    </ThemeProvider>
-  );
+  return <AuthenticatedApp />;
 }
 
 export default function RootLayout() {

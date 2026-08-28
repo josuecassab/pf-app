@@ -6,17 +6,16 @@ import * as Localization from "expo-localization";
 import { router } from "expo-router";
 import { useCallback, useMemo, useState } from "react";
 import {
-    ActivityIndicator,
-    Alert,
-    Keyboard,
-    KeyboardAvoidingView,
-    Platform,
-    Pressable,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableWithoutFeedback,
-    View,
+  ActivityIndicator,
+  Alert,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
 } from "react-native";
 import { Dropdown } from "react-native-element-dropdown";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -33,6 +32,7 @@ const API_URL = process.env.EXPO_PUBLIC_API_URL;
 const EMPTY_DROPDOWN_DATA = [];
 const EMPTY_BANK_LIST = EMPTY_DROPDOWN_DATA;
 const EMPTY_SUBCATEGORIES_LIST = EMPTY_DROPDOWN_DATA;
+const CURRENCIES = ["COP", "USD"];
 
 function escapeRegExp(string) {
   return string.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -156,6 +156,7 @@ export default function Index() {
     bankList,
     tenantId,
   );
+  const [selectedCurrency, setSelectedCurrency] = useState(CURRENCIES[0]);
 
   const subcategoriesMap = useMemo(() => {
     const subcategoriesMap = {};
@@ -167,10 +168,8 @@ export default function Index() {
     return subcategoriesMap;
   }, [subcategoryList]);
 
-  const onChange = (event, selectedDate) => {
-    const currentDate = selectedDate;
-    console.log(currentDate);
-    setDate(currentDate);
+  const onChange = (_event, selectedDate) => {
+    if (selectedDate) setDate(selectedDate);
   };
 
   const handleAmountChangeText = useCallback(
@@ -240,6 +239,7 @@ export default function Index() {
       return;
     }
     txn.amount = txtType === 0 ? parsedAmount : -1 * parsedAmount;
+    txn.currency = selectedCurrency;
     if (selectedCategory?.value) {
       txn.category_id = selectedCategory.value;
     } else {
@@ -250,8 +250,9 @@ export default function Index() {
     txn.subcategory_id = selectedSubcategory?.value
       ? selectedSubcategory.value
       : null;
-    if (selectedBank?.value != null && selectedBank.value !== "") {
-      txn.bank_id = selectedBank.value;
+    const selectedBankId = selectedBank?.id ?? selectedBank?.value;
+    if (selectedBankId != null && selectedBankId !== "") {
+      txn.bank_id = selectedBankId;
     } else {
       Alert.alert("Error de validación", "Por favor seleccione un banco");
       setIsSending(false);
@@ -284,6 +285,7 @@ export default function Index() {
             date: data.date,
             description: data.description ?? null,
             amount: data.amount,
+            currency: data.currency ?? selectedCurrency,
             category_id: data.category_id,
             subcategory_id: data.subcategory_id ?? null,
             bank_id: data.bank_id,
@@ -317,355 +319,388 @@ export default function Index() {
     }
   };
 
+  const amountColor =
+    value === ""
+      ? theme.colors.text
+      : txtType === 0
+        ? theme.colors.success
+        : theme.colors.error;
+
+  const dropdownTheme = {
+    placeholderStyle: [
+      styles.placeholderStyle,
+      { color: theme.colors.placeholder },
+    ],
+    selectedTextStyle: [
+      styles.selectedTextStyle,
+      { color: theme.colors.text },
+    ],
+    inputSearchStyle: [
+      styles.inputSearchStyle,
+      { color: theme.colors.text },
+    ],
+    iconStyle: styles.iconStyle,
+    containerStyle: {
+      backgroundColor: theme.colors.inputBackground,
+      borderRadius: 16,
+      borderColor: theme.colors.border,
+    },
+    itemContainerStyle: {
+      backgroundColor: theme.colors.inputBackground,
+      borderRadius: 12,
+    },
+    itemTextStyle: {
+      color: theme.colors.text,
+      fontSize: 14,
+    },
+    activeColor: `${theme.colors.primary}20`,
+  };
+
   return (
     <SafeAreaView
       edges={["top", "bottom", "left", "right"]}
       style={{ flex: 1, backgroundColor: theme.colors.background }}
     >
       <KeyboardAvoidingView
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
         style={{ flex: 1 }}
-        keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 20}
       >
-        <TouchableWithoutFeedback onPress={() => Keyboard.dismiss()}>
-          <View
-            style={[
-              {
-                backgroundColor: theme.colors.background,
-                flex: 1,
-                justifyContent: "space-around",
-              },
-            ]}
-          >
-            {/* <Text style={[styles.titleText, { color: theme.colors.text }]}>
-              Agregar
-            </Text> */}
-            <View style={styles.containerStyle}>
-              <Text style={[styles.labelText, { color: theme.colors.text }]}>
-                Fecha
-              </Text>
-              <View style={{ transform: [{ scale: 1.1 }] }}>
-                <DateTimePicker
-                  testID="dateTimePicker"
-                  value={date}
-                  mode="date"
-                  onChange={onChange}
-                  textColor={theme.colors.text}
-                  themeVariant={theme.isDark ? "dark" : "light"}
-                  display="default"
-                  accentColor={theme.colors.primary}
-                  style={{
-                    borderRadius: 30,
-                    height: 40,
-                  }}
-                />
-              </View>
-            </View>
-            <View style={styles.containerStyle}>
-              <Text style={[styles.labelText, { color: theme.colors.text }]}>
-                Valor
-              </Text>
-              <View style={styles.currencyInputWrapper}>
-                <TextInput
-                  style={[
-                    styles.currencyInput,
-                    {
-                      backgroundColor: theme.colors.inputBackground,
-                      color: theme.colors.text,
-                      fontSize: 16,
-                      textAlign: "center",
-                      borderRadius: 30,
-                      paddingLeft: 10,
-                      paddingRight: value ? 34 : 10,
-                    },
-                  ]}
-                  value={value}
-                  onChangeText={handleAmountChangeText}
-                  onBlur={handleAmountBlur}
-                  keyboardType="decimal-pad"
-                  placeholder="ingresa el valor"
-                  placeholderTextColor={theme.colors.placeholder}
-                />
-                {value !== "" ? (
-                  <Pressable
-                    accessibilityLabel="Limpiar valor"
-                    onPress={() => setValue("")}
-                    style={({ pressed }) => [
-                      styles.currencyClearButton,
-                      pressed && { opacity: 0.55 },
-                    ]}
-                    hitSlop={10}
-                  >
-                    <Feather
-                      name="x"
-                      size={18}
-                      color={theme.colors.placeholder}
-                    />
-                  </Pressable>
-                ) : null}
-              </View>
-            </View>
-            <View style={styles.containerStyle}>
-              <Text style={[styles.labelText, { color: theme.colors.text }]}>
-                Tipo
-              </Text>
-              <SegmentedControl
-                style={{ width: 160, height: 40 }}
-                values={["Ingreso", "Egreso"]}
-                selectedIndex={txtType}
-                appearance={theme.isDark ? "dark" : "light"}
-                onChange={(event) => {
-                  console.log(event);
-                  setTxnType(event.nativeEvent.selectedSegmentIndex);
-                }}
-                tintColor={theme.colors.primary}
-                activeFontStyle={{ color: "#ffffff" }}
+        <ScrollView
+          contentContainerStyle={styles.scrollContent}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
+          nestedScrollEnabled
+          showsVerticalScrollIndicator={false}
+        >
+          <View style={styles.amountSection}>
+            <View style={styles.currencyInputWrapper}>
+              <TextInput
+                style={[
+                  styles.currencyInput,
+                  {
+                    color: amountColor,
+                    paddingRight: value ? 40 : 16,
+                  },
+                ]}
+                value={value}
+                onChangeText={handleAmountChangeText}
+                onBlur={handleAmountBlur}
+                keyboardType="decimal-pad"
+                placeholder={`0${amountSeparators.decimal}00`}
+                placeholderTextColor={theme.colors.placeholder}
+                numberOfLines={1}
+                adjustsFontSizeToFit
+                minimumFontScale={0.5}
               />
-            </View>
-
-            <View style={[styles.containerStyle, { gap: 16 }]}>
-              <View style={styles.categoryHeader}>
-                <Text
-                  style={[styles.categoryLabel, { color: theme.colors.text }]}
-                >
-                  Categoria
-                </Text>
+              {value !== "" ? (
                 <Pressable
+                  accessibilityLabel="Limpiar valor"
+                  onPress={() => setValue("")}
                   style={({ pressed }) => [
-                    styles.editButton,
-                    pressed && styles.editButtonPressed,
+                    styles.currencyClearButton,
+                    pressed && { opacity: 0.55 },
                   ]}
-                  onPress={() => router.push("/manage-categories")}
+                  hitSlop={10}
                 >
-                  <Feather name="edit" size={20} color={theme.colors.text} />
+                  <Feather
+                    name="x"
+                    size={20}
+                    color={theme.colors.placeholder}
+                  />
                 </Pressable>
-              </View>
-              <Dropdown
-                style={[
-                  styles.dropdown,
-                  {
-                    backgroundColor: theme.colors.inputBackground,
-                    borderBottomColor: theme.colors.border,
-                    width: "60%",
-                  },
-                ]}
-                placeholderStyle={[
-                  styles.placeholderStyle,
-                  { color: theme.colors.placeholder },
-                ]}
-                selectedTextStyle={[
-                  styles.selectedTextStyle,
-                  { color: theme.colors.text },
-                ]}
-                inputSearchStyle={[
-                  styles.inputSearchStyle,
-                  { color: theme.colors.text },
-                ]}
-                iconStyle={styles.iconStyle}
-                containerStyle={{
-                  backgroundColor: theme.colors.inputBackground,
-                  borderRadius: 30,
-                  borderColor: theme.colors.border,
-                }}
-                itemContainerStyle={{
-                  backgroundColor: theme.colors.inputBackground,
-                  borderRadius: 30,
-                }}
-                itemTextStyle={{
-                  color: theme.colors.text,
-                  fontSize: 14,
-                }}
-                activeColor={theme.colors.primary + "20"}
-                data={categoriesData ?? EMPTY_DROPDOWN_DATA}
-                search
-                maxHeight={220}
-                labelField="label"
-                valueField="value"
-                placeholder={
-                  isLoadingCategories ? "Cargando..." : "Seleccionar categoria"
-                }
-                searchPlaceholder="Buscar..."
-                value={selectedCategory?.value}
-                onChange={(item) => {
-                  setSelectedCategory({
-                    label: item.label,
-                    value: item.value,
-                  });
-                }}
-              />
-              <Dropdown
-                style={[
-                  styles.dropdown,
-                  {
-                    backgroundColor: theme.colors.inputBackground,
-                    borderBottomColor: theme.colors.border,
-                    width: "60%",
-                  },
-                ]}
-                placeholderStyle={[
-                  styles.placeholderStyle,
-                  { color: theme.colors.placeholder },
-                ]}
-                selectedTextStyle={[
-                  styles.selectedTextStyle,
-                  { color: theme.colors.text },
-                ]}
-                inputSearchStyle={[
-                  styles.inputSearchStyle,
-                  { color: theme.colors.text },
-                ]}
-                containerStyle={{
-                  backgroundColor: theme.colors.inputBackground,
-                  borderRadius: 30,
-                  borderColor: theme.colors.border,
-                }}
-                itemTextStyle={{
-                  color: theme.colors.text,
-                  fontSize: 14,
-                }}
-                iconStyle={styles.iconStyle}
-                data={
-                  subcategoriesMap[selectedCategory?.value] ??
-                  EMPTY_DROPDOWN_DATA
-                }
-                search
-                maxHeight={220}
-                labelField="label"
-                valueField="value"
-                placeholder={
-                  isLoadingSubcategories
-                    ? "Cargando..."
-                    : "Seleccionar subcategoria"
-                }
-                searchPlaceholder="Buscar..."
-                value={selectedSubcategory?.value}
-                onChange={(item) => {
-                  setSelectedSubcategory({
-                    label: item.label,
-                    value: item.value,
-                  });
-                }}
-                dropdownPosition="bottom"
-              />
-            </View>
-            <View style={[styles.containerStyle, { gap: 16 }]}>
-              <View style={styles.categoryHeader}>
-                <Text
-                  style={[styles.categoryLabel, { color: theme.colors.text }]}
-                >
-                  Banco
-                </Text>
-                <Pressable
-                  style={({ pressed }) => [
-                    styles.editButton,
-                    pressed && styles.editButtonPressed,
-                  ]}
-                  onPress={() => router.push("/manage-banks")}
-                >
-                  <Feather name="edit" size={20} color={theme.colors.text} />
-                </Pressable>
-              </View>
-              <Dropdown
-                style={[
-                  styles.dropdown,
-                  {
-                    backgroundColor: theme.colors.inputBackground,
-                    borderBottomColor: theme.colors.border,
-                    width: "60%",
-                  },
-                ]}
-                placeholderStyle={[
-                  styles.placeholderStyle,
-                  { color: theme.colors.placeholder },
-                ]}
-                selectedTextStyle={[
-                  styles.selectedTextStyle,
-                  { color: theme.colors.text, textAlign: "center" },
-                ]}
-                inputSearchStyle={[
-                  styles.inputSearchStyle,
-                  { color: theme.colors.text },
-                ]}
-                iconStyle={styles.iconStyle}
-                containerStyle={{
-                  backgroundColor: theme.colors.inputBackground,
-                  borderColor: theme.colors.border,
-                  borderRadius: 30,
-                }}
-                itemContainerStyle={{
-                  backgroundColor: theme.colors.inputBackground,
-                  borderRadius: 30,
-                }}
-                itemTextStyle={{
-                  color: theme.colors.text,
-                  fontSize: 14,
-                  textAlign: "center",
-                }}
-                activeColor={theme.colors.primary + "20"}
-                data={bankList}
-                labelField="label"
-                valueField="value"
-                placeholder={
-                  isLoadingBanks ? "Cargando..." : "Seleccionar banco"
-                }
-                searchPlaceholder="Buscar..."
-                value={selectedBank?.value}
-                onChange={selectBank}
-              />
-            </View>
-            <View style={styles.containerStyle}>
-              <Pressable
-                style={({ pressed }) => [
-                  styles.submitButton,
-                  { backgroundColor: theme.colors.primary },
-                  pressed && styles.submitButtonPressed,
-                ]}
-                onPress={submitTxn}
-              >
-                {isSending ? (
-                  <ActivityIndicator size="small" color="#ffffff" />
-                ) : (
-                  <Text style={styles.submitButtonText}>
-                    Enviar transacción
-                  </Text>
-                )}
-              </Pressable>
+              ) : null}
             </View>
           </View>
-        </TouchableWithoutFeedback>
+
+          <View style={[styles.card, { backgroundColor: theme.colors.card }]}>
+            <View style={styles.toggleRow}>
+              <Text
+                style={[
+                  styles.fieldLabel,
+                  styles.toggleLabel,
+                  { color: theme.colors.text },
+                ]}
+              >
+                Moneda
+              </Text>
+              <View style={styles.segmentWrap}>
+                <SegmentedControl
+                  style={styles.fullSegment}
+                  values={CURRENCIES}
+                  selectedIndex={Math.max(
+                    0,
+                    CURRENCIES.indexOf(selectedCurrency),
+                  )}
+                  appearance={theme.isDark ? "dark" : "light"}
+                  onChange={(event) => {
+                    const index = event.nativeEvent.selectedSegmentIndex;
+                    setSelectedCurrency(CURRENCIES[index] ?? CURRENCIES[0]);
+                  }}
+                  tintColor={theme.colors.primary}
+                  activeFontStyle={{ color: "#ffffff" }}
+                />
+              </View>
+            </View>
+          </View>
+
+          <View style={[styles.card, { backgroundColor: theme.colors.card }]}>
+            <View style={styles.toggleRow}>
+              <Text
+                style={[
+                  styles.fieldLabel,
+                  styles.toggleLabel,
+                  { color: theme.colors.text },
+                ]}
+              >
+                Tipo
+              </Text>
+              <View style={styles.segmentWrap}>
+                <SegmentedControl
+                  style={styles.fullSegment}
+                  values={["Ingreso", "Egreso"]}
+                  selectedIndex={txtType}
+                  appearance={theme.isDark ? "dark" : "light"}
+                  onChange={(event) => {
+                    setTxnType(event.nativeEvent.selectedSegmentIndex);
+                  }}
+                  tintColor={
+                    txtType === 0 ? theme.colors.success : theme.colors.error
+                  }
+                  activeFontStyle={{ color: "#ffffff" }}
+                />
+              </View>
+            </View>
+          </View>
+
+          <View style={[styles.card, { backgroundColor: theme.colors.card }]}>
+            <View style={styles.dateRow}>
+              <Text style={[styles.fieldLabel, { color: theme.colors.text }]}>
+                Fecha
+              </Text>
+              <DateTimePicker
+                testID="dateTimePicker"
+                value={date}
+                mode="date"
+                onChange={onChange}
+                textColor={theme.colors.text}
+                themeVariant={theme.isDark ? "dark" : "light"}
+                display="default"
+                accentColor={theme.colors.primary}
+              />
+            </View>
+          </View>
+
+          <View style={[styles.card, { backgroundColor: theme.colors.card }]}>
+            <View style={styles.fieldHeader}>
+              <Text style={[styles.fieldLabel, { color: theme.colors.text }]}>
+                Categoría
+              </Text>
+              <Pressable
+                accessibilityLabel="Editar categorías"
+                style={({ pressed }) => [
+                  styles.editButton,
+                  pressed && styles.editButtonPressed,
+                ]}
+                onPress={() => router.push("/manage-categories")}
+                hitSlop={8}
+              >
+                <Feather
+                  name="edit-2"
+                  size={16}
+                  color={theme.colors.textSecondary}
+                />
+              </Pressable>
+            </View>
+            <Dropdown
+              {...dropdownTheme}
+              style={[
+                styles.dropdown,
+                { backgroundColor: theme.colors.inputBackground },
+              ]}
+              data={categoriesData ?? EMPTY_DROPDOWN_DATA}
+              search
+              maxHeight={220}
+              labelField="label"
+              valueField="value"
+              placeholder={
+                isLoadingCategories ? "Cargando..." : "Seleccionar categoría"
+              }
+              searchPlaceholder="Buscar..."
+              value={selectedCategory?.value}
+              onChange={(item) => {
+                setSelectedCategory({
+                  label: item.label,
+                  value: item.value,
+                });
+                setSelectedSubcategory(null);
+              }}
+            />
+            <Dropdown
+              {...dropdownTheme}
+              style={[
+                styles.dropdown,
+                { backgroundColor: theme.colors.inputBackground },
+              ]}
+              data={
+                subcategoriesMap[selectedCategory?.value] ?? EMPTY_DROPDOWN_DATA
+              }
+              search
+              maxHeight={220}
+              labelField="label"
+              valueField="value"
+              placeholder={
+                isLoadingSubcategories
+                  ? "Cargando..."
+                  : selectedCategory
+                    ? "Seleccionar subcategoría"
+                    : "Primero elige categoría"
+              }
+              searchPlaceholder="Buscar..."
+              value={selectedSubcategory?.value}
+              disable={!selectedCategory}
+              onChange={(item) => {
+                setSelectedSubcategory({
+                  label: item.label,
+                  value: item.value,
+                });
+              }}
+            />
+          </View>
+
+          <View style={[styles.card, { backgroundColor: theme.colors.card }]}>
+            <View style={styles.fieldHeader}>
+              <Text style={[styles.fieldLabel, { color: theme.colors.text }]}>
+                Banco
+              </Text>
+              <Pressable
+                accessibilityLabel="Editar bancos"
+                style={({ pressed }) => [
+                  styles.editButton,
+                  pressed && styles.editButtonPressed,
+                ]}
+                onPress={() => router.push("/manage-banks")}
+                hitSlop={8}
+              >
+                <Feather
+                  name="edit-2"
+                  size={16}
+                  color={theme.colors.textSecondary}
+                />
+              </Pressable>
+            </View>
+            <Dropdown
+              {...dropdownTheme}
+              style={[
+                styles.dropdown,
+                { backgroundColor: theme.colors.inputBackground },
+              ]}
+              data={bankList}
+              labelField="name"
+              valueField="id"
+              placeholder={
+                isLoadingBanks ? "Cargando..." : "Seleccionar banco"
+              }
+              searchPlaceholder="Buscar..."
+              value={selectedBank?.id ?? selectedBank?.value}
+              onChange={selectBank}
+            />
+          </View>
+        </ScrollView>
+
+        <View style={styles.footer}>
+          <Pressable
+            disabled={isSending}
+            style={({ pressed }) => [
+              styles.submitButton,
+              { backgroundColor: theme.colors.primary },
+              (pressed || isSending) && styles.submitButtonPressed,
+            ]}
+            onPress={submitTxn}
+          >
+            {isSending ? (
+              <ActivityIndicator size="small" color="#ffffff" />
+            ) : (
+              <Text style={styles.submitButtonText}>Enviar transacción</Text>
+            )}
+          </Pressable>
+        </View>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  titleText: {
-    fontSize: 24,
-    fontWeight: "bold",
+  scrollContent: {
+    flexGrow: 1,
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    paddingBottom: 16,
+    gap: 12,
+  },
+  amountSection: {
+    paddingVertical: 4,
+  },
+  currencyInputWrapper: {
+    position: "relative",
+    width: "100%",
+    justifyContent: "center",
+  },
+  currencyInput: {
+    fontSize: 40,
+    fontWeight: "600",
     textAlign: "center",
-  },
-  dropdownContainerStyle: {
-    flexDirection: "row",
-    gap: 8,
-    paddingHorizontal: 16,
     paddingVertical: 8,
+    paddingHorizontal: 16,
+    letterSpacing: 0.3,
   },
-  containerStyle: {
-    padding: 8,
-    gap: 8,
-    // borderWidth: 0.5,
-    borderColor: "gray",
+  currencyClearButton: {
+    position: "absolute",
+    right: 4,
+    top: 0,
+    bottom: 0,
+    justifyContent: "center",
     alignItems: "center",
-    justifyContent: "space-around",
+    paddingHorizontal: 8,
+  },
+  fullSegment: {
+    width: "100%",
+    height: 36,
+  },
+  card: {
+    borderRadius: 16,
+    padding: 16,
+    gap: 10,
+  },
+  toggleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
+  toggleLabel: {
+    width: 72,
+  },
+  segmentWrap: {
+    flex: 1,
+  },
+  dateRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  fieldHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  fieldLabel: {
+    fontWeight: "600",
+    fontSize: 15,
   },
   dropdown: {
-    height: 40,
-    width: "75%",
-    borderRadius: 40,
+    height: 44,
+    width: "100%",
+    borderRadius: 12,
     paddingHorizontal: 14,
-  },
-  icon: {
-    marginRight: 5,
   },
   placeholderStyle: {
     fontSize: 14,
@@ -680,57 +715,27 @@ const styles = StyleSheet.create({
   inputSearchStyle: {
     height: 40,
     fontSize: 14,
-    borderRadius: 20,
-  },
-  labelText: {
-    fontWeight: "600",
-  },
-
-  currencyInputWrapper: {
-    position: "relative",
-    width: 150,
-    justifyContent: "center",
-  },
-  currencyClearButton: {
-    position: "absolute",
-    right: 6,
-    top: 0,
-    bottom: 0,
-    justifyContent: "center",
-    alignItems: "center",
-    paddingHorizontal: 4,
-  },
-  currencyInput: {
-    borderRadius: 24,
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    width: 150,
-    textAlign: "center",
-  },
-  categoryHeader: {
-    flexDirection: "row",
-    justifyContent: "center",
-    alignItems: "center",
-    width: "100%",
-  },
-  categoryLabel: {
-    fontWeight: "600",
-    fontSize: 16,
+    borderRadius: 12,
   },
   editButton: {
-    position: "absolute",
-    right: 100,
     borderRadius: 8,
-    padding: 8,
+    padding: 6,
   },
   editButtonPressed: {
     opacity: 0.5,
   },
+  footer: {
+    paddingHorizontal: 20,
+    paddingTop: 8,
+    paddingBottom: 8,
+  },
   submitButton: {
-    width: "50%",
-    borderRadius: 30,
-    padding: 12,
+    width: "100%",
+    borderRadius: 14,
+    paddingVertical: 16,
     alignItems: "center",
+    justifyContent: "center",
+    minHeight: 52,
   },
   submitButtonPressed: {
     opacity: 0.8,
@@ -738,5 +743,6 @@ const styles = StyleSheet.create({
   submitButtonText: {
     color: "#ffffff",
     fontWeight: "600",
+    fontSize: 16,
   },
 });

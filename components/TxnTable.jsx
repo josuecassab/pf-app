@@ -104,7 +104,7 @@ export default function TxnTable({
       headerDropdownLabel === "Banco" ||
       headerDropdownLabel === "Cuenta"
     ) {
-      setFilterBank(item ? { label: item.label, value: item.value } : null);
+      setFilterBank(item ? { name: item.name, id: item.id } : null);
     } else if (headerDropdownLabel === "Fecha" && item?.year && item?.month) {
       setFilterDate({ year: item.year, month: item.month });
     } else if (headerDropdownLabel === "Monto") {
@@ -370,7 +370,7 @@ export default function TxnTable({
           ]}
         >
           <Text style={[styles.filterChipText, { color: theme.colors.text }]}>
-            Banco: {filterBank.label}
+            Banco: {filterBank.name}
           </Text>
           <MaterialIcons
             name="close"

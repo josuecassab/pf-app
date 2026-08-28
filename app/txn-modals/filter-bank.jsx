@@ -17,8 +17,13 @@ import { useBanks } from "../../hooks/useBanks";
 import { useTxnFilterModalSubmit } from "../../hooks/useTxnFilterModalSubmit";
 import {
   parseJsonParam,
-  TXN_FILTER_NULL_OPTION,
+  TXN_FILTER_NULL_VALUE,
 } from "../../lib/txnFilterModalParams";
+
+const TXN_FILTER_NULL_OPTION = {
+  name: "null",
+  id: TXN_FILTER_NULL_VALUE,
+};
 
 const HEADER = "Cuenta";
 const DROP_MAX_H = 480;
@@ -93,10 +98,10 @@ export default function TxnModalFilterBank() {
                 <Dropdown
                   key={HEADER}
                   data={data}
-                  value={filterBank?.value}
+                  value={filterBank?.id}
                   onChange={(item) => submit(HEADER, item)}
-                  labelField="label"
-                  valueField="value"
+                  labelField="name"
+                  valueField="id"
                   placeholder="Seleccionar banco"
                   searchPlaceholder="Buscar banco..."
                   search

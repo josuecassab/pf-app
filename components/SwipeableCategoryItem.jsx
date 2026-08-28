@@ -27,6 +27,7 @@ export default function SwipeableCategoryItem({
   onPress,
   onDelete,
   onEdit,
+  showEdit = true,
   isLoading = false,
   emptyNameMessage = "El nombre de la categoría no puede estar vacío.",
   renameConfirmTitle = "Cambiar nombre",
@@ -94,70 +95,72 @@ export default function SwipeableCategoryItem({
   return (
     <View style={styles.container}>
       <View style={styles.actionsContainer}>
-        {isLoading ? (
-          <ActivityIndicator size="small" color={theme.colors.text} />
-        ) : isEditing ? (
-          <Pressable
-            style={({ pressed }) => [
-              styles.actionButton,
-              styles.sendButton,
-              { borderLeftColor: theme.colors.surface },
-              pressed && styles.actionButtonPressed,
-            ]}
-            onPress={() => {
-              if (categoryLabel.trim() === "") {
-                Alert.alert("Error", emptyNameMessage);
-                return;
-              }
-              console.log(categoryLabel);
-              Alert.alert(renameConfirmTitle, renameConfirmMessage, [
-                { text: "No" },
-                {
-                  text: "Si",
-                  onPress: () => {
-                    onEdit(cat.value, categoryLabel, parentId);
-                    setIsEditing(false);
-                    position.value = 0;
-                    pressed.value = false;
-                    setCategoryLabel("");
-                  },
-                },
-              ]);
-            }}
-          >
-            <Octicons name="check" size={22} color="#ffffff" />
-          </Pressable>
-        ) : (
-          <Pressable
-            style={({ pressed }) => [
-              styles.actionButton,
-              styles.editButton,
-              { borderLeftColor: theme.colors.surface },
-              pressed && styles.actionButtonPressed,
-            ]}
-            disabled={isLoading}
-            onPress={() => {
-              setIsEditing(!isEditing);
-              setDisplayedInputCat((prev) => {
-                const newSet = new Set(prev);
-                if (newSet.has(cat.value)) {
-                  newSet.delete(cat.value);
-                } else {
-                  newSet.add(cat.value);
+        {showEdit &&
+          (isLoading ? (
+            <ActivityIndicator size="small" color={theme.colors.text} />
+          ) : isEditing ? (
+            <Pressable
+              style={({ pressed }) => [
+                styles.actionButton,
+                styles.sendButton,
+                { borderLeftColor: theme.colors.surface },
+                pressed && styles.actionButtonPressed,
+              ]}
+              onPress={() => {
+                if (categoryLabel.trim() === "") {
+                  Alert.alert("Error", emptyNameMessage);
+                  return;
                 }
-                return newSet;
-              });
-            }}
-          >
-            <Octicons name="pencil" size={22} color="#ffffff" />
-          </Pressable>
-        )}
+                console.log(categoryLabel);
+                Alert.alert(renameConfirmTitle, renameConfirmMessage, [
+                  { text: "No" },
+                  {
+                    text: "Si",
+                    onPress: () => {
+                      onEdit(cat.value, categoryLabel, parentId);
+                      setIsEditing(false);
+                      position.value = 0;
+                      pressed.value = false;
+                      setCategoryLabel("");
+                    },
+                  },
+                ]);
+              }}
+            >
+              <Octicons name="check" size={22} color="#ffffff" />
+            </Pressable>
+          ) : (
+            <Pressable
+              style={({ pressed }) => [
+                styles.actionButton,
+                styles.editButton,
+                { borderLeftColor: theme.colors.surface },
+                pressed && styles.actionButtonPressed,
+              ]}
+              disabled={isLoading}
+              onPress={() => {
+                setIsEditing(!isEditing);
+                setDisplayedInputCat((prev) => {
+                  const newSet = new Set(prev);
+                  if (newSet.has(cat.value)) {
+                    newSet.delete(cat.value);
+                  } else {
+                    newSet.add(cat.value);
+                  }
+                  return newSet;
+                });
+              }}
+            >
+              <Octicons name="pencil" size={22} color="#ffffff" />
+            </Pressable>
+          ))}
         <Pressable
           onPress={() => onDelete(cat.value)}
           style={({ pressed }) => [
             styles.actionButton,
             styles.deleteButton,
             { borderLeftColor: theme.colors.borderLight },
+            !showEdit && styles.deleteButtonOnly,
             pressed && styles.actionButtonPressed,
           ]}
         >
@@ -281,6 +284,9 @@ const styles = StyleSheet.create({
   },
   deleteButton: {
     backgroundColor: "#dc2626",
+  },
+  deleteButtonOnly: {
+    maxWidth: 140,
   },
   actionButtonPressed: {
     opacity: 0.7,
