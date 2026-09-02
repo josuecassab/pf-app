@@ -45,6 +45,15 @@ const months = {
 const calendarMonths = Object.keys(months).filter((m) => m !== "total");
 
 const years = [2026, 2025, 2024, 2023, 2022, 2021];
+const CURRENCIES = ["COP", "USD"];
+const DEFAULT_CURRENCY = "COP";
+
+function txnCurrency(txn) {
+  const raw = String(txn?.currency ?? DEFAULT_CURRENCY)
+    .trim()
+    .toUpperCase();
+  return raw || DEFAULT_CURRENCY;
+}
 
 function formatSummaryAmount(num) {
   const n = Number(num);
@@ -202,7 +211,9 @@ export default function Summary() {
   const { theme } = useTheme();
   const [text, setText] = useState("");
   const [showYears, setShowYears] = useState(false);
+  const [showCurrencies, setShowCurrencies] = useState(false);
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
+  const [selectedCurrency, setSelectedCurrency] = useState(DEFAULT_CURRENCY);
   const [selectedGroupTab, setSelectedGroupTab] = useState("all");
   const [defaultGroupTab, setDefaultGroupTab] = useState(null);
   const [groupModalVisible, setGroupModalVisible] = useState(false);
@@ -347,6 +358,7 @@ export default function Summary() {
     for (const item of txns) {
       const parts = txnCalendarParts(item.date);
       if (!parts || parts.year !== selectedYear) continue;
+      if (txnCurrency(item) !== selectedCurrency) continue;
 
       if (!catTotalMap.has(item.category_id)) {
         catTotalMap.set(item.category_id, {
@@ -429,7 +441,7 @@ export default function Summary() {
         }),
       ),
     }));
-  }, [txns, selectedYear]);
+  }, [txns, selectedYear, selectedCurrency]);
 
   const chartData = useMemo(
     () => filterRowsByGroup(groupedRows, selectedGroupTab, categoryGroups),
@@ -794,64 +806,131 @@ export default function Summary() {
           <Text style={[styles.screenTitle, { color: theme.colors.text }]}>
             Resumen
           </Text>
-          <View style={styles.yearSelector}>
-            <Pressable
-              style={({ pressed }) => [
-                styles.yearButton,
-                {
-                  backgroundColor: theme.colors.surface,
-                  borderColor: theme.colors.border,
-                },
-                pressed && styles.yearButtonPressed,
-              ]}
-              onPress={() => setShowYears(!showYears)}
-              accessibilityRole="button"
-              accessibilityLabel={`Año ${selectedYear}`}
-            >
-              <Text
-                style={[styles.yearButtonText, { color: theme.colors.text }]}
-              >
-                {selectedYear}
-              </Text>
-              <AntDesign
-                name={showYears ? "up" : "down"}
-                size={12}
-                color={theme.colors.textSecondary}
-              />
-            </Pressable>
-            {showYears && (
-              <ScrollView
-                style={[
-                  styles.yearDropdown,
+          <View style={styles.headerActions}>
+            <View style={styles.yearSelector}>
+              <Pressable
+                style={({ pressed }) => [
+                  styles.yearButton,
                   {
                     backgroundColor: theme.colors.surface,
                     borderColor: theme.colors.border,
                   },
+                  pressed && styles.yearButtonPressed,
                 ]}
+                onPress={() => {
+                  setShowCurrencies((open) => !open);
+                  setShowYears(false);
+                }}
+                accessibilityRole="button"
+                accessibilityLabel={`Moneda ${selectedCurrency}`}
               >
-                {years.map((item, index) => (
-                  <Pressable
-                    key={index}
-                    style={({ pressed }) => [
-                      styles.yearOption,
-                      {
-                        backgroundColor:
-                          selectedYear === item
-                            ? theme.colors.inputBackground
-                            : "transparent",
-                      },
-                      pressed && styles.yearOptionPressed,
-                    ]}
-                    onPress={() => {
-                      setSelectedYear(item);
-                      setShowYears(false);
-                    }}
-                  >
-                    <Text style={{ color: theme.colors.text }}>{item}</Text>
-                  </Pressable>
-                ))}
-              </ScrollView>
-            )}
+                <Text
+                  style={[styles.yearButtonText, { color: theme.colors.text }]}
+                >
+                  {selectedCurrency}
+                </Text>
+                <AntDesign
+                  name={showCurrencies ? "up" : "down"}
+                  size={12}
+                  color={theme.colors.textSecondary}
+                />
+              </Pressable>
+              {showCurrencies && (
+                <ScrollView
+                  style={[
+                    styles.yearDropdown,
+                    {
+                      backgroundColor: theme.colors.surface,
+                      borderColor: theme.colors.border,
+                    },
+                  ]}
+                >
+                  {CURRENCIES.map((item) => (
+                    <Pressable
+                      key={item}
+                      style={({ pressed }) => [
+                        styles.yearOption,
+                        {
+                          backgroundColor:
+                            selectedCurrency === item
+                              ? theme.colors.inputBackground
+                              : "transparent",
+                        },
+                        pressed && styles.yearOptionPressed,
+                      ]}
+                      onPress={() => {
+                        setSelectedCurrency(item);
+                        setShowCurrencies(false);
+                      }}
+                    >
+                      <Text style={{ color: theme.colors.text }}>{item}</Text>
+                    </Pressable>
+                  ))}
+                </ScrollView>
+              )}
+            </View>
+            <View style={styles.yearSelector}>
+              <Pressable
+                style={({ pressed }) => [
+                  styles.yearButton,
+                  {
+                    backgroundColor: theme.colors.surface,
+                    borderColor: theme.colors.border,
+                  },
+                  pressed && styles.yearButtonPressed,
+                ]}
+                onPress={() => {
+                  setShowYears((open) => !open);
+                  setShowCurrencies(false);
+                }}
+                accessibilityRole="button"
+                accessibilityLabel={`Año ${selectedYear}`}
+              >
+                <Text
+                  style={[styles.yearButtonText, { color: theme.colors.text }]}
+                >
+                  {selectedYear}
+                </Text>
+                <AntDesign
+                  name={showYears ? "up" : "down"}
+                  size={12}
+                  color={theme.colors.textSecondary}
+                />
+              </Pressable>
+              {showYears && (
+                <ScrollView
+                  style={[
+                    styles.yearDropdown,
+                    {
+                      backgroundColor: theme.colors.surface,
+                      borderColor: theme.colors.border,
+                    },
+                  ]}
+                >
+                  {years.map((item, index) => (
+                    <Pressable
+                      key={index}
+                      style={({ pressed }) => [
+                        styles.yearOption,
+                        {
+                          backgroundColor:
+                            selectedYear === item
+                              ? theme.colors.inputBackground
+                              : "transparent",
+                        },
+                        pressed && styles.yearOptionPressed,
+                      ]}
+                      onPress={() => {
+                        setSelectedYear(item);
+                        setShowYears(false);
+                      }}
+                    >
+                      <Text style={{ color: theme.colors.text }}>{item}</Text>
+                    </Pressable>
+                  ))}
+                </ScrollView>
+              )}
+            </View>
           </View>
         </View>
         {isPending && (
@@ -1564,6 +1643,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     marginTop: 6,
     marginBottom: 8,
+  },
+  headerActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
   },
   yearSelector: {
     alignItems: "flex-end",

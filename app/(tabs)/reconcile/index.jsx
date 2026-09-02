@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import * as DocumentPicker from "expo-document-picker";
 import { router } from "expo-router";
 import { PDFDocument } from "pdf-lib";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -24,6 +24,7 @@ import { usePurchasesContext } from "../../../contexts/PurchasesContext";
 import { useTheme } from "../../../contexts/ThemeContext";
 import { useBanks } from "../../../hooks/useBanks";
 import { formatApiError } from "../../../lib/apiErrors";
+import { QUERY_CACHE_MAX_AGE } from "../../../lib/queryClient";
 import { hasActiveEntitlement } from "../../../lib/revenuecatEntitlements";
 import { reconcileStyles } from "../reconcileStyles";
 
@@ -59,6 +60,73 @@ function statementPathFromListItem(item) {
     }
   }
   return null;
+}
+
+function statementLabelFromPath(path) {
+  if (!path || typeof path !== "string") return null;
+  return path.split("/").at(-1).split(".")[0] || null;
+}
+
+function hintFromCreateStatementBody(
+  body,
+  fileName,
+  previousValues,
+  minUpdatedAt,
+) {
+  const path = statementPathFromListItem(body);
+  const table =
+    typeof body?.table === "string"
+      ? body.table
+      : typeof body?.table_name === "string"
+        ? body.table_name
+        : typeof body?.name === "string"
+          ? body.name
+          : null;
+  return {
+    path,
+    label:
+      statementLabelFromPath(path) || statementLabelFromPath(table) || null,
+    fileStem: statementLabelFromPath(fileName),
+    previousValues: Array.isArray(previousValues) ? previousValues : [],
+    minUpdatedAt: minUpdatedAt ?? 0,
+  };
+}
+
+function findStatementForUploadHint(statements, hint) {
+  if (!hint || !Array.isArray(statements) || statements.length === 0) {
+    return null;
+  }
+  if (hint.path) {
+    const byPath = statements.find(
+      (s) => s.value === hint.path || s.value.endsWith(hint.path),
+    );
+    if (byPath) return byPath;
+  }
+
+  const previous = new Set(hint.previousValues ?? []);
+  const newcomers = previous.size
+    ? statements.filter((s) => !previous.has(s.value))
+    : [];
+  const labelsToTry = [hint.label, hint.fileStem].filter(Boolean);
+  const matchLabel = (list) => {
+    for (const label of labelsToTry) {
+      const byLabel = list.find(
+        (s) =>
+          s.label === label || s.label.toLowerCase() === label.toLowerCase(),
+      );
+      if (byLabel) return byLabel;
+    }
+    return null;
+  };
+
+  if (newcomers.length === 1) return newcomers[0];
+  if (newcomers.length > 1) {
+    return matchLabel(newcomers) ?? newcomers[0];
+  }
+  if (previous.size === 0 && statements.length === 1) {
+    return statements[0];
+  }
+  return matchLabel(statements);
 }
 
 /** Display name after /banks/ + financial-entities join (`name`; `label` is legacy). */
@@ -218,37 +286,38 @@ export default function Reconcile() {
   const [file, setFile] = useState(null);
   const [pdfPassword, setPdfPassword] = useState("");
   const [pdfPasswordRequired, setPdfPasswordRequired] = useState(false);
-  const [statements, setStatements] = useState([]);
   const [selectedStatement, setSelectedStatement] = useState(null);
+  const [pendingUploadedHint, setPendingUploadedHint] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
   const [conciliarGateBusy, setConciliarGateBusy] = useState(false);
   const [previewExpanded, setPreviewExpanded] = useState(false);
 
   const selectedBank = useMemo(() => {
-    if (!bankList.length) return null;
-    const fromStatement = selectedStatement?.value
-      ? bankFromStatementGcsUri(selectedStatement.value, bankList)
-      : null;
+    if (!bankList.length || !selectedStatement?.value) return null;
+    const fromStatement = bankFromStatementGcsUri(
+      selectedStatement.value,
+      bankList,
+    );
     return fromStatement ?? bankList[0];
   }, [bankList, selectedStatement?.value]);
 
-  const fetchStatements = useCallback(async () => {
-    if (!tenantId) return;
-    try {
+  const {
+    data: statements = [],
+    isLoading: isLoadingStatements,
+    error: statementsError,
+    dataUpdatedAt: statementsUpdatedAt,
+  } = useQuery({
+    queryKey: ["list_statements", tenantId],
+    queryFn: async () => {
       const res = await fetch(`${API_URL}/list_statements/`, {
         headers: getAuthHeaders(),
       });
-      const payload = await res.json();
+      const payload = await res.json().catch(() => ({}));
       if (!res.ok) {
-        console.error("list_statements failed:", res.status, payload);
-        Alert.alert(
-          "Error",
+        throw new Error(
           formatApiError(payload) ||
             `No se pudieron listar los extractos (${res.status})`,
         );
-        setStatements([]);
-        setSelectedStatement(null);
-        return;
       }
       const rawList = Array.isArray(payload)
         ? payload
@@ -261,43 +330,47 @@ export default function Reconcile() {
               : Array.isArray(payload?.data)
                 ? payload.data
                 : [];
-      if (
-        rawList.length === 0 &&
-        payload != null &&
-        typeof payload === "object" &&
-        !Array.isArray(payload)
-      ) {
-        console.warn(
-          "list_statements: expected an array or known wrapper; got keys:",
-          Object.keys(payload),
-        );
-      }
-      const statements = rawList
+      return rawList
         .map(statementPathFromListItem)
         .filter(Boolean)
         .map((item) => ({
-          label: item.split("/").at(-1).split(".")[0],
+          label: statementLabelFromPath(item),
           value: item,
         }));
-      setStatements(statements);
-      setSelectedStatement((prev) => {
-        if (prev && statements.some((s) => s.value === prev.value)) {
-          return prev;
-        }
-        return statements[0] ?? null;
-      });
-    } catch (error) {
-      console.error("Error fetching statements:", error);
-      Alert.alert(
-        "Error",
-        error?.message ?? "No se pudieron cargar los extractos.",
-      );
-    }
-  }, [tenantId, getAuthHeaders]);
+    },
+    enabled: !!tenantId,
+    select: (data) => (Array.isArray(data) ? data : []),
+    refetchOnMount: (query) =>
+      Array.isArray(query.state.data) ? true : "always",
+    retry: (failureCount, error) => {
+      if (/invalid or expired token/i.test(error?.message ?? "")) {
+        return false;
+      }
+      return failureCount < 3;
+    },
+    staleTime: 1000 * 60 * 60,
+    gcTime: QUERY_CACHE_MAX_AGE,
+  });
 
   useEffect(() => {
-    fetchStatements();
-  }, [fetchStatements]);
+    if (pendingUploadedHint) {
+      if (statementsUpdatedAt <= pendingUploadedHint.minUpdatedAt) {
+        return;
+      }
+      const match = findStatementForUploadHint(statements, pendingUploadedHint);
+      if (match) {
+        setSelectedStatement(match);
+      }
+      setPendingUploadedHint(null);
+      return;
+    }
+    setSelectedStatement((prev) => {
+      if (prev && statements.some((s) => s.value === prev.value)) {
+        return prev;
+      }
+      return null;
+    });
+  }, [statements, pendingUploadedHint, statementsUpdatedAt]);
 
   useEffect(() => {
     setPreviewExpanded(false);
@@ -460,7 +533,17 @@ export default function Reconcile() {
       }
 
       console.log("Upload successful:", body);
-      fetchStatements();
+      setPendingUploadedHint(
+        hintFromCreateStatementBody(
+          body,
+          file?.name,
+          statements.map((s) => s.value),
+          statementsUpdatedAt,
+        ),
+      );
+      await queryClient.invalidateQueries({
+        queryKey: ["list_statements", tenantId],
+      });
       setPdfPassword("");
       setPdfPasswordRequired(false);
       setIsLoading(false);
@@ -882,7 +965,18 @@ export default function Reconcile() {
           isComplete={step2Complete}
           theme={theme}
         >
-          {statements.length === 0 ? (
+          {isLoadingStatements ? (
+            <ActivityIndicator size="small" color={theme.colors.primary} />
+          ) : statementsError ? (
+            <Text
+              style={[
+                reconcileStyles.wizardEmptyHint,
+                { color: theme.colors.error },
+              ]}
+            >
+              {statementsError.message}
+            </Text>
+          ) : statements.length === 0 ? (
             <Text
               style={[
                 reconcileStyles.wizardEmptyHint,
@@ -930,6 +1024,7 @@ export default function Reconcile() {
                 placeholder="Seleccionar extracto"
                 value={selectedStatement?.value}
                 onChange={(item) => {
+                  setPendingUploadedHint(null);
                   setSelectedStatement({
                     label: item.label,
                     value: item.value,

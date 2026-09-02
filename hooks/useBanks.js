@@ -1,5 +1,5 @@
-import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { useMemo } from "react";
 import { useAuth } from "../contexts/AuthContext";
 import { formatApiError } from "../lib/apiErrors";
 import { QUERY_CACHE_MAX_AGE } from "../lib/queryClient";
@@ -34,7 +34,7 @@ export function useBanks() {
       // Persisted cache may still be { banks, financialEntities } from before the split.
       return Array.isArray(data) ? data : (data?.banks ?? []);
     },
-    staleTime: 0,
+    staleTime: 1000 * 60 * 60,
     gcTime: QUERY_CACHE_MAX_AGE,
   });
 

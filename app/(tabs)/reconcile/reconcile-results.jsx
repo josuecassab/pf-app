@@ -535,6 +535,9 @@ export default function ReconcileResults() {
         Alert.alert("Error", insertTxnsResponse.message);
         return;
       }
+      await queryClient.invalidateQueries({
+        queryKey: ["txns", tenantId],
+      });
       Alert.alert("Éxito", "✅ Conciliación completada correctamente!");
       navigation.goBack();
     } catch (error) {

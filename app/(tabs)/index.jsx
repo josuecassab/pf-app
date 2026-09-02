@@ -4,7 +4,7 @@ import SegmentedControl from "@react-native-segmented-control/segmented-control"
 import { useQueryClient } from "@tanstack/react-query";
 import * as Localization from "expo-localization";
 import { router } from "expo-router";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -17,7 +17,6 @@ import {
   TextInput,
   View,
 } from "react-native";
-import { Dropdown } from "react-native-element-dropdown";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useAuth } from "../../contexts/AuthContext";
 import { useTheme } from "../../contexts/ThemeContext";
@@ -131,6 +130,162 @@ function formatFullAmount(num, decimal, group) {
   return intFmt + decimal + fracStr;
 }
 
+function normalizeSearchText(value) {
+  return String(value ?? "")
+    .toLowerCase()
+    .replace(/\s/g, "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+}
+
+function SearchableSelect({
+  open,
+  onOpen,
+  onClose,
+  data,
+  labelField,
+  valueField,
+  value,
+  placeholder,
+  searchPlaceholder,
+  disable = false,
+  theme,
+  onChange,
+}) {
+  const inputRef = useRef(null);
+  const [query, setQuery] = useState("");
+
+  useEffect(() => {
+    if (!open) {
+      setQuery("");
+      return;
+    }
+    const timeoutId = setTimeout(() => inputRef.current?.focus(), 40);
+    return () => clearTimeout(timeoutId);
+  }, [open]);
+
+  const selected = data.find((item) => item[valueField] === value);
+  const filtered = useMemo(() => {
+    if (!query) return data;
+    const key = normalizeSearchText(query);
+    return data.filter((item) =>
+      normalizeSearchText(item[labelField]).includes(key),
+    );
+  }, [data, query, labelField]);
+
+  if (disable || !open) {
+    return (
+      <Pressable
+        disabled={disable}
+        onPress={onOpen}
+        style={({ pressed }) => [
+          styles.selectField,
+          { backgroundColor: theme.colors.inputBackground },
+          disable && styles.selectFieldDisabled,
+          pressed && !disable && { opacity: 0.85 },
+        ]}
+      >
+        <Text
+          numberOfLines={1}
+          style={[
+            selected ? styles.selectedTextStyle : styles.placeholderStyle,
+            {
+              color: selected
+                ? theme.colors.text
+                : theme.colors.placeholder,
+              flex: 1,
+            },
+          ]}
+        >
+          {selected ? selected[labelField] : placeholder}
+        </Text>
+        <Feather
+          name="chevron-down"
+          size={18}
+          color={theme.colors.placeholder}
+        />
+      </Pressable>
+    );
+  }
+
+  return (
+    <View
+      style={[
+        styles.selectOpen,
+        { backgroundColor: theme.colors.inputBackground },
+      ]}
+    >
+      <View
+        style={[
+          styles.selectSearchRow,
+          { borderBottomColor: theme.colors.border },
+        ]}
+      >
+        <Feather name="search" size={16} color={theme.colors.placeholder} />
+        <TextInput
+          ref={inputRef}
+          value={query}
+          onChangeText={setQuery}
+          placeholder={searchPlaceholder}
+          placeholderTextColor={theme.colors.placeholder}
+          autoCorrect={false}
+          autoCapitalize="none"
+          style={[styles.selectSearchInput, { color: theme.colors.text }]}
+        />
+        <Pressable
+          accessibilityLabel="Cerrar búsqueda"
+          onPress={onClose}
+          hitSlop={8}
+          style={({ pressed }) => [pressed && { opacity: 0.55 }]}
+        >
+          <Feather name="x" size={18} color={theme.colors.placeholder} />
+        </Pressable>
+      </View>
+      <ScrollView
+        keyboardShouldPersistTaps="always"
+        nestedScrollEnabled
+        style={styles.selectResults}
+      >
+        {filtered.length === 0 ? (
+          <Text
+            style={[
+              styles.selectEmpty,
+              { color: theme.colors.placeholder },
+            ]}
+          >
+            Sin resultados
+          </Text>
+        ) : (
+          filtered.map((item) => {
+            const isActive = item[valueField] === value;
+            return (
+              <Pressable
+                key={String(item[valueField])}
+                onPress={() => {
+                  onChange(item);
+                  onClose();
+                }}
+                style={({ pressed }) => [
+                  styles.selectItem,
+                  isActive && { backgroundColor: `${theme.colors.primary}20` },
+                  pressed && { opacity: 0.7 },
+                ]}
+              >
+                <Text
+                  numberOfLines={1}
+                  style={[styles.selectItemText, { color: theme.colors.text }]}
+                >
+                  {item[labelField]}
+                </Text>
+              </Pressable>
+            );
+          })
+        )}
+      </ScrollView>
+    </View>
+  );
+}
+
 export default function Index() {
   const [selectedCategory, setSelectedCategory] = useState(null);
   const [selectedSubcategory, setSelectedSubcategory] = useState(null);
@@ -157,6 +312,45 @@ export default function Index() {
     tenantId,
   );
   const [selectedCurrency, setSelectedCurrency] = useState(CURRENCIES[0]);
+  const [openSelect, setOpenSelect] = useState(null);
+  const scrollViewRef = useRef(null);
+  const scrollOffsetY = useRef(0);
+  const categoryAnchorRef = useRef(null);
+  const subcategoryAnchorRef = useRef(null);
+  const bankAnchorRef = useRef(null);
+
+  const handleFormScroll = useCallback((event) => {
+    scrollOffsetY.current = event.nativeEvent.contentOffset.y;
+  }, []);
+
+  const scrollAnchorToTop = useCallback((anchorRef) => {
+    const scrollView = scrollViewRef.current;
+    const anchor = anchorRef.current;
+    if (!scrollView || !anchor) return;
+
+    scrollView.measureInWindow((_sx, scrollViewY) => {
+      anchor.measureInWindow((_ax, anchorY) => {
+        const delta = anchorY - scrollViewY - 8;
+        if (Math.abs(delta) < 2) return;
+        scrollView.scrollTo({
+          y: Math.max(0, scrollOffsetY.current + delta),
+          animated: true,
+        });
+      });
+    });
+  }, []);
+
+  useEffect(() => {
+    if (openSelect == null) return;
+    const anchorRef =
+      openSelect === "category"
+        ? categoryAnchorRef
+        : openSelect === "subcategory"
+          ? subcategoryAnchorRef
+          : bankAnchorRef;
+    const frame = requestAnimationFrame(() => scrollAnchorToTop(anchorRef));
+    return () => cancelAnimationFrame(frame);
+  }, [openSelect, scrollAnchorToTop]);
 
   const subcategoriesMap = useMemo(() => {
     const subcategoriesMap = {};
@@ -326,36 +520,6 @@ export default function Index() {
         ? theme.colors.success
         : theme.colors.error;
 
-  const dropdownTheme = {
-    placeholderStyle: [
-      styles.placeholderStyle,
-      { color: theme.colors.placeholder },
-    ],
-    selectedTextStyle: [
-      styles.selectedTextStyle,
-      { color: theme.colors.text },
-    ],
-    inputSearchStyle: [
-      styles.inputSearchStyle,
-      { color: theme.colors.text },
-    ],
-    iconStyle: styles.iconStyle,
-    containerStyle: {
-      backgroundColor: theme.colors.inputBackground,
-      borderRadius: 16,
-      borderColor: theme.colors.border,
-    },
-    itemContainerStyle: {
-      backgroundColor: theme.colors.inputBackground,
-      borderRadius: 12,
-    },
-    itemTextStyle: {
-      color: theme.colors.text,
-      fontSize: 14,
-    },
-    activeColor: `${theme.colors.primary}20`,
-  };
-
   return (
     <SafeAreaView
       edges={["top", "bottom", "left", "right"]}
@@ -366,11 +530,17 @@ export default function Index() {
         style={{ flex: 1 }}
       >
         <ScrollView
-          contentContainerStyle={styles.scrollContent}
+          ref={scrollViewRef}
+          contentContainerStyle={[
+            styles.scrollContent,
+            openSelect != null && styles.scrollContentSelectOpen,
+          ]}
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode="on-drag"
           nestedScrollEnabled
           showsVerticalScrollIndicator={false}
+          onScroll={handleFormScroll}
+          scrollEventThrottle={16}
         >
           <View style={styles.amountSection}>
             <View style={styles.currencyInputWrapper}>
@@ -511,60 +681,59 @@ export default function Index() {
                 />
               </Pressable>
             </View>
-            <Dropdown
-              {...dropdownTheme}
-              style={[
-                styles.dropdown,
-                { backgroundColor: theme.colors.inputBackground },
-              ]}
-              data={categoriesData ?? EMPTY_DROPDOWN_DATA}
-              search
-              maxHeight={220}
-              labelField="label"
-              valueField="value"
-              placeholder={
-                isLoadingCategories ? "Cargando..." : "Seleccionar categoría"
-              }
-              searchPlaceholder="Buscar..."
-              value={selectedCategory?.value}
-              onChange={(item) => {
-                setSelectedCategory({
-                  label: item.label,
-                  value: item.value,
-                });
-                setSelectedSubcategory(null);
-              }}
-            />
-            <Dropdown
-              {...dropdownTheme}
-              style={[
-                styles.dropdown,
-                { backgroundColor: theme.colors.inputBackground },
-              ]}
-              data={
-                subcategoriesMap[selectedCategory?.value] ?? EMPTY_DROPDOWN_DATA
-              }
-              search
-              maxHeight={220}
-              labelField="label"
-              valueField="value"
-              placeholder={
-                isLoadingSubcategories
-                  ? "Cargando..."
-                  : selectedCategory
-                    ? "Seleccionar subcategoría"
-                    : "Primero elige categoría"
-              }
-              searchPlaceholder="Buscar..."
-              value={selectedSubcategory?.value}
-              disable={!selectedCategory}
-              onChange={(item) => {
-                setSelectedSubcategory({
-                  label: item.label,
-                  value: item.value,
-                });
-              }}
-            />
+            <View ref={categoryAnchorRef} collapsable={false}>
+              <SearchableSelect
+                open={openSelect === "category"}
+                onOpen={() => setOpenSelect("category")}
+                onClose={() => setOpenSelect(null)}
+                data={categoriesData ?? EMPTY_DROPDOWN_DATA}
+                labelField="label"
+                valueField="value"
+                value={selectedCategory?.value}
+                placeholder={
+                  isLoadingCategories ? "Cargando..." : "Seleccionar categoría"
+                }
+                searchPlaceholder="Buscar..."
+                theme={theme}
+                onChange={(item) => {
+                  setSelectedCategory({
+                    label: item.label,
+                    value: item.value,
+                  });
+                  setSelectedSubcategory(null);
+                }}
+              />
+            </View>
+            <View ref={subcategoryAnchorRef} collapsable={false}>
+              <SearchableSelect
+                open={openSelect === "subcategory"}
+                onOpen={() => setOpenSelect("subcategory")}
+                onClose={() => setOpenSelect(null)}
+                data={
+                  subcategoriesMap[selectedCategory?.value] ??
+                  EMPTY_DROPDOWN_DATA
+                }
+                labelField="label"
+                valueField="value"
+                value={selectedSubcategory?.value}
+                placeholder={
+                  isLoadingSubcategories
+                    ? "Cargando..."
+                    : selectedCategory
+                      ? "Seleccionar subcategoría"
+                      : "Primero elige categoría"
+                }
+                searchPlaceholder="Buscar..."
+                disable={!selectedCategory}
+                theme={theme}
+                onChange={(item) => {
+                  setSelectedSubcategory({
+                    label: item.label,
+                    value: item.value,
+                  });
+                }}
+              />
+            </View>
           </View>
 
           <View style={[styles.card, { backgroundColor: theme.colors.card }]}>
@@ -588,22 +757,23 @@ export default function Index() {
                 />
               </Pressable>
             </View>
-            <Dropdown
-              {...dropdownTheme}
-              style={[
-                styles.dropdown,
-                { backgroundColor: theme.colors.inputBackground },
-              ]}
-              data={bankList}
-              labelField="name"
-              valueField="id"
-              placeholder={
-                isLoadingBanks ? "Cargando..." : "Seleccionar banco"
-              }
-              searchPlaceholder="Buscar..."
-              value={selectedBank?.id ?? selectedBank?.value}
-              onChange={selectBank}
-            />
+            <View ref={bankAnchorRef} collapsable={false}>
+              <SearchableSelect
+                open={openSelect === "bank"}
+                onOpen={() => setOpenSelect("bank")}
+                onClose={() => setOpenSelect(null)}
+                data={bankList}
+                labelField="name"
+                valueField="id"
+                value={selectedBank?.id ?? selectedBank?.value}
+                placeholder={
+                  isLoadingBanks ? "Cargando..." : "Seleccionar banco"
+                }
+                searchPlaceholder="Buscar..."
+                theme={theme}
+                onChange={selectBank}
+              />
+            </View>
           </View>
         </ScrollView>
 
@@ -636,6 +806,9 @@ const styles = StyleSheet.create({
     paddingTop: 12,
     paddingBottom: 16,
     gap: 12,
+  },
+  scrollContentSelectOpen: {
+    paddingBottom: 280,
   },
   amountSection: {
     paddingVertical: 4,
@@ -696,10 +869,50 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     fontSize: 15,
   },
-  dropdown: {
+  selectField: {
     height: 44,
     width: "100%",
     borderRadius: 12,
+    paddingHorizontal: 14,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  selectFieldDisabled: {
+    opacity: 0.5,
+  },
+  selectOpen: {
+    width: "100%",
+    borderRadius: 12,
+    overflow: "hidden",
+  },
+  selectSearchRow: {
+    height: 44,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingHorizontal: 14,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  selectSearchInput: {
+    flex: 1,
+    fontSize: 14,
+    paddingVertical: 0,
+  },
+  selectResults: {
+    maxHeight: 220,
+  },
+  selectItem: {
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    borderRadius: 12,
+  },
+  selectItemText: {
+    fontSize: 14,
+  },
+  selectEmpty: {
+    fontSize: 14,
+    paddingVertical: 14,
     paddingHorizontal: 14,
   },
   placeholderStyle: {
@@ -707,15 +920,6 @@ const styles = StyleSheet.create({
   },
   selectedTextStyle: {
     fontSize: 14,
-  },
-  iconStyle: {
-    width: 20,
-    height: 20,
-  },
-  inputSearchStyle: {
-    height: 40,
-    fontSize: 14,
-    borderRadius: 12,
   },
   editButton: {
     borderRadius: 8,

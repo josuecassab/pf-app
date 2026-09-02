@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "../contexts/AuthContext";
 import { authJsonHeaders } from "../lib/apiHeaders";
+import { QUERY_CACHE_MAX_AGE } from "../lib/queryClient";
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL;
 
@@ -43,6 +44,7 @@ export function useCategoryGroups() {
     },
     enabled: !!tenantId,
     staleTime: 1000 * 60 * 60, // 1 hour - treat as global, avoid refetch on tab switch
+    gcTime: QUERY_CACHE_MAX_AGE,
   });
 
   const createGroup = useMutation({

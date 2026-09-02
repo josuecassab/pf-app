@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "../contexts/AuthContext";
 import { formatApiError } from "../lib/apiErrors";
+import { QUERY_CACHE_MAX_AGE } from "../lib/queryClient";
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL;
 
@@ -27,5 +28,6 @@ export function useSubcategories() {
     enabled: !!tenantId,
     select: (data) => data.sort((a, b) => a.label.localeCompare(b.label)),
     staleTime: 1000 * 60 * 60, // 1 hour - treat as global, avoid refetch on tab switch
+    gcTime: QUERY_CACHE_MAX_AGE,
   });
 }

@@ -23,7 +23,7 @@ import { useTheme } from "../contexts/ThemeContext";
 import { formatSpanishNumber } from "../lib/formatSpanishNumber";
 import { stringifyQueryKeyForParams } from "../lib/queryKeyParams";
 import { getTxnFilterModalPathname } from "../lib/txnFilterModalRoutes";
-import { applyTxnFilters } from "../lib/txnTableFilters";
+import { applyTxnFilters, txnCurrency } from "../lib/txnTableFilters";
 
 function paramOne(raw) {
   if (raw == null) return "";
@@ -67,6 +67,7 @@ export default function TxnTable({
   const [filterDate, setFilterDate] = useState(null);
   const [filterValue, setFilterValue] = useState(null);
   const [filterDescription, setFilterDescription] = useState("");
+  const [filterCurrency, setFilterCurrency] = useState(null);
 
   useEffect(() => {
     if (!headerFiltersOwned) return;
@@ -111,6 +112,10 @@ export default function TxnTable({
       setFilterValue(fv != null && fv !== "" ? fv : null);
     } else if (headerDropdownLabel === "Descripción") {
       setFilterDescription(typeof fd === "string" ? fd : "");
+    } else if (headerDropdownLabel === "Moneda") {
+      setFilterCurrency(
+        item ? { label: item.label, value: item.value } : null,
+      );
     }
     router.setParams({ txnFilterApplyJson: undefined });
   }, [tableName, routeParams.txnFilterApplyJson]);
@@ -193,6 +198,9 @@ export default function TxnTable({
       if (filterDescription && filterDescription.trim() !== "") {
         params.filterDescription = filterDescription;
       }
+      if (filterCurrency) {
+        params.filterCurrencyJson = JSON.stringify(filterCurrency);
+      }
       router.push({
         pathname: modalPath,
         params,
@@ -208,6 +216,7 @@ export default function TxnTable({
       filterDate,
       filterValue,
       filterDescription,
+      filterCurrency,
     ],
   );
 
@@ -219,6 +228,7 @@ export default function TxnTable({
       filterDate,
       filterValue,
       filterDescription,
+      filterCurrency,
     }),
     [
       filterCategory,
@@ -227,6 +237,7 @@ export default function TxnTable({
       filterDate,
       filterValue,
       filterDescription,
+      filterCurrency,
     ],
   );
 
@@ -288,7 +299,8 @@ export default function TxnTable({
       filterSubcategory ||
       filterBank ||
       filterValue != null ||
-      (filterDescription && filterDescription.trim() !== ""));
+      (filterDescription && filterDescription.trim() !== "") ||
+      filterCurrency);
 
   const filterChipsRow = !showFilterChips ? null : (
     <View style={styles.filterChipsRow}>
@@ -427,6 +439,28 @@ export default function TxnTable({
           />
         </Pressable>
       )}
+      {filterCurrency && (
+        <Pressable
+          onPress={() => setFilterCurrency(null)}
+          style={[
+            styles.filterChip,
+            {
+              backgroundColor: theme.colors.surface,
+              borderColor: theme.colors.border,
+            },
+          ]}
+        >
+          <Text style={[styles.filterChipText, { color: theme.colors.text }]}>
+            Moneda: {filterCurrency.label ?? filterCurrency.value}
+          </Text>
+          <MaterialIcons
+            name="close"
+            size={18}
+            color={theme.colors.text}
+            style={styles.filterChipIcon}
+          />
+        </Pressable>
+      )}
     </View>
   );
 
@@ -478,8 +512,9 @@ export default function TxnTable({
     Fecha: styles.colDate,
     Descripción: styles.colDescription,
     Monto: styles.colAmount,
+    Moneda: styles.colCurrency,
     Categoria: styles.colCategory,
-    Subcategoria: styles.colSubcategoria,
+    Subcategoria: styles.colSubcategory,
     Cuenta: styles.colBank,
     Editar: styles.colEdit,
   };
@@ -577,6 +612,7 @@ export default function TxnTable({
       {renderHeaderCell("Categoria")}
       {renderHeaderCell("Subcategoria")}
       {renderHeaderCell("Cuenta")}
+      {renderHeaderCell("Moneda")}
       {showEditColumn && renderHeaderCell("Editar")}
     </View>
   );
@@ -617,6 +653,23 @@ export default function TxnTable({
       </View>
     );
   };
+
+  const renderCurrencyCell = (item) => (
+    <View
+      style={[
+        styles.cell,
+        styles.colCurrency,
+        {
+          borderColor: theme.colors.border,
+          backgroundColor: theme.colors.background,
+        },
+      ]}
+    >
+      <Text style={[styles.cellText, { color: theme.colors.text }]}>
+        {txnCurrency(item)}
+      </Text>
+    </View>
+  );
 
   const renderDescriptionCell = (value) => (
     <View
@@ -767,6 +820,7 @@ export default function TxnTable({
       {renderCategoryCell(item.id, item.category_id)}
       {renderSubCategoryCell(item.id, item.subcategory_id, item.category_id)}
       {renderBankCell(item.id, item.bank_id)}
+      {renderCurrencyCell(item)}
       {showEditColumn && renderEditCell(item.reconciled)}
     </View>
   );
@@ -834,6 +888,7 @@ const styles = StyleSheet.create({
   colDate: { width: 99 },
   colDescription: { width: 112 },
   colAmount: { width: 112 },
+  colCurrency: { width: 74 },
   colCategory: { width: 112 },
   colSubcategory: { width: 112 },
   colBank: { width: 80 },
