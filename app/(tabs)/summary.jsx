@@ -18,7 +18,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import GroupedTable from "../../components/GroupedTable";
 import SummaryMonthlyBarChart, {
-  SUMMARY_CHART_NEGATIVE_REFERENCE_DEFAULT,
+  defaultNegativeReference,
 } from "../../components/SummaryMonthlyBarChart";
 import { useTheme } from "../../contexts/ThemeContext";
 import { useCategories } from "../../hooks/useCategories";
@@ -44,7 +44,6 @@ const months = {
 
 const calendarMonths = Object.keys(months).filter((m) => m !== "total");
 
-const years = [2026, 2025, 2024, 2023, 2022, 2021];
 const CURRENCIES = ["COP", "USD"];
 const DEFAULT_CURRENCY = "COP";
 
@@ -69,6 +68,16 @@ function txnCalendarParts(dateStr) {
   const month = Number(match[2]) - 1;
   if (!Number.isFinite(year) || month < 0 || month > 11) return null;
   return { year, month };
+}
+
+function uniqueYearsFromTxns(txns, currency) {
+  const set = new Set();
+  for (const item of txns) {
+    if (currency != null && txnCurrency(item) !== currency) continue;
+    const parts = txnCalendarParts(item.date);
+    if (parts) set.add(parts.year);
+  }
+  return Array.from(set).sort((a, b) => a - b);
 }
 
 function filterRowsByGroup(rows, selectedGroupTab, categoryGroups) {
@@ -121,6 +130,12 @@ function refLineGroupKey(groupTab) {
   return String(groupTab);
 }
 
+function refLineStorageKey(groupTab, currency) {
+  const group = refLineGroupKey(groupTab);
+  if (!currency || currency === DEFAULT_CURRENCY) return group;
+  return `${group}:${currency}`;
+}
+
 function parseStoredReferenceLines(raw) {
   if (raw == null) return {};
   try {
@@ -139,10 +154,10 @@ function parseStoredReferenceLines(raw) {
   }
 }
 
-function referenceLineForGroup(storedByGroup, groupTab) {
-  const stored = storedByGroup[refLineGroupKey(groupTab)];
+function referenceLineForGroup(storedByGroup, groupTab, currency) {
+  const stored = storedByGroup[refLineStorageKey(groupTab, currency)];
   if (Number.isFinite(stored) && stored > 0) return stored;
-  return SUMMARY_CHART_NEGATIVE_REFERENCE_DEFAULT;
+  return defaultNegativeReference(currency);
 }
 
 function parseStoredBarColors(raw) {
@@ -223,6 +238,7 @@ export default function Summary() {
   const [referenceLinesByGroup, setReferenceLinesByGroup] = useState({});
   const [barColorsByGroup, setBarColorsByGroup] = useState({});
   const [chartSettingsVisible, setChartSettingsVisible] = useState(false);
+  const [chartByYear, setChartByYear] = useState(false);
   const [refLineDraft, setRefLineDraft] = useState("");
   const [barColorDraft, setBarColorDraft] = useState("");
   const [summaryViewIndex, setSummaryViewIndex] = useState(0);
@@ -301,8 +317,13 @@ export default function Summary() {
   const supportsReferenceLine = selectedGroupTab !== "all";
 
   const activeReferenceLine = useMemo(
-    () => referenceLineForGroup(referenceLinesByGroup, selectedGroupTab),
-    [referenceLinesByGroup, selectedGroupTab],
+    () =>
+      referenceLineForGroup(
+        referenceLinesByGroup,
+        selectedGroupTab,
+        selectedCurrency,
+      ),
+    [referenceLinesByGroup, selectedGroupTab, selectedCurrency],
   );
 
   const activeBarColor = useMemo(
@@ -339,12 +360,17 @@ export default function Summary() {
 
   useEffect(() => {
     if (!hasNextPage || isFetchingNextPage || isPending) return;
+    if (chartByYear) {
+      fetchNextPage();
+      return;
+    }
     const oldestDate = data?.pages?.at(-1)?.at(-1)?.date;
     if (!oldestDate) return;
     if (oldestDate > `${selectedYear - 1}-12-31`) {
       fetchNextPage();
     }
   }, [
+    chartByYear,
     data,
     fetchNextPage,
     hasNextPage,
@@ -352,6 +378,26 @@ export default function Summary() {
     isPending,
     selectedYear,
   ]);
+
+  const yearsChronological = useMemo(
+    () => uniqueYearsFromTxns(txns, selectedCurrency),
+    [txns, selectedCurrency],
+  );
+
+  const pickerYears = useMemo(() => {
+    const years = uniqueYearsFromTxns(txns);
+    const set = new Set(years);
+    set.add(selectedYear);
+    return Array.from(set).sort((a, b) => b - a);
+  }, [txns, selectedYear]);
+
+  const yearChartLabels = useMemo(
+    () =>
+      Object.fromEntries(
+        yearsChronological.map((year) => [year, String(year)]),
+      ),
+    [yearsChronological],
+  );
 
   const groupedRows = useMemo(() => {
     const catTotalMap = new Map();
@@ -448,14 +494,54 @@ export default function Summary() {
     [groupedRows, selectedGroupTab, categoryGroups],
   );
 
-  const chartStats = useMemo(() => {
-    let ytd = 0;
-    for (const month of calendarMonths) {
-      ytd += chartData.reduce((sum, row) => sum + (Number(row[month]) || 0), 0);
+  const yearlyGroupedRows = useMemo(() => {
+    const yearSet = new Set(yearsChronological);
+    const catTotalMap = new Map();
+    for (const item of txns) {
+      const parts = txnCalendarParts(item.date);
+      if (!parts || !yearSet.has(parts.year)) continue;
+      if (txnCurrency(item) !== selectedCurrency) continue;
+
+      if (!catTotalMap.has(item.category_id)) {
+        const totals = { total: 0 };
+        for (const year of yearsChronological) totals[year] = 0;
+        catTotalMap.set(item.category_id, totals);
+      }
+      const categoryTotals = catTotalMap.get(item.category_id);
+      const amount = Number(item.amount) || 0;
+      categoryTotals[parts.year] += amount;
+      categoryTotals.total += amount;
     }
-    const avg = calendarMonths.length > 0 ? ytd / calendarMonths.length : 0;
+
+    return Array.from(catTotalMap.entries()).map(([category_id, totals]) => ({
+      category_id,
+      ...Object.fromEntries(
+        yearsChronological.map((year) => [year, totals[year]]),
+      ),
+      total: totals.total,
+    }));
+  }, [txns, selectedCurrency, yearsChronological]);
+
+  const yearlyChartData = useMemo(
+    () =>
+      filterRowsByGroup(yearlyGroupedRows, selectedGroupTab, categoryGroups),
+    [yearlyGroupedRows, selectedGroupTab, categoryGroups],
+  );
+
+  const displayedChartData = chartByYear ? yearlyChartData : chartData;
+
+  const chartStats = useMemo(() => {
+    const periodKeys = chartByYear ? yearsChronological : calendarMonths;
+    let ytd = 0;
+    for (const period of periodKeys) {
+      ytd += displayedChartData.reduce(
+        (sum, row) => sum + (Number(row[period]) || 0),
+        0,
+      );
+    }
+    const avg = periodKeys.length > 0 ? ytd / periodKeys.length : 0;
     return { ytd, avg };
-  }, [chartData]);
+  }, [chartByYear, displayedChartData, yearsChronological]);
 
   const selectedGroupEmpty = useMemo(() => {
     if (selectedGroupTab === "all") return false;
@@ -713,7 +799,8 @@ export default function Summary() {
   }, []);
 
   const saveChartSettings = useCallback(async () => {
-    const groupKey = refLineGroupKey(selectedGroupTab);
+    const colorGroupKey = refLineGroupKey(selectedGroupTab);
+    const refGroupKey = refLineStorageKey(selectedGroupTab, selectedCurrency);
     let nextRefLines = referenceLinesByGroup;
     let nextBarColors = barColorsByGroup;
 
@@ -722,11 +809,13 @@ export default function Summary() {
       if (!Number.isFinite(parsed) || parsed <= 0) {
         Alert.alert(
           "Valor no válido",
-          "Introduce un importe mayor que cero (por ejemplo 5000000).",
+          selectedCurrency === "USD"
+            ? "Introduce un importe mayor que cero (por ejemplo 1000)."
+            : "Introduce un importe mayor que cero (por ejemplo 5000000).",
         );
         return;
       }
-      nextRefLines = { ...referenceLinesByGroup, [groupKey]: parsed };
+      nextRefLines = { ...referenceLinesByGroup, [refGroupKey]: parsed };
     }
 
     const color = String(barColorDraft ?? "").trim().toLowerCase();
@@ -736,9 +825,9 @@ export default function Summary() {
     }
     if (color === theme.colors.primary.toLowerCase()) {
       nextBarColors = { ...barColorsByGroup };
-      delete nextBarColors[groupKey];
+      delete nextBarColors[colorGroupKey];
     } else {
-      nextBarColors = { ...barColorsByGroup, [groupKey]: color };
+      nextBarColors = { ...barColorsByGroup, [colorGroupKey]: color };
     }
 
     setReferenceLinesByGroup(nextRefLines);
@@ -768,6 +857,7 @@ export default function Summary() {
     barColorDraft,
     closeChartSettings,
     selectedGroupTab,
+    selectedCurrency,
     referenceLinesByGroup,
     barColorsByGroup,
     supportsReferenceLine,
@@ -775,11 +865,11 @@ export default function Summary() {
   ]);
 
   const resetRefLine = useCallback(async () => {
-    const groupKey = refLineGroupKey(selectedGroupTab);
+    const groupKey = refLineStorageKey(selectedGroupTab, selectedCurrency);
     const next = { ...referenceLinesByGroup };
     delete next[groupKey];
     setReferenceLinesByGroup(next);
-    setRefLineDraft(String(SUMMARY_CHART_NEGATIVE_REFERENCE_DEFAULT));
+    setRefLineDraft(String(defaultNegativeReference(selectedCurrency)));
     try {
       await AsyncStorage.setItem(
         CHART_REF_LINE_STORAGE_KEY,
@@ -788,7 +878,7 @@ export default function Summary() {
     } catch (e) {
       console.error("Error resetting chart reference line:", e);
     }
-  }, [selectedGroupTab, referenceLinesByGroup]);
+  }, [selectedGroupTab, selectedCurrency, referenceLinesByGroup]);
 
   const resetBarColor = useCallback(() => {
     setBarColorDraft(theme.colors.primary);
@@ -907,9 +997,9 @@ export default function Summary() {
                     },
                   ]}
                 >
-                  {years.map((item, index) => (
+                  {pickerYears.map((item) => (
                     <Pressable
-                      key={index}
+                      key={item}
                       style={({ pressed }) => [
                         styles.yearOption,
                         {
@@ -1071,35 +1161,72 @@ export default function Summary() {
                           { color: theme.colors.textSecondary },
                         ]}
                       >
-                        Tendencia mensual
+                        {chartByYear
+                          ? "Tendencia anual"
+                          : "Tendencia mensual"}
                       </Text>
-                      <Pressable
-                        onPress={openChartSettings}
-                        accessibilityRole="button"
-                        accessibilityLabel="Ajustes del gráfico"
-                        style={({ pressed }) => [
-                          styles.chartSettingsButton,
-                          {
-                            backgroundColor: theme.colors.surface,
-                            borderColor: theme.colors.border,
-                          },
-                          pressed && styles.chartSettingsButtonPressed,
-                        ]}
-                      >
-                        <AntDesign
-                          name="setting"
-                          size={20}
-                          color={theme.colors.primary}
-                        />
-                      </Pressable>
+                      <View style={styles.chartHeaderActions}>
+                        <Pressable
+                          onPress={() => setChartByYear((prev) => !prev)}
+                          accessibilityRole="button"
+                          accessibilityLabel={
+                            chartByYear
+                              ? "Mostrar gráfico mensual"
+                              : "Mostrar gráfico por año"
+                          }
+                          style={({ pressed }) => [
+                            styles.chartSettingsButton,
+                            {
+                              backgroundColor: chartByYear
+                                ? theme.colors.inputBackground
+                                : theme.colors.surface,
+                              borderColor: chartByYear
+                                ? theme.colors.primary
+                                : theme.colors.border,
+                            },
+                            pressed && styles.chartSettingsButtonPressed,
+                          ]}
+                        >
+                          <AntDesign
+                            name="calendar"
+                            size={20}
+                            color={theme.colors.primary}
+                          />
+                        </Pressable>
+                        <Pressable
+                          onPress={openChartSettings}
+                          accessibilityRole="button"
+                          accessibilityLabel="Ajustes del gráfico"
+                          style={({ pressed }) => [
+                            styles.chartSettingsButton,
+                            {
+                              backgroundColor: theme.colors.surface,
+                              borderColor: theme.colors.border,
+                            },
+                            pressed && styles.chartSettingsButtonPressed,
+                          ]}
+                        >
+                          <AntDesign
+                            name="setting"
+                            size={20}
+                            color={theme.colors.primary}
+                          />
+                        </Pressable>
+                      </View>
                     </View>
                     <SummaryMonthlyBarChart
                       embedded
                       title=""
-                      data={chartData}
+                      data={displayedChartData}
+                      periodKeys={
+                        chartByYear ? yearsChronological : undefined
+                      }
+                      periodLabels={chartByYear ? yearChartLabels : undefined}
+                      barWidth={chartByYear ? 32 : 22}
                       showReferenceLine={supportsReferenceLine}
                       negativeReferenceLine={activeReferenceLine}
                       barColor={activeBarColor}
+                      currency={selectedCurrency}
                     />
                     <View style={styles.statsRow}>
                       <View
@@ -1117,7 +1244,7 @@ export default function Summary() {
                             { color: theme.colors.textSecondary },
                           ]}
                         >
-                          Total año
+                          {chartByYear ? "Total período" : "Total año"}
                         </Text>
                         <Text
                           style={[
@@ -1144,7 +1271,9 @@ export default function Summary() {
                             { color: theme.colors.textSecondary },
                           ]}
                         >
-                          Promedio mensual
+                          {chartByYear
+                            ? "Promedio anual"
+                            : "Promedio mensual"}
                         </Text>
                         <Text
                           style={[
@@ -1290,7 +1419,11 @@ export default function Summary() {
                       color: theme.colors.text,
                     },
                   ]}
-                  placeholder="Importe (ej. 5000000)"
+                  placeholder={
+                    selectedCurrency === "USD"
+                      ? "Importe (ej. 1000)"
+                      : "Importe (ej. 5000000)"
+                  }
                   placeholderTextColor={theme.colors.placeholder}
                   value={refLineDraft}
                   onChangeText={setRefLineDraft}
@@ -1306,7 +1439,7 @@ export default function Summary() {
                 >
                   <Text style={{ color: theme.colors.primary }}>
                     Restablecer valor predeterminado (
-                    {SUMMARY_CHART_NEGATIVE_REFERENCE_DEFAULT.toLocaleString(
+                    {defaultNegativeReference(selectedCurrency).toLocaleString(
                       "es-ES",
                     )}
                     )
@@ -1500,6 +1633,11 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     paddingHorizontal: 4,
     marginBottom: 6,
+  },
+  chartHeaderActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
   },
   sectionLabel: {
     fontSize: 13,

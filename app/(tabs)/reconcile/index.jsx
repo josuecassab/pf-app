@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import * as DocumentPicker from "expo-document-picker";
 import { router } from "expo-router";
 import { PDFDocument } from "pdf-lib";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -23,7 +23,10 @@ import { useAuth } from "../../../contexts/AuthContext";
 import { usePurchasesContext } from "../../../contexts/PurchasesContext";
 import { useTheme } from "../../../contexts/ThemeContext";
 import { useBanks } from "../../../hooks/useBanks";
-import { formatApiError } from "../../../lib/apiErrors";
+import {
+  formatApiError,
+  isTransientNetworkError,
+} from "../../../lib/apiErrors";
 import { QUERY_CACHE_MAX_AGE } from "../../../lib/queryClient";
 import { hasActiveEntitlement } from "../../../lib/revenuecatEntitlements";
 import { reconcileStyles } from "../reconcileStyles";
@@ -129,25 +132,55 @@ function findStatementForUploadHint(statements, hint) {
   return matchLabel(statements);
 }
 
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * iOS drops idle HTTP connections after ~60s. PDF parsing can outlive that,
+ * so the client throws "Network request failed" after the server already
+ * created the statement. Poll list_statements until the new extract appears.
+ */
+async function waitForUploadedStatement({
+  queryClient,
+  tenantId,
+  fileName,
+  previousValues,
+  minUpdatedAt,
+  attempts = 24,
+  delayMs = 5000,
+}) {
+  const hint = hintFromCreateStatementBody(
+    {},
+    fileName,
+    previousValues,
+    minUpdatedAt,
+  );
+  let consecutiveFetchFailures = 0;
+  for (let i = 0; i < attempts; i++) {
+    try {
+      const list = await queryClient.fetchQuery({
+        queryKey: ["list_statements", tenantId],
+        staleTime: 0,
+      });
+      consecutiveFetchFailures = 0;
+      const match = findStatementForUploadHint(
+        Array.isArray(list) ? list : [],
+        hint,
+      );
+      if (match) return match;
+    } catch {
+      consecutiveFetchFailures += 1;
+      if (consecutiveFetchFailures >= 3) return null;
+    }
+    if (i < attempts - 1) await sleep(delayMs);
+  }
+  return null;
+}
+
 /** Display name after /banks/ + financial-entities join (`name`; `label` is legacy). */
 function bankDisplayName(bank) {
   return bank?.name ?? bank?.label ?? bank?.fe_code ?? "";
-}
-
-/** gs://bucket/<fe_code>/file.xlsx → matching bank from list, if known */
-function bankFromStatementGcsUri(uri, bankOptions) {
-  if (!uri || typeof uri !== "string") return null;
-  const match = uri.match(/^gs:\/\/[^/]+\/([^/]+)\//);
-  if (!match) return null;
-  const slug = match[1];
-  return (
-    bankOptions.find(
-      (b) =>
-        b.fe_code === slug ||
-        b.value === slug ||
-        (b.id != null && String(b.id) === slug),
-    ) ?? null
-  );
 }
 
 const DROPDOWN_SELECTED_TEXT_PROPS = {
@@ -292,15 +325,6 @@ export default function Reconcile() {
   const [conciliarGateBusy, setConciliarGateBusy] = useState(false);
   const [previewExpanded, setPreviewExpanded] = useState(false);
 
-  const selectedBank = useMemo(() => {
-    if (!bankList.length || !selectedStatement?.value) return null;
-    const fromStatement = bankFromStatementGcsUri(
-      selectedStatement.value,
-      bankList,
-    );
-    return fromStatement ?? bankList[0];
-  }, [bankList, selectedStatement?.value]);
-
   const {
     data: statements = [],
     isLoading: isLoadingStatements,
@@ -413,7 +437,7 @@ export default function Reconcile() {
   const statementRowCount = data?.length ?? 0;
   const step1Complete = statements.length > 0;
   const step2Complete = Boolean(selectedStatement?.label);
-  const selectedBankName = bankDisplayName(selectedBank);
+  const selectedBankName = selectedStatement?.value.split("_")[0]
   const canConciliar =
     step2Complete && Boolean(selectedBankName) && !conciliarGateBusy;
 
@@ -426,6 +450,8 @@ export default function Reconcile() {
       return;
     }
     setIsLoading(true);
+    const previousValues = statements.map((s) => s.value);
+    const minUpdatedAt = statementsUpdatedAt;
 
     try {
       let passwordToSend = "";
@@ -442,7 +468,6 @@ export default function Reconcile() {
                 "Introduce la contraseña del documento para continuar.",
               );
             }
-            setIsLoading(false);
             return;
           }
           passwordToSend = pdfPassword.trim();
@@ -470,7 +495,6 @@ export default function Reconcile() {
             "Error",
             "No se pudo leer el archivo. Elige el documento de nuevo.",
           );
-          setIsLoading(false);
           return;
         }
         if (isPdfPickedFile(file)) {
@@ -509,7 +533,6 @@ export default function Reconcile() {
         if (res.status === 400) {
           if (detail === CREATE_STATEMENT_PDF_NEED_PASSWORD) {
             setPdfPasswordRequired(true);
-            setIsLoading(false);
             return;
           }
           if (detail === CREATE_STATEMENT_PDF_WRONG_PASSWORD) {
@@ -519,7 +542,6 @@ export default function Reconcile() {
               "Contraseña incorrecta",
               "La contraseña no corresponde a este PDF. Inténtalo de nuevo.",
             );
-            setIsLoading(false);
             return;
           }
         }
@@ -528,7 +550,6 @@ export default function Reconcile() {
           (typeof body?.message === "string" ? body.message : "") ||
           `Error ${res.status}`;
         Alert.alert("Error", fallback);
-        setIsLoading(false);
         return;
       }
 
@@ -537,8 +558,8 @@ export default function Reconcile() {
         hintFromCreateStatementBody(
           body,
           file?.name,
-          statements.map((s) => s.value),
-          statementsUpdatedAt,
+          previousValues,
+          minUpdatedAt,
         ),
       );
       await queryClient.invalidateQueries({
@@ -546,10 +567,37 @@ export default function Reconcile() {
       });
       setPdfPassword("");
       setPdfPasswordRequired(false);
-      setIsLoading(false);
     } catch (error) {
       console.error("Error uploading file:", error);
-      Alert.alert("Error", "❌ Upload failed: " + error.message);
+      if (isTransientNetworkError(error)) {
+        try {
+          const match = await waitForUploadedStatement({
+            queryClient,
+            tenantId,
+            fileName: file?.name,
+            previousValues,
+            minUpdatedAt,
+          });
+          if (match) {
+            setSelectedStatement(match);
+            setPdfPassword("");
+            setPdfPasswordRequired(false);
+            return;
+          }
+        } catch (refetchError) {
+          console.error("Error reconciling uploaded statement:", refetchError);
+        }
+        Alert.alert(
+          "Error",
+          "No se pudo confirmar la carga. Si el extracto aparece en la lista, ya se procesó. Si no, inténtalo de nuevo.",
+        );
+        return;
+      }
+      Alert.alert(
+        "Error",
+        error?.message ?? "No se pudo cargar el extracto.",
+      );
+    } finally {
       setIsLoading(false);
     }
   };
@@ -702,7 +750,6 @@ export default function Reconcile() {
       {renderHeaderCell("Fecha")}
       {renderHeaderCell("Descripcion")}
       {renderHeaderCell("Valor")}
-      {renderHeaderCell("Saldo")}
       {renderHeaderCell("Banco")}
     </View>
   );
@@ -807,7 +854,6 @@ export default function Reconcile() {
       {renderDateCell(item.date)}
       {renderDescriptionCell(item?.description)}
       {renderAmountCell(item.amount)}
-      {renderBalanceCell(item.balance)}
       {renderBankCell(item?.bank)}
     </View>
   );

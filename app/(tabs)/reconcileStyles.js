@@ -143,11 +143,10 @@ export const reconcileStyles = StyleSheet.create({
   row: {
     flexDirection: "row",
   },
-  colDate: { width: 98 },
-  colDescription: { width: 144 },
-  colAmount: { width: 112 },
-  colBalance: { width: 112 },
-  colBanco: { width: 80 },
+  colDate: { width: 100 },
+  colDescription: { width: 120 },
+  colAmount: { width: 100 },
+  colBanco: { width: 70 },
   headerCell: {
     borderBottomWidth: 1,
     borderRightWidth: 1,
@@ -176,7 +175,7 @@ export const reconcileStyles = StyleSheet.create({
   wizardStep: {
     borderWidth: 1,
     borderRadius: 12,
-    padding: 16,
+    padding: 10,
     gap: 12,
   },
   wizardStepHeader: {

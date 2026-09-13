@@ -81,50 +81,38 @@ export default function GroupedTable({
     });
   }, []);
 
-  // --- IMPROVED SYNC LOGIC ---
+  // Keep left/right vertical offsets in sync. Only unlock after momentum ends —
+  // unlocking on drag-end lets the follower steal ownership mid-fling and jitter.
   const handleScroll = useCallback((source, event) => {
-    // Prevent recursive syncing
     if (isSyncingRef.current) {
       return;
     }
 
-    // If the other list is the active scroller, ignore this event
     if (isScrollingRef.current && scrollingListRef.current !== source) {
       return;
     }
 
-    // Lock this list as the active scroller
     if (!isScrollingRef.current) {
       isScrollingRef.current = true;
       scrollingListRef.current = source;
     }
 
-    // Get the offset
     const offset = event.nativeEvent.contentOffset.y;
-    const lastOffset = lastOffsetRef.current[source];
-
-    // Only sync if offset has changed significantly (more than 0.5px to avoid micro-adjustments)
-    if (Math.abs(offset - lastOffset) < 0.5) {
-      return;
-    }
-
-    // Update last offset
     lastOffsetRef.current[source] = offset;
 
-    // Sync the OTHER list
     const targetRef = source === "left" ? rightRef : leftRef;
     const targetSource = source === "left" ? "right" : "left";
 
-    // Only sync if target is not already at this offset (prevent feedback loop)
-    if (Math.abs(offset - lastOffsetRef.current[targetSource]) > 0.5) {
-      isSyncingRef.current = true;
-      targetRef.current?.scrollToOffset({ offset, animated: false });
-      lastOffsetRef.current[targetSource] = offset;
-      // Use setTimeout to reset the flag after the scroll completes
-      setTimeout(() => {
-        isSyncingRef.current = false;
-      }, 0);
+    if (Math.abs(offset - lastOffsetRef.current[targetSource]) < 0.5) {
+      return;
     }
+
+    isSyncingRef.current = true;
+    lastOffsetRef.current[targetSource] = offset;
+    targetRef.current?.scrollToOffset({ offset, animated: false });
+    requestAnimationFrame(() => {
+      isSyncingRef.current = false;
+    });
   }, []);
 
   const onLeftScroll = useCallback(
@@ -141,7 +129,23 @@ export default function GroupedTable({
     [handleScroll],
   );
 
-  const handleScrollEnd = useCallback(() => {
+  const handleScrollBeginDrag = useCallback((source) => {
+    isScrollingRef.current = true;
+    scrollingListRef.current = source;
+    isSyncingRef.current = false;
+  }, []);
+
+  const handleScrollEndDrag = useCallback((event) => {
+    // No fling → unlock now. Fast fling keeps the lock until momentum ends.
+    const velocityY = event.nativeEvent.velocity?.y ?? 0;
+    if (Math.abs(velocityY) < 0.05) {
+      isScrollingRef.current = false;
+      scrollingListRef.current = null;
+      isSyncingRef.current = false;
+    }
+  }, []);
+
+  const handleMomentumScrollEnd = useCallback(() => {
     isScrollingRef.current = false;
     scrollingListRef.current = null;
     isSyncingRef.current = false;
@@ -448,8 +452,9 @@ export default function GroupedTable({
             showsVerticalScrollIndicator={false}
             scrollEventThrottle={16}
             onScroll={onLeftScroll}
-            onMomentumScrollEnd={handleScrollEnd}
-            onScrollEndDrag={handleScrollEnd}
+            onScrollBeginDrag={() => handleScrollBeginDrag("left")}
+            onScrollEndDrag={handleScrollEndDrag}
+            onMomentumScrollEnd={handleMomentumScrollEnd}
             removeClippedSubviews={true}
             maxToRenderPerBatch={10}
             updateCellsBatchingPeriod={50}
@@ -486,8 +491,9 @@ export default function GroupedTable({
                 showsVerticalScrollIndicator={false}
                 scrollEventThrottle={16}
                 onScroll={onRightScroll}
-                onMomentumScrollEnd={handleScrollEnd}
-                onScrollEndDrag={handleScrollEnd}
+                onScrollBeginDrag={() => handleScrollBeginDrag("right")}
+                onScrollEndDrag={handleScrollEndDrag}
+                onMomentumScrollEnd={handleMomentumScrollEnd}
                 removeClippedSubviews={true}
                 maxToRenderPerBatch={10}
                 updateCellsBatchingPeriod={50}

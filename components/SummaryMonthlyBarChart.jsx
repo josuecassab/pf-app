@@ -29,6 +29,13 @@ const monthChartLabel = {
 
 /** Default spending threshold on all-negative monthly bar charts (absolute scale). */
 export const SUMMARY_CHART_NEGATIVE_REFERENCE_DEFAULT = 5_000_000;
+export const SUMMARY_CHART_NEGATIVE_REFERENCE_USD_DEFAULT = 1_000;
+
+export function defaultNegativeReference(currency) {
+  return currency === "USD"
+    ? SUMMARY_CHART_NEGATIVE_REFERENCE_USD_DEFAULT
+    : SUMMARY_CHART_NEGATIVE_REFERENCE_DEFAULT;
+}
 
 /** Round up to a readable axis limit (e.g. 900k → 1.1M with padding). */
 function roundChartAxisLimit(absValue) {
@@ -38,12 +45,24 @@ function roundChartAxisLimit(absValue) {
   return Math.ceil(padded / unit) * unit;
 }
 
-function formatChartYLabel(value, { signFromPrefix = false } = {}) {
+function formatChartYLabel(
+  value,
+  { signFromPrefix = false, currency = "COP" } = {},
+) {
   const n = Number(value);
   if (!Number.isFinite(n)) return "";
   if (n === 0) return "0";
   const sign = !signFromPrefix && n < 0 ? "-" : "";
   const abs = Math.abs(n);
+  if (currency === "USD") {
+    if (abs >= 1_000_000) return `${sign}${(abs / 1_000_000).toFixed(1)}M`;
+    if (abs >= 10_000) {
+      const k = abs / 1_000;
+      const compact = k >= 100 || k % 1 === 0 ? k.toFixed(0) : k.toFixed(1);
+      return `${sign}${compact}k`;
+    }
+    return `${sign}${Math.round(abs).toLocaleString("es-ES")}`;
+  }
   if (abs >= 1_000_000) return `${sign}${(abs / 1_000_000).toFixed(1)}M`;
   if (abs >= 1_000) return `${sign}${(abs / 1_000).toFixed(0)}k`;
   return signFromPrefix ? String(Math.round(abs)) : String(Math.round(n));
@@ -54,16 +73,18 @@ function buildChartModel(
   primaryColor,
   negativeReference = SUMMARY_CHART_NEGATIVE_REFERENCE_DEFAULT,
   includeReferenceLine = true,
+  periodKeys = chartMonths,
+  periodLabels = monthChartLabel,
 ) {
   const noOfSections = 4;
-  const points = chartMonths.map((month) => {
+  const points = periodKeys.map((period) => {
     const value = tableData.reduce(
-      (sum, row) => sum + (Number(row[month]) || 0),
+      (sum, row) => sum + (Number(row[period]) || 0),
       0,
     );
     return {
       value: Math.round(value * 100) / 100,
-      label: monthChartLabel[month] ?? month.slice(0, 3),
+      label: periodLabels[period] ?? String(period),
       frontColor: primaryColor,
     };
   });
@@ -157,10 +178,19 @@ export default function SummaryMonthlyBarChart({
   barColor,
   /** When true, renders only the chart card (no outer scroll / pull-to-refresh). */
   embedded = false,
+  /** Row keys to chart (months 0–11 by default, or calendar years). */
+  periodKeys,
+  /** Labels keyed by periodKeys. */
+  periodLabels,
+  barWidth = 22,
+  /** COP uses compact M/k labels; USD keeps dollar-scale tick labels. */
+  currency = "COP",
 }) {
   const { theme } = useTheme();
   const { width: windowWidth } = useWindowDimensions();
   const resolvedBarColor = barColor || theme.colors.primary;
+  const resolvedPeriodKeys = periodKeys ?? chartMonths;
+  const resolvedPeriodLabels = periodLabels ?? monthChartLabel;
 
   const chartModel = useMemo(
     () =>
@@ -169,8 +199,17 @@ export default function SummaryMonthlyBarChart({
         resolvedBarColor,
         negativeReferenceLine,
         showReferenceLine,
+        resolvedPeriodKeys,
+        resolvedPeriodLabels,
       ),
-    [data, resolvedBarColor, negativeReferenceLine, showReferenceLine],
+    [
+      data,
+      resolvedBarColor,
+      negativeReferenceLine,
+      showReferenceLine,
+      resolvedPeriodKeys,
+      resolvedPeriodLabels,
+    ],
   );
 
   const chartWidth = Math.max(windowWidth - 48, 280);
@@ -195,7 +234,7 @@ export default function SummaryMonthlyBarChart({
             data={chartModel.barChartData}
             width={chartWidth}
             adjustToWidth
-            barWidth={22}
+            barWidth={barWidth}
             barBorderRadius={4}
             yAxisColor={theme.colors.border}
             xAxisColor={theme.colors.border}
@@ -220,6 +259,7 @@ export default function SummaryMonthlyBarChart({
             formatYLabel={(value) =>
               formatChartYLabel(value, {
                 signFromPrefix: chartModel.chartAllNegative,
+                currency,
               })
             }
             {...(chartModel.showReferenceLine

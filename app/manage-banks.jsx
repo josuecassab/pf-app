@@ -25,6 +25,7 @@ import { useTheme } from "../contexts/ThemeContext";
 import { useBanks } from "../hooks/useBanks";
 import { useFinancialEntities } from "../hooks/useFinancialEntities";
 import { formatApiError } from "../lib/apiErrors";
+import { authJsonHeaders } from "../lib/apiHeaders";
 import { setPendingBankSelection } from "../lib/pendingBankSelection";
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL;
@@ -45,7 +46,7 @@ function bankLabel(bank) {
 
 export default function ManageBanksScreen() {
   const queryClient = useQueryClient();
-  const { getAuthHeaders } = useAuth();
+  const { getAuthHeaders, tenantId } = useAuth();
   const { theme } = useTheme();
   const { data: banksData } = useBanks();
   const { data: entitiesData, isPending: isLoadingEntities } =
@@ -94,10 +95,27 @@ export default function ManageBanksScreen() {
   const addBank = async (entity) => {
     if (entity?.code == null || addingFeCode != null) return;
     setAddingFeCode(entity.code);
+
+    const selectCreatedBank = (createdId) => {
+      resetPicker();
+      if (createdId == null) return;
+      setPendingBankSelection({
+        label: entity.legal_name,
+        name: entity.legal_name,
+        value: createdId,
+        id: createdId,
+        fe_code: entity.code,
+      });
+    };
+
     try {
       const res = await fetch(
         `${API_URL}/banks/insert_bank/?fe_code=${encodeURIComponent(entity.code)}`,
-        { method: "POST", headers: getAuthHeaders() },
+        {
+          method: "POST",
+          headers: authJsonHeaders(getAuthHeaders),
+          body: JSON.stringify({ fe_code: entity.code }),
+        },
       );
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
@@ -105,19 +123,24 @@ export default function ManageBanksScreen() {
         return;
       }
       await queryClient.invalidateQueries({ queryKey: ["banks"] });
-      resetPicker();
-      const createdId = data?.id ?? data?.value;
-      if (createdId != null) {
-        setPendingBankSelection({
-          label: entity.legal_name,
-          name: entity.legal_name,
-          value: createdId,
-          id: createdId,
-          fe_code: entity.code,
-        });
-      }
+      selectCreatedBank(data?.id ?? data?.value);
     } catch (error) {
       console.error("Error adding bank:", error);
+      // iOS fetch can throw "Network request failed" after the server already
+      // committed (empty POST body, dropped 4G response). Reconcile from GET.
+      try {
+        await queryClient.invalidateQueries({ queryKey: ["banks"] });
+        const banks = queryClient.getQueryData(["banks", tenantId]);
+        const created = (Array.isArray(banks) ? banks : []).find(
+          (b) => String(b.fe_code) === String(entity.code),
+        );
+        if (created) {
+          selectCreatedBank(bankId(created));
+          return;
+        }
+      } catch (refetchError) {
+        console.error("Error reconciling added bank:", refetchError);
+      }
       Alert.alert("Error agregando el banco", error.message);
     } finally {
       setAddingFeCode(null);

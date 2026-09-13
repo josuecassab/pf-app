@@ -24,8 +24,8 @@ import { parseQueryKeyParam } from "../../lib/queryKeyParams";
 const API_URL = process.env.EXPO_PUBLIC_API_URL;
 
 const TXN_FILTER_NULL_OPTION = {
-  label: "null",
-  value: null,
+  name: "null",
+  id: null,
 };
 
 function paramOne(raw) {
@@ -68,7 +68,7 @@ export default function TxnModalSelectBank() {
         {
           method: "PUT",
           headers: authJsonHeaders(getAuthHeaders),
-          body: JSON.stringify({ ids, value: selectedBank?.value }),
+          body: JSON.stringify({ ids, value: selectedBank?.id }),
         },
       );
       const body = await res.json().catch(() => ({}));
@@ -80,7 +80,7 @@ export default function TxnModalSelectBank() {
         return;
       }
 
-      const clearingBank = selectedBank?.value == null;
+      const clearingBank = selectedBank?.id == null;
 
       const idSet = new Set(ids.map((x) => String(x)));
       queryClient.setQueryData(queryKey, (oldData) => {
@@ -93,7 +93,7 @@ export default function TxnModalSelectBank() {
                   idSet.has(String(txn.id))
                     ? {
                         ...txn,
-                        bank_id: clearingBank ? null : selectedBank?.value,
+                        bank_id: clearingBank ? null : selectedBank?.id,
                       }
                     : txn,
                 )
@@ -173,11 +173,11 @@ export default function TxnModalSelectBank() {
             data={labels}
             search
             maxHeight={220}
-            labelField="label"
-            valueField="value"
+            labelField="name"
+            valueField="id"
             placeholder="Seleccionar banco"
             searchPlaceholder="Buscar..."
-            value={selectedBank?.value}
+            value={selectedBank?.id}
             onChange={(item) => setSelectedBank(item)}
           />
           <Pressable
