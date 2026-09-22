@@ -1,3 +1,6 @@
+import Feather from "@expo/vector-icons/Feather";
+import Constants from "expo-constants";
+import { useRouter } from "expo-router";
 import { useState } from "react";
 import {
   ActivityIndicator,
@@ -6,6 +9,7 @@ import {
   Modal,
   Platform,
   Pressable,
+  ScrollView,
   StyleSheet,
   Switch,
   Text,
@@ -17,23 +21,88 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useAuth } from "../../contexts/AuthContext";
 import { usePurchasesContext } from "../../contexts/PurchasesContext";
 import { useTheme } from "../../contexts/ThemeContext";
-import { REVENUECAT_PRODUCT_IDS } from "../../lib/revenuecatConstants";
-import { hasActiveEntitlement } from "../../lib/revenuecatEntitlements";
 import { formatApiError } from "../../lib/apiErrors";
+import { hasActiveEntitlement } from "../../lib/revenuecatEntitlements";
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL;
 const DELETE_CONFIRM_WORD = "eliminar";
+const APP_VERSION =
+  Constants.expoConfig?.version ?? Constants.nativeAppVersion ?? "1.0.0";
+
+function Section({ title, theme, children }) {
+  return (
+    <View style={styles.section}>
+      <Text style={[styles.sectionTitle, { color: theme.colors.textSecondary }]}>
+        {title}
+      </Text>
+      <View
+        style={[
+          styles.sectionCard,
+          {
+            backgroundColor: theme.colors.card,
+            borderColor: theme.colors.borderLight,
+          },
+        ]}
+      >
+        {children}
+      </View>
+    </View>
+  );
+}
+
+function InfoRow({ label, value, theme, isLast }) {
+  return (
+    <View
+      style={[
+        styles.infoRow,
+        !isLast && {
+          borderBottomWidth: StyleSheet.hairlineWidth,
+          borderBottomColor: theme.colors.borderLight,
+        },
+      ]}
+    >
+      <Text style={[styles.infoLabel, { color: theme.colors.textSecondary }]}>
+        {label}
+      </Text>
+      <Text
+        style={[styles.infoValue, { color: theme.colors.text }]}
+        numberOfLines={1}
+      >
+        {value || "—"}
+      </Text>
+    </View>
+  );
+}
+
+function NavRow({ label, onPress, theme, isLast }) {
+  return (
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.navRow,
+        !isLast && {
+          borderBottomWidth: StyleSheet.hairlineWidth,
+          borderBottomColor: theme.colors.borderLight,
+        },
+        pressed && styles.buttonPressed,
+      ]}
+    >
+      <Text style={[styles.navLabel, { color: theme.colors.text }]}>{label}</Text>
+      <Feather name="chevron-right" size={18} color={theme.colors.textSecondary} />
+    </Pressable>
+  );
+}
 
 export default function Settings() {
   const { theme } = useTheme();
-  const { signOut: clearSession, getAuthHeaders } = useAuth();
+  const router = useRouter();
+  const { session, signOut: clearSession, getAuthHeaders } = useAuth();
   const {
     isNativePurchasesPlatform,
     sdkReady,
     sdkError,
     isProActive,
     entitlementId,
-    presentPaywall,
     presentPaywallIfNeeded,
     presentCustomerCenter,
     restorePurchases,
@@ -42,6 +111,14 @@ export default function Settings() {
   const [deletingAccount, setDeletingAccount] = useState(false);
   const [deleteModalVisible, setDeleteModalVisible] = useState(false);
   const [deleteConfirmText, setDeleteConfirmText] = useState("");
+
+  const user = session?.user;
+  const email = user?.email ?? "";
+  const username =
+    (typeof user?.username === "string" && user.username.trim()) ||
+    (typeof user?.user_metadata?.username === "string" &&
+      user.user_metadata.username.trim()) ||
+    "";
 
   async function signOut() {
     try {
@@ -71,33 +148,7 @@ export default function Settings() {
     }
   }
 
-  async function handleShowPaywall() {
-    if (!isNativePurchasesPlatform) {
-      Alert.alert(
-        "No disponible",
-        "Las compras integradas solo funcionan en la app iOS o Android (no en la web ni en Expo Go sin un development build).",
-      );
-      return;
-    }
-    setPurchaseBusy(true);
-    try {
-      const { ok, result, error } = await presentPaywall();
-      if (!ok && error) {
-        Alert.alert("Paywall", error.message ?? String(error));
-        return;
-      }
-      if (
-        result === PAYWALL_RESULT.PURCHASED ||
-        result === PAYWALL_RESULT.RESTORED
-      ) {
-        Alert.alert("ZeroGasto Pro", "Tu suscripción está activa. ¡Gracias!");
-      }
-    } finally {
-      setPurchaseBusy(false);
-    }
-  }
-
-  async function handleShowPaywallIfNeeded() {
+  async function handleGetPro() {
     if (!isNativePurchasesPlatform) {
       Alert.alert(
         "No disponible",
@@ -109,10 +160,15 @@ export default function Settings() {
     try {
       const { ok, result, error } = await presentPaywallIfNeeded();
       if (!ok && error) {
-        Alert.alert("Paywall", error.message ?? String(error));
+        Alert.alert("Suscripción", error.message ?? String(error));
         return;
       }
-      if (result === PAYWALL_RESULT.NOT_PRESENTED) {
+      if (
+        result === PAYWALL_RESULT.PURCHASED ||
+        result === PAYWALL_RESULT.RESTORED
+      ) {
+        Alert.alert("ZeroGasto Pro", "Tu suscripción está activa. ¡Gracias!");
+      } else if (result === PAYWALL_RESULT.NOT_PRESENTED) {
         Alert.alert("ZeroGasto Pro", "Ya tienes acceso Pro activo.");
       }
     } finally {
@@ -121,7 +177,13 @@ export default function Settings() {
   }
 
   async function handleRestore() {
-    if (!isNativePurchasesPlatform) return;
+    if (!isNativePurchasesPlatform) {
+      Alert.alert(
+        "No disponible",
+        "Restaurar compras solo funciona en la app iOS o Android.",
+      );
+      return;
+    }
     setPurchaseBusy(true);
     try {
       const {
@@ -149,7 +211,10 @@ export default function Settings() {
 
   async function handleCustomerCenter() {
     if (!isNativePurchasesPlatform) {
-      Alert.alert("No disponible", "Customer Center requiere iOS o Android.");
+      Alert.alert(
+        "No disponible",
+        "Gestionar la suscripción requiere iOS o Android.",
+      );
       return;
     }
     setPurchaseBusy(true);
@@ -157,8 +222,8 @@ export default function Settings() {
       const { ok, error } = await presentCustomerCenter();
       if (!ok && error) {
         Alert.alert(
-          "Customer Center",
-          `${error.message ?? String(error)}\n\nNota: Customer Center en el dashboard de RevenueCat suele requerir un plan Pro o Enterprise.`,
+          "Suscripción",
+          error.message ?? String(error),
         );
       }
     } finally {
@@ -214,62 +279,57 @@ export default function Settings() {
     purchaseBusy || (isNativePurchasesPlatform && !sdkReady);
 
   const proSubtitle = !isNativePurchasesPlatform
-    ? "Solo en app móvil nativa. Los botones abren un aviso; el paywall real es en iOS/Android."
+    ? "Disponible solo en la app iOS o Android"
     : !sdkReady
-      ? sdkError?.message?.includes("Missing RevenueCat")
-        ? "Configura las claves EXPO_PUBLIC_REVENUECAT_* en .env y reinicia Expo (Metro)."
-        : sdkError?.message
-          ? sdkError.message
-          : "Inicializando compras…"
+      ? sdkError?.message
+        ? "Compras no disponibles en este momento"
+        : "Inicializando…"
       : isProActive
-        ? "Suscripción activa"
-        : "Desbloquea funciones Pro";
+        ? "Activa"
+        : "No activa";
 
   return (
     <SafeAreaView
       edges={["top", "bottom", "left", "right"]}
       style={[styles.container, { backgroundColor: theme.colors.background }]}
     >
-      <View style={styles.content}>
-        <View
-          style={[
-            styles.settingRow,
-            { borderBottomColor: theme.colors.border },
-          ]}
-        >
-          <Text style={[styles.settingLabel, { color: theme.colors.text }]}>
-            Modo Oscuro
-          </Text>
-          <Switch
-            value={theme.isDark}
-            onValueChange={theme.toggleTheme}
-            trackColor={{
-              false: theme.colors.border,
-              true: theme.colors.primary,
-            }}
-            thumbColor={theme.isDark ? "#ffffff" : "#f4f3f4"}
-          />
-        </View>
+      <ScrollView
+        contentContainerStyle={styles.content}
+        keyboardShouldPersistTaps="handled"
+      >
+        <Section title="Cuenta" theme={theme}>
+          <InfoRow label="Correo" value={email} theme={theme} />
+          <InfoRow label="Usuario" value={username} theme={theme} isLast />
+        </Section>
 
-        <View
-          style={[
-            styles.settingRow,
-            {
-              borderBottomColor: theme.colors.border,
-              flexDirection: "column",
-              alignItems: "stretch",
-              gap: 12,
-            },
-          ]}
-        >
+        <Section title="Apariencia" theme={theme}>
+          <View style={styles.settingRow}>
+            <Text style={[styles.settingLabel, { color: theme.colors.text }]}>
+              Modo oscuro
+            </Text>
+            <Switch
+              value={theme.isDark}
+              onValueChange={theme.toggleTheme}
+              trackColor={{
+                false: theme.colors.border,
+                true: theme.colors.primary,
+              }}
+              thumbColor={theme.isDark ? "#ffffff" : "#f4f3f4"}
+            />
+          </View>
+        </Section>
+
+        <Section title="Suscripción" theme={theme}>
           <View
-            style={{
-              flexDirection: "row",
-              justifyContent: "space-between",
-              alignItems: "center",
-            }}
+            style={[
+              styles.proHeader,
+              {
+                borderBottomWidth: StyleSheet.hairlineWidth,
+                borderBottomColor: theme.colors.borderLight,
+              },
+            ]}
           >
-            <View style={{ flex: 1, paddingRight: 12 }}>
+            <View style={styles.proHeaderText}>
               <Text style={[styles.settingLabel, { color: theme.colors.text }]}>
                 ZeroGasto Pro
               </Text>
@@ -286,102 +346,94 @@ export default function Settings() {
             ) : null}
           </View>
 
-          <Text style={[styles.productHint, { color: theme.colors.border }]}>
-            Productos en tienda: {REVENUECAT_PRODUCT_IDS.MONTHLY},{" "}
-            {REVENUECAT_PRODUCT_IDS.YEARLY} · Entitlement: {entitlementId}
-          </Text>
+          <View style={styles.proActions}>
+            {!isProActive ? (
+              <Pressable
+                onPress={handleGetPro}
+                disabled={paywallButtonsDisabled}
+                style={({ pressed }) => [
+                  styles.primaryButton,
+                  { backgroundColor: theme.colors.primary },
+                  pressed && styles.buttonPressed,
+                  paywallButtonsDisabled && styles.buttonDisabled,
+                ]}
+              >
+                {purchaseBusy ? (
+                  <ActivityIndicator color="#ffffff" />
+                ) : (
+                  <Text style={styles.primaryButtonText}>Obtener Pro</Text>
+                )}
+              </Pressable>
+            ) : null}
 
-          <Pressable
-            onPress={handleShowPaywallIfNeeded}
-            disabled={paywallButtonsDisabled}
-            style={({ pressed }) => [
-              styles.secondaryButton,
-              { borderColor: theme.colors.primary },
-              pressed && styles.buttonPressed,
-              paywallButtonsDisabled && styles.buttonDisabled,
-            ]}
-          >
-            {purchaseBusy ? (
-              <ActivityIndicator color={theme.colors.primary} />
-            ) : (
+            <Pressable
+              onPress={handleRestore}
+              disabled={paywallButtonsDisabled}
+              style={({ pressed }) => [
+                styles.secondaryButton,
+                { borderColor: theme.colors.border },
+                pressed && styles.buttonPressed,
+                paywallButtonsDisabled && styles.buttonDisabled,
+              ]}
+            >
               <Text
                 style={[
                   styles.secondaryButtonText,
-                  { color: theme.colors.primary },
+                  { color: theme.colors.text },
                 ]}
               >
-                Ver oferta (si no eres Pro)
+                Restaurar compras
               </Text>
-            )}
-          </Pressable>
+            </Pressable>
 
-          <Pressable
-            onPress={handleShowPaywall}
-            disabled={paywallButtonsDisabled}
-            style={({ pressed }) => [
-              styles.secondaryButton,
-              { borderColor: theme.colors.primary },
-              pressed && styles.buttonPressed,
-              paywallButtonsDisabled && styles.buttonDisabled,
-            ]}
-          >
-            <Text
-              style={[
-                styles.secondaryButtonText,
-                { color: theme.colors.primary },
+            <Pressable
+              onPress={handleCustomerCenter}
+              disabled={paywallButtonsDisabled}
+              style={({ pressed }) => [
+                styles.secondaryButton,
+                { borderColor: theme.colors.border },
+                pressed && styles.buttonPressed,
+                paywallButtonsDisabled && styles.buttonDisabled,
               ]}
             >
-              Mostrar paywall
-            </Text>
-          </Pressable>
+              <Text
+                style={[
+                  styles.secondaryButtonText,
+                  { color: theme.colors.text },
+                ]}
+              >
+                Gestionar suscripción
+              </Text>
+            </Pressable>
+          </View>
+        </Section>
 
-          <Pressable
-            onPress={handleRestore}
-            disabled={paywallButtonsDisabled}
-            style={({ pressed }) => [
-              styles.secondaryButton,
-              { borderColor: theme.colors.border },
-              pressed && styles.buttonPressed,
-              paywallButtonsDisabled && styles.buttonDisabled,
-            ]}
-          >
-            <Text
-              style={[styles.secondaryButtonText, { color: theme.colors.text }]}
-            >
-              Restaurar compras
-            </Text>
-          </Pressable>
-
-          <Pressable
-            onPress={handleCustomerCenter}
-            disabled={paywallButtonsDisabled}
-            style={({ pressed }) => [
-              styles.secondaryButton,
-              { borderColor: theme.colors.border },
-              pressed && styles.buttonPressed,
-              paywallButtonsDisabled && styles.buttonDisabled,
-            ]}
-          >
-            <Text
-              style={[styles.secondaryButtonText, { color: theme.colors.text }]}
-            >
-              Gestionar suscripción (Customer Center)
-            </Text>
-          </Pressable>
-        </View>
+        <Section title="Datos" theme={theme}>
+          <NavRow
+            label="Categorías"
+            theme={theme}
+            onPress={() => router.push("/manage-categories")}
+          />
+          <NavRow
+            label="Bancos"
+            theme={theme}
+            isLast
+            onPress={() => router.push("/manage-banks")}
+          />
+        </Section>
 
         <View style={styles.footerActions}>
           <Pressable
             onPress={() => signOut()}
             disabled={deletingAccount}
             style={({ pressed }) => [
-              styles.button,
+              styles.primaryButton,
               { backgroundColor: theme.colors.primary },
               pressed && styles.buttonPressed,
               deletingAccount && styles.buttonDisabled,
             ]}
           >
-            <Text style={styles.buttonText}>Salir</Text>
+            <Text style={styles.primaryButtonText}>Salir</Text>
           </Pressable>
 
           <Pressable
@@ -400,7 +452,11 @@ export default function Settings() {
             </Text>
           </Pressable>
         </View>
-      </View>
+
+        <Text style={[styles.versionText, { color: theme.colors.textSecondary }]}>
+          ZeroGasto · v{APP_VERSION}
+        </Text>
+      </ScrollView>
 
       <Modal
         visible={deleteModalVisible}
@@ -508,70 +564,106 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   content: {
-    flex: 1,
     padding: 24,
+    paddingBottom: 40,
+    gap: 8,
+  },
+  section: {
+    marginBottom: 12,
+  },
+  sectionTitle: {
+    fontSize: 13,
+    fontWeight: "600",
+    letterSpacing: 0.4,
+    textTransform: "uppercase",
+    marginBottom: 8,
+    marginLeft: 4,
+  },
+  sectionCard: {
+    borderRadius: 12,
+    borderWidth: StyleSheet.hairlineWidth,
+    overflow: "hidden",
+  },
+  infoRow: {
+    flexDirection: "row",
     justifyContent: "space-between",
+    alignItems: "center",
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    gap: 12,
+  },
+  infoLabel: {
+    fontSize: 14,
+    fontWeight: "500",
+  },
+  infoValue: {
+    flex: 1,
+    fontSize: 15,
+    fontWeight: "500",
+    textAlign: "right",
+  },
+  navRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+  },
+  navLabel: {
+    fontSize: 16,
+    fontWeight: "500",
   },
   settingRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    paddingVertical: 16,
-    borderBottomWidth: 1,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
   },
   settingLabel: {
     fontSize: 16,
     fontWeight: "500",
   },
-  footerActions: {
-    marginTop: 24,
-    gap: 12,
-  },
-  button: {
-    borderRadius: 12,
-    paddingVertical: 16,
-    paddingHorizontal: 24,
-    shadowColor: "#000",
-    shadowOffset: {
-      width: 0,
-      height: 4,
-    },
-    shadowOpacity: 0.3,
-    shadowRadius: 4.65,
-    elevation: 8,
+  proHeader: {
     flexDirection: "row",
+    justifyContent: "space-between",
     alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
   },
-  dangerButton: {
-    alignSelf: "center",
-    paddingVertical: 8,
-    paddingHorizontal: 12,
+  proHeaderText: {
+    flex: 1,
+    paddingRight: 12,
   },
-  dangerButtonText: {
-    fontWeight: "500",
-    fontSize: 13,
-  },
-  buttonPressed: {
-    opacity: 0.8,
-  },
-  buttonText: {
-    color: "#ffffff",
-    fontWeight: "600",
-    fontSize: 16,
-    letterSpacing: 0.5,
+  proActions: {
+    padding: 16,
+    gap: 10,
   },
   subLabel: {
     fontSize: 13,
     marginTop: 4,
   },
-  productHint: {
-    fontSize: 12,
-  },
   badge: {
     fontSize: 14,
     fontWeight: "700",
+  },
+  footerActions: {
+    marginTop: 16,
+    gap: 12,
+  },
+  primaryButton: {
+    borderRadius: 12,
+    paddingVertical: 16,
+    paddingHorizontal: 24,
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: 52,
+  },
+  primaryButtonText: {
+    color: "#ffffff",
+    fontWeight: "600",
+    fontSize: 16,
+    letterSpacing: 0.5,
   },
   secondaryButton: {
     borderWidth: 1,
@@ -585,8 +677,25 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     fontSize: 15,
   },
+  dangerButton: {
+    alignSelf: "center",
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+  },
+  dangerButtonText: {
+    fontWeight: "500",
+    fontSize: 13,
+  },
+  buttonPressed: {
+    opacity: 0.8,
+  },
   buttonDisabled: {
     opacity: 0.45,
+  },
+  versionText: {
+    marginTop: 20,
+    textAlign: "center",
+    fontSize: 12,
   },
   modalOverlay: {
     flex: 1,

@@ -1,15 +1,10 @@
 import Ionicons from "@expo/vector-icons/Ionicons";
 import {
-  useFocusEffect,
-  useNavigation,
-  useRoute,
-} from "@react-navigation/native";
-import {
   useInfiniteQuery,
   useQuery,
   useQueryClient,
 } from "@tanstack/react-query";
-import { router } from "expo-router";
+import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
@@ -25,6 +20,12 @@ import { useTheme } from "../../../contexts/ThemeContext";
 import { reconcileStyles } from "../reconcileStyles";
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL;
+
+function routeParamOne(raw) {
+  if (raw == null) return "";
+  if (Array.isArray(raw)) return String(raw[0] ?? "");
+  return String(raw);
+}
 
 function formatCount(count, hasMore) {
   if (count == null) return "…";
@@ -161,10 +162,9 @@ export default function ReconcileResults() {
   const { tenantId, getAuthHeaders } = useAuth();
   const queryClient = useQueryClient();
   const [isReconciling, setIsReconciling] = useState(false);
-  const navigation = useNavigation();
-  const route = useRoute();
-  const statementLabel = route.params?.statementLabel;
-  const bankLabel = route.params?.bankLabel;
+  const params = useLocalSearchParams();
+  const statementLabel = routeParamOne(params.statementLabel);
+  const bankLabel = routeParamOne(params.bankLabel);
   const joinedTableName = `${statementLabel}_joined`;
 
   const {
@@ -220,9 +220,9 @@ export default function ReconcileResults() {
 
   useEffect(() => {
     if (!statementLabel || !bankLabel) {
-      navigation.goBack();
+      router.back();
     }
-  }, [statementLabel, bankLabel, navigation]);
+  }, [statementLabel, bankLabel]);
 
   useFocusEffect(
     useCallback(() => {

@@ -27,15 +27,19 @@ function AuthenticatedStack() {
       <Stack.Screen
         name="manage-categories"
         options={{
-          presentation: "modal",
+          presentation: "card",
+          animation: "slide_from_right",
           headerShown: false,
+          gestureEnabled: true,
         }}
       />
       <Stack.Screen
         name="manage-banks"
         options={{
-          presentation: "modal",
+          presentation: "card",
+          animation: "slide_from_right",
           headerShown: false,
+          gestureEnabled: true,
         }}
       />
       <Stack.Screen

@@ -5,6 +5,10 @@ import { useBanks } from "../../hooks/useBanks";
 import { useCategories } from "../../hooks/useCategories";
 import { useSubcategories } from "../../hooks/useSubcategories";
 
+export const unstable_settings = {
+  initialRouteName: "index",
+};
+
 export default function TabsLayout() {
   const { theme } = useTheme();
   useCategories();
@@ -12,7 +16,6 @@ export default function TabsLayout() {
   useSubcategories();
   return (
     <NativeTabs
-      initialRouteName="index"
       backgroundColor={theme.colors.surface}
       tintColor={theme.colors.tabBarActive}
       iconColor={{

@@ -35,6 +35,7 @@ module.exports = {
       "expo-font",
       "expo-image",
       "expo-localization",
+      "expo-status-bar",
       "expo-web-browser",
       [
         "@react-native-google-signin/google-signin",

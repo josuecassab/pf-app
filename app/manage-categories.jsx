@@ -8,17 +8,14 @@ import {
   KeyboardAvoidingView,
   Platform,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
   View,
 } from "react-native";
-import {
-  GestureHandlerRootView,
-  ScrollView as GHScrollView,
-} from "react-native-gesture-handler";
 import { SafeAreaView } from "react-native-safe-area-context";
-import SwipeableCategoryItem from "../components/SwipeableCategoryItem";
+import CategoryListItem from "../components/CategoryListItem";
 import { useAuth } from "../contexts/AuthContext";
 import { useTheme } from "../contexts/ThemeContext";
 import { useCategories } from "../hooks/useCategories";
@@ -283,12 +280,15 @@ export default function ManageCategoriesScreen() {
               setAddingSubcategoryForId(null);
               setInputSubcategory("");
             }}
+            accessibilityRole="button"
+            accessibilityLabel="Volver"
+            hitSlop={8}
             style={styles.iconButton}
           >
             {({ pressed }) => (
-              <AntDesign
-                name="close"
-                size={24}
+              <Feather
+                name="chevron-left"
+                size={28}
                 color={pressed ? theme.colors.textSecondary : theme.colors.text}
               />
             )}
@@ -361,14 +361,17 @@ export default function ManageCategoriesScreen() {
             </Pressable>
           </View>
         )}
-        <GestureHandlerRootView style={styles.flex}>
-          <GHScrollView
-            ref={scrollViewRef}
-            keyboardShouldPersistTaps="handled"
-          >
+        <ScrollView
+          ref={scrollViewRef}
+          style={styles.flex}
+          keyboardShouldPersistTaps="handled"
+          contentInsetAdjustmentBehavior="never"
+          automaticallyAdjustKeyboardInsets={false}
+          removeClippedSubviews={false}
+        >
             {displayCategories.map((cat) => (
               <View key={cat.value}>
-                <SwipeableCategoryItem
+                <CategoryListItem
                   cat={cat}
                   parent={true}
                   onPress={() => expandCategories(cat)}
@@ -380,7 +383,7 @@ export default function ManageCategoriesScreen() {
                   <>
                     {subcategoriesMap[cat.value]?.map((sub) => (
                       <View key={sub.value} style={styles.subCategoryContainer}>
-                        <SwipeableCategoryItem
+                        <CategoryListItem
                           parentId={cat.value}
                           cat={sub}
                           onDelete={deleteSubcategory}
@@ -460,8 +463,7 @@ export default function ManageCategoriesScreen() {
                 )}
               </View>
             ))}
-          </GHScrollView>
-        </GestureHandlerRootView>
+        </ScrollView>
       </SafeAreaView>
     </KeyboardAvoidingView>
   );

@@ -9,17 +9,14 @@ import {
   KeyboardAvoidingView,
   Platform,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
   View,
 } from "react-native";
-import {
-  GestureHandlerRootView,
-  ScrollView as GHScrollView,
-} from "react-native-gesture-handler";
 import { SafeAreaView } from "react-native-safe-area-context";
-import SwipeableCategoryItem from "../components/SwipeableCategoryItem";
+import CategoryListItem from "../components/CategoryListItem";
 import { useAuth } from "../contexts/AuthContext";
 import { useTheme } from "../contexts/ThemeContext";
 import { useBanks } from "../hooks/useBanks";
@@ -179,12 +176,15 @@ export default function ManageBanksScreen() {
               closeModal();
               resetPicker();
             }}
+            accessibilityRole="button"
+            accessibilityLabel="Volver"
+            hitSlop={8}
             style={styles.iconButton}
           >
             {({ pressed }) => (
-              <AntDesign
-                name="close"
-                size={24}
+              <Feather
+                name="chevron-left"
+                size={28}
                 color={pressed ? theme.colors.textSecondary : theme.colors.text}
               />
             )}
@@ -237,7 +237,7 @@ export default function ManageBanksScreen() {
                 clearButtonMode="while-editing"
               />
             </View>
-            <GestureHandlerRootView style={styles.flex}>
+            <View style={styles.flex}>
               {isLoadingEntities ? (
                 <View style={styles.centered}>
                   <ActivityIndicator
@@ -246,7 +246,7 @@ export default function ManageBanksScreen() {
                   />
                 </View>
               ) : (
-                <GHScrollView
+                <ScrollView
                   contentContainerStyle={styles.bankList}
                   keyboardShouldPersistTaps="handled"
                 >
@@ -296,17 +296,16 @@ export default function ManageBanksScreen() {
                       </Pressable>
                     ))
                   )}
-                </GHScrollView>
+                </ScrollView>
               )}
-            </GestureHandlerRootView>
+            </View>
           </>
         ) : (
-          <GestureHandlerRootView style={styles.flex}>
-            <GHScrollView contentContainerStyle={styles.bankList}>
+          <ScrollView style={styles.flex} contentContainerStyle={styles.bankList}>
               {bankList.map((b) => {
                 const id = bankId(b);
                 return (
-                  <SwipeableCategoryItem
+                  <CategoryListItem
                     key={id}
                     cat={{
                       ...b,
@@ -318,8 +317,7 @@ export default function ManageBanksScreen() {
                   />
                 );
               })}
-            </GHScrollView>
-          </GestureHandlerRootView>
+          </ScrollView>
         )}
       </SafeAreaView>
     </KeyboardAvoidingView>
