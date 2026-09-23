@@ -413,12 +413,10 @@ export default function ReconcileResults() {
         return;
       }
 
-      await queryClient.invalidateQueries({
-        queryKey: ["matched_txns", tenantId, `${statementLabel}_joined`],
-      });
-      await queryClient.invalidateQueries({
-        queryKey: ["unmatched_txns", tenantId, statementLabel],
-      });
+      const matchedKey = ["matched_txns", `${statementLabel}_joined`];
+      const unmatchedKey = ["unmatched_txns", statementLabel];
+      await queryClient.invalidateQueries({ queryKey: matchedKey });
+      await queryClient.invalidateQueries({ queryKey: unmatchedKey });
       refetchMatchedTxns();
       refetchUnmatchedTxns();
       refetchDuplicateRowsInfo();
@@ -539,7 +537,7 @@ export default function ReconcileResults() {
         queryKey: ["txns", tenantId],
       });
       Alert.alert("Éxito", "✅ Conciliación completada correctamente!");
-      navigation.goBack();
+      router.back();
     } catch (error) {
       console.error("Error completing reconcile:", error);
       Alert.alert("Error", "Error al completar la conciliación");

@@ -191,7 +191,7 @@ export default function ManageCategoriesScreen() {
     setUpdatingCategory(value);
     try {
       const res = await fetch(
-        `${API_URL}/categories/update_category/?value=${value}&label=${newLabel}`,
+        `${API_URL}/categories/update_category/?value=${encodeURIComponent(value)}&label=${encodeURIComponent(newLabel)}`,
         {
           method: "PUT",
           headers: getAuthHeaders(),
@@ -221,7 +221,7 @@ export default function ManageCategoriesScreen() {
     setUpdatingCategory(value);
     try {
       const res = await fetch(
-        `${API_URL}/subcategories/update_subcategory/?value=${value}&label=${newLabel}`,
+        `${API_URL}/subcategories/update_subcategory/?value=${encodeURIComponent(value)}&label=${encodeURIComponent(newLabel)}`,
         {
           method: "PUT",
           headers: getAuthHeaders(),

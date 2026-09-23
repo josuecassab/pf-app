@@ -122,6 +122,11 @@ export function AuthProvider({ children }) {
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(async (event, supabaseSession) => {
+      if (event === "SIGNED_OUT") {
+        setSessionState(null);
+        AsyncStorage.removeItem(SESSION_STORAGE_KEY).catch(() => {});
+        return;
+      }
       if (
         event !== "TOKEN_REFRESHED" &&
         event !== "SIGNED_IN" &&

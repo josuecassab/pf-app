@@ -83,13 +83,23 @@ function uniqueYearsFromTxns(txns, currency) {
 function filterRowsByGroup(rows, selectedGroupTab, categoryGroups) {
   const list = rows ?? [];
   if (selectedGroupTab === "all" || selectedGroupTab == null) return list;
-  const g = categoryGroups.find(
+  const g = (categoryGroups ?? []).find(
     (x) => Number(x.id) === Number(selectedGroupTab),
   );
-  const categoryIds = (g?.categories ?? []).map((item) => item.id);
-  if (!categoryIds.length) return list;
-  const allowed = new Set(categoryIds);
-  return list.filter((item) => allowed.has(item.category_id));
+  if (!g) return list;
+  const allowed = new Set();
+  if (Array.isArray(g.category_ids)) {
+    for (const id of g.category_ids) {
+      if (id == null || id === "") continue;
+      allowed.add(String(id));
+    }
+  }
+  for (const member of g.categories ?? []) {
+    const id = groupCategoryMemberId(member);
+    if (id != null) allowed.add(String(id));
+  }
+  if (allowed.size === 0) return [];
+  return list.filter((item) => allowed.has(String(item.category_id)));
 }
 
 const CHART_REF_LINE_STORAGE_KEY = "@summary_chart_negative_reference_by_group";

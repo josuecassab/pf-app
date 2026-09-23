@@ -38,12 +38,14 @@ const formatNumber = (num, decimals = 2) => {
   return parseFloat(num.toFixed(decimals)).toLocaleString("es-ES");
 };
 
+const EMPTY_LOOKUP = new Map();
+
 export default function GroupedTable({
   data = [],
   onRefresh,
   refreshing = false,
-  categoriesById = {},
-  subcategoriesById = {},
+  categoriesById = EMPTY_LOOKUP,
+  subcategoriesById = EMPTY_LOOKUP,
 }) {
   const { theme } = useTheme();
   const leftRef = useRef(null);
@@ -228,7 +230,7 @@ export default function GroupedTable({
               numberOfLines={1}
             >
               {isExpanded ? "▼ " : "▶ "}
-              {categoriesById.get(item.category_id)?.toLowerCase()}
+              {categoriesById.get?.(item.category_id)?.toLowerCase()}
             </Text>
           </TouchableOpacity>
           {isExpanded &&
@@ -252,7 +254,7 @@ export default function GroupedTable({
                   numberOfLines={1}
                 >
                   {subcategoriesById
-                    .get(subItem?.subcategory_id)
+                    .get?.(subItem?.subcategory_id)
                     ?.toLowerCase() || "Sin subcategoría"}
                 </Text>
               </View>
@@ -260,7 +262,7 @@ export default function GroupedTable({
         </View>
       );
     },
-    [expandedCategories, toggleCategory, theme],
+    [categoriesById, expandedCategories, subcategoriesById, toggleCategory, theme],
   );
 
   const renderRightColumnsItem = useCallback(
@@ -339,15 +341,32 @@ export default function GroupedTable({
       if (sortConfig.key === key && sortConfig.direction === "asc") {
         direction = "desc";
       }
+      const valueOf = (row) => {
+        if (key === "category_id") {
+          return String(
+            categoriesById?.get?.(row.category_id) ?? row.category_id ?? "",
+          );
+        }
+        return row[key];
+      };
       const next = [...sortedData].sort((a, b) => {
-        if (a[key] < b[key]) return direction === "asc" ? -1 : 1;
-        if (a[key] > b[key]) return direction === "asc" ? 1 : -1;
-        return 0;
+        const av = valueOf(a);
+        const bv = valueOf(b);
+        const cmp =
+          key === "category_id"
+            ? String(av).localeCompare(String(bv), "es", { sensitivity: "base" })
+            : av < bv
+              ? -1
+              : av > bv
+                ? 1
+                : 0;
+        if (cmp === 0) return 0;
+        return direction === "asc" ? cmp : -cmp;
       });
       setSortConfig({ key, direction });
       setSortedData(next);
     },
-    [sortedData, sortConfig.key, sortConfig.direction],
+    [categoriesById, sortedData, sortConfig.key, sortConfig.direction],
   );
 
   const renderLeftHeader = useCallback(() => {
@@ -361,7 +380,7 @@ export default function GroupedTable({
           },
           styles.headerHeight,
         ]}
-        onPress={() => handleSort("category")}
+        onPress={() => handleSort("category_id")}
       >
         <Text
           style={[
@@ -370,7 +389,7 @@ export default function GroupedTable({
           ]}
         >
           Name{" "}
-          {sortConfig.key === "category"
+          {sortConfig.key === "category_id"
             ? sortConfig.direction === "asc"
               ? "↑"
               : "↓"
@@ -444,6 +463,7 @@ export default function GroupedTable({
           <FlatList
             ref={leftRef}
             data={sortedData}
+            extraData={{ categoriesById, expandedCategories, subcategoriesById }}
             keyExtractor={(item) => item.category_id}
             renderItem={renderLeftColumnItem}
             ListHeaderComponent={renderLeftHeader}

@@ -183,6 +183,31 @@ function bankDisplayName(bank) {
   return bank?.name ?? bank?.label ?? bank?.fe_code ?? "";
 }
 
+/** Statement paths are full URIs; the bank token lives on the filename stem. */
+function bankNameFromStatement(statement, banks) {
+  const stem =
+    (typeof statement?.label === "string" && statement.label) ||
+    statementLabelFromPath(statement?.value) ||
+    "";
+  if (!stem) return "";
+  const names = (Array.isArray(banks) ? banks : [])
+    .map((bank) => String(bankDisplayName(bank)).trim())
+    .filter(Boolean)
+    .sort((a, b) => b.length - a.length);
+  const stemKey = stem.toLowerCase();
+  for (const name of names) {
+    const key = name.toLowerCase();
+    if (
+      stemKey === key ||
+      stemKey.startsWith(`${key}_`) ||
+      stemKey.startsWith(`${key} `)
+    ) {
+      return name;
+    }
+  }
+  return stem.split("_")[0] || "";
+}
+
 const DROPDOWN_SELECTED_TEXT_PROPS = {
   numberOfLines: 1,
   ellipsizeMode: "tail",
@@ -437,7 +462,7 @@ export default function Reconcile() {
   const statementRowCount = data?.length ?? 0;
   const step1Complete = statements.length > 0;
   const step2Complete = Boolean(selectedStatement?.label);
-  const selectedBankName = selectedStatement?.value.split("_")[0]
+  const selectedBankName = bankNameFromStatement(selectedStatement, bankList);
   const canConciliar =
     step2Complete && Boolean(selectedBankName) && !conciliarGateBusy;
 
@@ -653,8 +678,10 @@ export default function Reconcile() {
       return;
     }
     try {
+      const matchedKey = ["matched_txns", `${selectedStatement.label}_joined`];
+      const unmatchedKey = ["unmatched_txns", selectedStatement.label];
       const res = await fetch(
-        `${API_URL}/create_statement_joined/?table_name=${encodeURIComponent(selectedStatement.label)}`,
+        `${API_URL}/create_statement_joined/?table_name=${encodeURIComponent(selectedStatement.label)}&bank_name=${encodeURIComponent(selectedBankName)}`,
         {
           method: "POST",
           headers: getAuthHeaders(),
@@ -666,17 +693,8 @@ export default function Reconcile() {
         return;
       }
       console.log("Reconciliation result:", response);
-      // Invalidate queries to refetch the data
-      queryClient.invalidateQueries({
-        queryKey: [
-          "matched_txns",
-          tenantId,
-          `${selectedStatement.label}_joined`,
-        ],
-      });
-      queryClient.invalidateQueries({
-        queryKey: ["unmatched_txns", tenantId, selectedStatement.label],
-      });
+      queryClient.invalidateQueries({ queryKey: matchedKey });
+      queryClient.invalidateQueries({ queryKey: unmatchedKey });
       navigateToReconcileResults({
         statementLabel: selectedStatement.label,
         bankLabel: selectedBankName,
