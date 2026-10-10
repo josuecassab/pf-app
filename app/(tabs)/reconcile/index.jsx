@@ -270,6 +270,16 @@ async function pickedFileToArrayBuffer(file) {
   return await res.arrayBuffer();
 }
 
+/** Expo fetch accepts string, Blob, or `{ bytes, name, type }` — not `{ uri, name, type }`. */
+function nativeFormDataFilePart(file, bytes) {
+  const data = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
+  return {
+    name: file.name ?? "statement",
+    type: file.mimeType ?? "application/octet-stream",
+    bytes: () => data,
+  };
+}
+
 function WizardStep({ step, title, subtitle, isComplete, theme, children }) {
   return (
     <View
@@ -480,10 +490,11 @@ export default function Reconcile() {
 
     try {
       let passwordToSend = "";
+      let fileBytes = null;
 
       if (isPdfPickedFile(file)) {
-        const ab = await pickedFileToArrayBuffer(file);
-        const encrypted = await pdfIsPasswordProtected(ab);
+        fileBytes = await pickedFileToArrayBuffer(file);
+        const encrypted = await pdfIsPasswordProtected(fileBytes);
         if (encrypted) {
           if (!pdfPassword.trim()) {
             setPdfPasswordRequired(true);
@@ -506,7 +517,6 @@ export default function Reconcile() {
       }
 
       const formData = new FormData();
-      // Web FormData only accepts Blob/File; RN's { uri, name, type } becomes "[object Object]".
       if (Platform.OS === "web") {
         const picked = file;
         if (picked.file instanceof Blob) {
@@ -526,11 +536,10 @@ export default function Reconcile() {
           formData.append("pdf_password", passwordToSend);
         }
       } else {
-        formData.append("file", {
-          uri: file.uri,
-          name: file.name,
-          type: file.mimeType ?? "application/octet-stream",
-        });
+        if (!fileBytes) {
+          fileBytes = await pickedFileToArrayBuffer(file);
+        }
+        formData.append("file", nativeFormDataFilePart(file, fileBytes));
         if (isPdfPickedFile(file)) {
           formData.append("pdf_password", passwordToSend);
         }

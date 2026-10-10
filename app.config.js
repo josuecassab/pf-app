@@ -47,6 +47,7 @@ module.exports = {
       ],
       "./plugins/withIosProjectVersion.js",
       "./plugins/withPodfileModularHeaders.js",
+      "./plugins/withIosSceneLifecycle.js",
     ],
   },
 };
