@@ -22,6 +22,11 @@ import { useAuth } from "../../contexts/AuthContext";
 import { usePurchasesContext } from "../../contexts/PurchasesContext";
 import { useTheme } from "../../contexts/ThemeContext";
 import { formatApiError } from "../../lib/apiErrors";
+import {
+  PRIVACY_POLICY_URL,
+  SUPPORT_URL,
+  openExternalUrl,
+} from "../../lib/legalLinks";
 import { hasActiveEntitlement } from "../../lib/revenuecatEntitlements";
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL;
@@ -74,7 +79,7 @@ function InfoRow({ label, value, theme, isLast }) {
   );
 }
 
-function NavRow({ label, onPress, theme, isLast }) {
+function NavRow({ label, onPress, theme, isLast, icon = "chevron-right" }) {
   return (
     <Pressable
       onPress={onPress}
@@ -88,7 +93,7 @@ function NavRow({ label, onPress, theme, isLast }) {
       ]}
     >
       <Text style={[styles.navLabel, { color: theme.colors.text }]}>{label}</Text>
-      <Feather name="chevron-right" size={18} color={theme.colors.textSecondary} />
+      <Feather name={icon} size={18} color={theme.colors.textSecondary} />
     </Pressable>
   );
 }
@@ -406,6 +411,22 @@ export default function Settings() {
               </Text>
             </Pressable>
           </View>
+        </Section>
+
+        <Section title="Ayuda" theme={theme}>
+          <NavRow
+            label="Política de privacidad"
+            theme={theme}
+            icon="external-link"
+            onPress={() => openExternalUrl(PRIVACY_POLICY_URL)}
+          />
+          <NavRow
+            label="Soporte"
+            theme={theme}
+            icon="external-link"
+            isLast
+            onPress={() => openExternalUrl(SUPPORT_URL)}
+          />
         </Section>
 
         <Section title="Datos" theme={theme}>

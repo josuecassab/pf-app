@@ -11,6 +11,7 @@
       "supportsTablet": false,
       "bundleIdentifier": "com.josuecassab.zerogasto",
       "appleTeamId": "D95BATD6PK",
+      "usesAppleSignIn": true,
       "icon": {
         "dark": "./assets/images/zerogasto_black.png",
         "light": "./assets/images/zerogasto_white.png"

@@ -5,6 +5,8 @@ import {
   isSuccessResponse,
   statusCodes,
 } from "@react-native-google-signin/google-signin";
+import * as AppleAuthentication from "expo-apple-authentication";
+import * as Crypto from "expo-crypto";
 import * as Linking from "expo-linking";
 import { useEffect, useState } from "react";
 import {
@@ -26,9 +28,37 @@ import { useAuth } from "../contexts/AuthContext";
 import { useTheme } from "../contexts/ThemeContext";
 import { supabase } from "../lib/supabase";
 import { formatApiError } from "../lib/apiErrors";
+import {
+  PRIVACY_POLICY_URL,
+  SUPPORT_URL,
+  openExternalUrl,
+} from "../lib/legalLinks";
 import ZerogastoWordmark from "../assets/images/zerogasto_wordmark.svg";
 
-function usernameFromGoogleSupabaseUser(user) {
+function appleNameMetadata(fullName) {
+  if (!fullName) return null;
+  const givenName = fullName.givenName?.trim() || "";
+  const familyName = fullName.familyName?.trim() || "";
+  const middleName = fullName.middleName?.trim() || "";
+  if (!givenName && !familyName && !middleName) return null;
+  let formatted = "";
+  try {
+    formatted = AppleAuthentication.formatFullName(fullName)?.trim() || "";
+  } catch (_) {
+    formatted = [givenName, middleName, familyName].filter(Boolean).join(" ");
+  }
+  return {
+    ...(formatted ? { full_name: formatted } : {}),
+    ...(givenName ? { given_name: givenName } : {}),
+    ...(familyName ? { family_name: familyName } : {}),
+  };
+}
+
+function isAppleAuthCancel(err) {
+  return err?.code === "ERR_REQUEST_CANCELED";
+}
+
+function usernameFromSupabaseUser(user) {
   if (!user) return "user";
   const fromMeta = user.user_metadata?.username;
   if (typeof fromMeta === "string" && fromMeta.trim()) {
@@ -109,8 +139,12 @@ export default function Auth() {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [newPasswordError, setNewPasswordError] = useState("");
   const [confirmPasswordError, setConfirmPasswordError] = useState("");
-  /** iOS: email/password hidden until user opts in; Google is the default path. */
+  /** iOS: email/password hidden until user opts in; Apple and Google are the default path. */
   const [emailAuthExpanded, setEmailAuthExpanded] = useState(false);
+  const [appleAuthAvailable, setAppleAuthAvailable] = useState(false);
+  const [oauthButtonWidth, setOauthButtonWidth] = useState(0);
+  /** Which button started the in-flight request, so only that button shows a spinner. */
+  const [authAction, setAuthAction] = useState(null);
 
   const url = Linking.useLinkingURL();
   console.log(url);
@@ -176,6 +210,17 @@ export default function Auth() {
       iosClientId,
       ...(webClientId ? { webClientId } : {}),
     });
+  }, []);
+
+  useEffect(() => {
+    if (Platform.OS !== "ios") return;
+    let cancelled = false;
+    AppleAuthentication.isAvailableAsync().then((available) => {
+      if (!cancelled) setAppleAuthAvailable(available);
+    });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   function validateEmail(email) {
@@ -357,8 +402,88 @@ export default function Auth() {
     }
   }
 
+  async function establishSession(nextSession, user) {
+    if (!nextSession?.access_token || !user) {
+      Alert.alert("Error", "Respuesta de sesión inválida.");
+      return;
+    }
+    const username = usernameFromSupabaseUser(user);
+    const schemaResult = await ensureUserTxnSchema(nextSession.access_token);
+    if (!schemaResult.ok) {
+      Alert.alert(
+        "Aviso",
+        schemaResult.message ||
+          "No se pudo preparar el almacén de transacciones. Algunas funciones pueden fallar hasta que se resuelva.",
+      );
+    }
+    await setSession({
+      access_token: nextSession.access_token,
+      refresh_token: nextSession.refresh_token,
+      user: { ...user, username },
+    });
+  }
+
+  async function signInWithApple() {
+    if (Platform.OS !== "ios" || loading) return;
+    setAuthAction("apple");
+    setLoading(true);
+    try {
+      const rawNonce = Crypto.randomUUID();
+      const hashedNonce = await Crypto.digestStringAsync(
+        Crypto.CryptoDigestAlgorithm.SHA256,
+        rawNonce,
+      );
+      const credential = await AppleAuthentication.signInAsync({
+        requestedScopes: [
+          AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
+          AppleAuthentication.AppleAuthenticationScope.EMAIL,
+        ],
+        nonce: hashedNonce,
+      });
+      const idToken = credential.identityToken;
+      if (!idToken) {
+        Alert.alert(
+          "Error",
+          "No se pudo obtener el identificador de Apple. Vuelve a intentarlo.",
+        );
+        return;
+      }
+      const { data, error } = await supabase.auth.signInWithIdToken({
+        provider: "apple",
+        token: idToken,
+        nonce: rawNonce,
+      });
+      if (error) {
+        Alert.alert(
+          "Error con Apple",
+          error.message ?? "No se pudo completar el inicio de sesión.",
+        );
+        return;
+      }
+      let user = data.session?.user;
+      const nameMetadata = appleNameMetadata(credential.fullName);
+      if (nameMetadata && user) {
+        const { data: updated, error: updateError } =
+          await supabase.auth.updateUser({ data: nameMetadata });
+        if (!updateError && updated?.user) {
+          user = updated.user;
+        }
+      }
+      await establishSession(data.session, user);
+    } catch (err) {
+      if (isAppleAuthCancel(err)) return;
+      Alert.alert(
+        "Error con Apple",
+        err?.message ?? "No se pudo iniciar sesión.",
+      );
+    } finally {
+      setLoading(false);
+      setAuthAction(null);
+    }
+  }
+
   async function signInWithGoogle() {
-    if (Platform.OS !== "ios") return;
+    if (Platform.OS !== "ios" || loading) return;
     const iosClientId = process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID;
     if (!iosClientId) {
       Alert.alert(
@@ -367,6 +492,7 @@ export default function Auth() {
       );
       return;
     }
+    setAuthAction("google");
     setLoading(true);
     try {
       await GoogleSignin.hasPlayServices();
@@ -400,26 +526,7 @@ export default function Auth() {
         );
         return;
       }
-      const nextSession = data.session;
-      if (!nextSession?.access_token || !nextSession.user) {
-        Alert.alert("Error", "Respuesta de sesión inválida.");
-        return;
-      }
-      const u = nextSession.user;
-      const username = usernameFromGoogleSupabaseUser(u);
-      const schemaResult = await ensureUserTxnSchema(nextSession.access_token);
-      if (!schemaResult.ok) {
-        Alert.alert(
-          "Aviso",
-          schemaResult.message ||
-            "No se pudo preparar el almacén de transacciones. Algunas funciones pueden fallar hasta que se resuelva.",
-        );
-      }
-      await setSession({
-        access_token: nextSession.access_token,
-        refresh_token: nextSession.refresh_token,
-        user: { ...u, username },
-      });
+      await establishSession(data.session, data.session?.user);
     } catch (err) {
       if (
         isErrorWithCode(err) &&
@@ -433,6 +540,7 @@ export default function Auth() {
       );
     } finally {
       setLoading(false);
+      setAuthAction(null);
     }
   }
 
@@ -538,7 +646,7 @@ export default function Auth() {
     justifyContent: "space-between",
   };
 
-  const showGooglePrimary =
+  const showOAuthPrimary =
     Platform.OS === "ios" &&
     mode !== "changePassword" &&
     mode !== "resetPassword" &&
@@ -546,7 +654,7 @@ export default function Auth() {
   const showEmailFields =
     mode === "resetPassword" ||
     mode === "changePassword" ||
-    !showGooglePrimary ||
+    !showOAuthPrimary ||
     emailAuthExpanded;
 
   const formContent = (
@@ -565,8 +673,38 @@ export default function Auth() {
           />
         </View>
 
-        {showGooglePrimary ? (
-          <View style={styles.oauthPrimaryBlock}>
+        {showOAuthPrimary ? (
+          <View
+            style={styles.oauthPrimaryBlock}
+            onLayout={(event) => {
+              const nextWidth = Math.round(event.nativeEvent.layout.width);
+              setOauthButtonWidth((current) =>
+                current === nextWidth ? current : nextWidth,
+              );
+            }}
+          >
+            {appleAuthAvailable && oauthButtonWidth > 0 ? (
+              <View
+                pointerEvents={loading ? "none" : "auto"}
+                style={loading ? styles.buttonDisabled : null}
+              >
+                <AppleAuthentication.AppleAuthenticationButton
+                  buttonType={
+                    AppleAuthentication.AppleAuthenticationButtonType.CONTINUE
+                  }
+                  buttonStyle={
+                    theme.isDark
+                      ? AppleAuthentication.AppleAuthenticationButtonStyle
+                          .WHITE
+                      : AppleAuthentication.AppleAuthenticationButtonStyle
+                          .BLACK
+                  }
+                  cornerRadius={24}
+                  style={{ width: oauthButtonWidth, height: 48 }}
+                  onPress={signInWithApple}
+                />
+              </View>
+            ) : null}
             <Pressable
               style={({ pressed }) => [
                 styles.googleBrandedButton,
@@ -576,7 +714,7 @@ export default function Auth() {
               disabled={loading}
               onPress={signInWithGoogle}
             >
-              {loading ? (
+              {authAction === "google" ? (
                 <ActivityIndicator color="#1f1f1f" size="small" />
               ) : (
                 <View style={styles.googleBrandedButtonInner}>
@@ -846,7 +984,7 @@ export default function Auth() {
           ) : (
             <>
               {mode === "signIn" &&
-              (emailAuthExpanded || !showGooglePrimary) ? (
+              (emailAuthExpanded || !showOAuthPrimary) ? (
                 <Pressable
                   onPress={() => setMode("resetPassword")}
                   style={[styles.modeLinkWrap, { marginBottom: 4 }]}
@@ -881,8 +1019,8 @@ export default function Auth() {
               {showEmailFields ? (
                 <Pressable
                   style={({ pressed }) => [
-                    showGooglePrimary ? styles.googleButton : styles.button,
-                    showGooglePrimary
+                    showOAuthPrimary ? styles.googleButton : styles.button,
+                    showOAuthPrimary
                       ? {
                           borderColor: theme.colors.border,
                           backgroundColor: theme.colors.surface,
@@ -896,15 +1034,15 @@ export default function Auth() {
                     mode === "signIn" ? signInWithEmail() : signUpWithEmail()
                   }
                 >
-                  {loading ? (
+                  {loading && !authAction ? (
                     <ActivityIndicator
-                      color={showGooglePrimary ? theme.colors.text : "#ffffff"}
+                      color={showOAuthPrimary ? theme.colors.text : "#ffffff"}
                       size="small"
                     />
                   ) : (
                     <Text
                       style={
-                        showGooglePrimary
+                        showOAuthPrimary
                           ? [
                               styles.googleButtonText,
                               { color: theme.colors.text },
@@ -919,6 +1057,30 @@ export default function Auth() {
               ) : null}
             </>
           )}
+        </View>
+        <View style={styles.legalLinks}>
+          <Pressable
+            onPress={() => openExternalUrl(PRIVACY_POLICY_URL)}
+            hitSlop={8}
+          >
+            <Text
+              style={[styles.modeLinkText, { color: theme.colors.primary }]}
+            >
+              Política de privacidad
+            </Text>
+          </Pressable>
+          <Text
+            style={[styles.modeLinkText, { color: theme.colors.placeholder }]}
+          >
+            ·
+          </Text>
+          <Pressable onPress={() => openExternalUrl(SUPPORT_URL)} hitSlop={8}>
+            <Text
+              style={[styles.modeLinkText, { color: theme.colors.primary }]}
+            >
+              Soporte
+            </Text>
+          </Pressable>
         </View>
       </View>
     </>
@@ -1038,6 +1200,13 @@ const styles = StyleSheet.create({
     alignSelf: "center",
     paddingVertical: 4,
     paddingHorizontal: 8,
+  },
+  legalLinks: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 12,
+    marginTop: 8,
   },
   googleBrandedButton: {
     alignSelf: "stretch",
