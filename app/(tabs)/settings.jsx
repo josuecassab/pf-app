@@ -25,6 +25,7 @@ import { formatApiError } from "../../lib/apiErrors";
 import {
   PRIVACY_POLICY_URL,
   SUPPORT_URL,
+  TERMS_OF_USE_URL,
   openExternalUrl,
 } from "../../lib/legalLinks";
 import { hasActiveEntitlement } from "../../lib/revenuecatEntitlements";
@@ -410,6 +411,34 @@ export default function Settings() {
                 Gestionar suscripción
               </Text>
             </Pressable>
+
+            <View style={styles.legalLinks}>
+              <Pressable
+                onPress={() => openExternalUrl(PRIVACY_POLICY_URL)}
+                hitSlop={8}
+              >
+                <Text
+                  style={[styles.legalLinkText, { color: theme.colors.primary }]}
+                >
+                  Política de privacidad
+                </Text>
+              </Pressable>
+              <Text
+                style={[styles.legalLinkText, { color: theme.colors.placeholder }]}
+              >
+                ·
+              </Text>
+              <Pressable
+                onPress={() => openExternalUrl(TERMS_OF_USE_URL)}
+                hitSlop={8}
+              >
+                <Text
+                  style={[styles.legalLinkText, { color: theme.colors.primary }]}
+                >
+                  Términos de uso (EULA)
+                </Text>
+              </Pressable>
+            </View>
           </View>
         </Section>
 
@@ -419,6 +448,12 @@ export default function Settings() {
             theme={theme}
             icon="external-link"
             onPress={() => openExternalUrl(PRIVACY_POLICY_URL)}
+          />
+          <NavRow
+            label="Términos de uso (EULA)"
+            theme={theme}
+            icon="external-link"
+            onPress={() => openExternalUrl(TERMS_OF_USE_URL)}
           />
           <NavRow
             label="Soporte"
@@ -659,6 +694,18 @@ const styles = StyleSheet.create({
   proActions: {
     padding: 16,
     gap: 10,
+  },
+  legalLinks: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    marginTop: 4,
+  },
+  legalLinkText: {
+    fontSize: 13,
+    fontWeight: "500",
   },
   subLabel: {
     fontSize: 13,

@@ -31,6 +31,7 @@ import { formatApiError } from "../lib/apiErrors";
 import {
   PRIVACY_POLICY_URL,
   SUPPORT_URL,
+  TERMS_OF_USE_URL,
   openExternalUrl,
 } from "../lib/legalLinks";
 import ZerogastoWordmark from "../assets/images/zerogasto_wordmark.svg";
@@ -1074,6 +1075,18 @@ export default function Auth() {
           >
             ·
           </Text>
+          <Pressable onPress={() => openExternalUrl(TERMS_OF_USE_URL)} hitSlop={8}>
+            <Text
+              style={[styles.modeLinkText, { color: theme.colors.primary }]}
+            >
+              Términos de uso (EULA)
+            </Text>
+          </Pressable>
+          <Text
+            style={[styles.modeLinkText, { color: theme.colors.placeholder }]}
+          >
+            ·
+          </Text>
           <Pressable onPress={() => openExternalUrl(SUPPORT_URL)} hitSlop={8}>
             <Text
               style={[styles.modeLinkText, { color: theme.colors.primary }]}
@@ -1203,6 +1216,7 @@ const styles = StyleSheet.create({
   },
   legalLinks: {
     flexDirection: "row",
+    flexWrap: "wrap",
     alignItems: "center",
     justifyContent: "center",
     gap: 12,
