@@ -24,6 +24,12 @@ import { usePurchasesContext } from "../../../contexts/PurchasesContext";
 import { useTheme } from "../../../contexts/ThemeContext";
 import { useBanks } from "../../../hooks/useBanks";
 import {
+  FREE_RECONCILIATIONS,
+  RECONCILED_STATEMENTS_KEY,
+  RECONCILIATION_COUNTER_KEY,
+  useSettings,
+} from "../../../hooks/useSettings";
+import {
   formatApiError,
   isTransientNetworkError,
 } from "../../../lib/apiErrors";
@@ -346,9 +352,18 @@ function WizardStep({ step, title, subtitle, isComplete, theme, children }) {
 export default function Reconcile() {
   const { theme } = useTheme();
   const { tenantId, getAuthHeaders } = useAuth();
-  const { isNativePurchasesPlatform, presentPaywallIfNeeded, entitlementId } =
-    usePurchasesContext();
+  const {
+    isNativePurchasesPlatform,
+    presentPaywallIfNeeded,
+    entitlementId,
+    isProActive,
+  } = usePurchasesContext();
   const queryClient = useQueryClient();
+  const {
+    data: settings,
+    refetch: refetchSettings,
+    updateSettings,
+  } = useSettings([RECONCILIATION_COUNTER_KEY, RECONCILED_STATEMENTS_KEY]);
   const { data: banksFromApi } = useBanks();
   const bankList = Array.isArray(banksFromApi) ? banksFromApi : [];
   const [file, setFile] = useState(null);
@@ -677,14 +692,14 @@ export default function Reconcile() {
   const reconcile = async () => {
     if (!selectedStatement?.label) {
       Alert.alert("Error", "Por favor selecciona un extracto primero");
-      return;
+      return false;
     }
     if (!selectedBankName) {
       Alert.alert(
         "Error",
         "No hay banco asociado a este extracto. Comprueba la lista de bancos o el extracto seleccionado.",
       );
-      return;
+      return false;
     }
     try {
       const matchedKey = ["matched_txns", `${selectedStatement.label}_joined`];
@@ -699,7 +714,7 @@ export default function Reconcile() {
       const response = await res.json();
       if (!res.ok) {
         Alert.alert("Error", response.message);
-        return;
+        return false;
       }
       console.log("Reconciliation result:", response);
       queryClient.invalidateQueries({ queryKey: matchedKey });
@@ -708,26 +723,118 @@ export default function Reconcile() {
         statementLabel: selectedStatement.label,
         bankLabel: selectedBankName,
       });
+      return true;
     } catch (error) {
       console.error("Error reconciling transactions:", error);
       Alert.alert("Error", "Error al conciliar transacciones");
+      return false;
+    }
+  };
+
+  const parseReconciledStatements = (raw) => {
+    if (Array.isArray(raw)) {
+      return raw.filter((item) => typeof item === "string");
+    }
+    if (typeof raw === "string" && raw.trim()) {
+      try {
+        const parsed = JSON.parse(raw);
+        return Array.isArray(parsed)
+          ? parsed.filter((item) => typeof item === "string")
+          : [];
+      } catch {
+        return [];
+      }
+    }
+    return [];
+  };
+
+  const loadReconciliationQuota = async () => {
+    let currentSettings = settings;
+    if (currentSettings == null) {
+      const result = await refetchSettings();
+      currentSettings = result.data ?? {};
+    }
+
+    const reconciledStatements = parseReconciledStatements(
+      currentSettings?.[RECONCILED_STATEMENTS_KEY],
+    );
+
+    const raw = currentSettings?.[RECONCILIATION_COUNTER_KEY];
+    if (raw === undefined || raw === null) {
+      await updateSettings.mutateAsync({
+        [RECONCILIATION_COUNTER_KEY]: String(FREE_RECONCILIATIONS),
+      });
+      return { remaining: FREE_RECONCILIATIONS, reconciledStatements };
+    }
+
+    const parsed = Number(raw);
+    return {
+      remaining: Number.isFinite(parsed) ? parsed : 0,
+      reconciledStatements,
+    };
+  };
+
+  const presentProPaywallAndReconcile = async () => {
+    if (!isNativePurchasesPlatform) {
+      Alert.alert(
+        "ZeroGasto Pro",
+        "Has agotado las conciliaciones gratuitas. Suscríbete a ZeroGasto Pro en la app iOS o Android para continuar.",
+      );
+      return;
+    }
+    const { ok, error, customerInfo: info } = await presentPaywallIfNeeded();
+    if (!ok && error) {
+      Alert.alert("Paywall", error.message ?? String(error));
+      return;
+    }
+    if (info && hasActiveEntitlement(info, entitlementId)) {
+      await reconcile();
     }
   };
 
   const handleConciliarPress = async () => {
-    if (!isNativePurchasesPlatform) {
-      await reconcile();
-      return;
-    }
     setConciliarGateBusy(true);
     try {
-      const { ok, error, customerInfo: info } = await presentPaywallIfNeeded();
-      if (!ok && error) {
-        Alert.alert("Paywall", error.message ?? String(error));
+      if (isProActive) {
+        await reconcile();
         return;
       }
-      if (info && hasActiveEntitlement(info, entitlementId)) {
-        await reconcile();
+
+      const statementId = selectedStatement?.label;
+      let remaining;
+      let reconciledStatements;
+      try {
+        ({ remaining, reconciledStatements } = await loadReconciliationQuota());
+      } catch (error) {
+        console.error("Error loading reconciliation counter:", error);
+        Alert.alert(
+          "Error",
+          error?.message ?? "No se pudo verificar las conciliaciones disponibles.",
+        );
+        return;
+      }
+
+      const alreadyCounted =
+        !!statementId && reconciledStatements.includes(statementId);
+
+      if (!alreadyCounted && remaining <= 0) {
+        await presentProPaywallAndReconcile();
+        return;
+      }
+
+      const success = await reconcile();
+      if (!success || alreadyCounted || !statementId) return;
+
+      try {
+        await updateSettings.mutateAsync({
+          [RECONCILIATION_COUNTER_KEY]: String(remaining - 1),
+          [RECONCILED_STATEMENTS_KEY]: JSON.stringify([
+            ...reconciledStatements,
+            statementId,
+          ]),
+        });
+      } catch (error) {
+        console.error("Error decrementing reconciliation counter:", error);
       }
     } finally {
       setConciliarGateBusy(false);

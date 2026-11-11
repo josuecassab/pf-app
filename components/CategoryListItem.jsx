@@ -191,12 +191,14 @@ export default function CategoryListItem({
           </Pressable>
         </View>
       ) : (
-        <RowActionsMenu
-          showEdit={showEdit}
-          onRename={startEditing}
-          onDelete={confirmDelete}
-          disabled={isLoading}
-        />
+        <View style={styles.actionsSlot} collapsable={false}>
+          <RowActionsMenu
+            showEdit={showEdit}
+            onRename={startEditing}
+            onDelete={confirmDelete}
+            disabled={isLoading}
+          />
+        </View>
       )}
     </View>
   );
@@ -230,6 +232,11 @@ const styles = StyleSheet.create({
   },
   editActions: {
     flexDirection: "row",
+    alignItems: "center",
+  },
+  actionsSlot: {
+    zIndex: 2,
+    justifyContent: "center",
     alignItems: "center",
   },
   pressed: {

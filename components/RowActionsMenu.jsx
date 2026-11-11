@@ -25,7 +25,7 @@ export default function RowActionsMenu({
       disabled={disabled}
       accessibilityRole="button"
       accessibilityLabel="Más acciones"
-      hitSlop={8}
+      hitSlop={12}
       style={({ pressed }) => [styles.button, pressed && styles.pressed]}
     >
       <Feather
@@ -39,9 +39,8 @@ export default function RowActionsMenu({
 
 const styles = StyleSheet.create({
   button: {
-    paddingVertical: 8,
-    paddingLeft: 8,
-    paddingRight: 12,
+    width: 44,
+    height: 44,
     justifyContent: "center",
     alignItems: "center",
   },
